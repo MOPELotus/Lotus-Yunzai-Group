@@ -90,3 +90,65 @@ test("审核使用当前连接，按响应区分明确拒绝、结果未知和�
   await review.receive({ ...event, comment: "重发" });
   expect(notifications).toBe(1);
 });
+
+test("Milky 和 OneBot 的同账号同 flag 请求分别通知和审核", async () => {
+  const review = createGroupRequestReview();
+  const notices: string[] = [];
+  const notifyMasters = async (message: string) => { notices.push(message); return 1; };
+  const milky = { ...request, groupRequestScope: "milky" as const, inviter_id: 51, notifyMasters };
+  await review.receive({ ...request, notifyMasters });
+  await review.receive(milky);
+  await review.receive(milky);
+  expect(notices).toHaveLength(2);
+  const [oneBotId, milkyId] = notices.map(visibleId);
+  expect(milkyId).not.toBe(oneBotId);
+  expect(notices[1]).toContain("成员申请入群 · 群 30 · 申请人 42 · 邀请者 51");
+  expect(notices[1]).not.toContain(milky.flag);
+
+  const calls: unknown[][] = [];
+  const reviewGroupRequest = async (...args: unknown[]) => { calls.push(args); return true; };
+  const oneBotContext = { ...owner, reviewGroupRequest };
+  const milkyContext = { ...oneBotContext, isMaster: false, groupRequestScope: "milky" as const, canReviewGroupRequests: true };
+  const oneBotList = review.commands["#入群申请"]("", oneBotContext);
+  const milkyList = review.commands["#入群申请"]("", milkyContext);
+  expect(oneBotList).toContain(oneBotId!);
+  expect(oneBotList).not.toContain(milkyId!);
+  expect(milkyList).toContain(milkyId!);
+  expect(milkyList).not.toContain(oneBotId!);
+  expect(await review.commands["#同意入群"](milkyId!, oneBotContext)).toContain("未找到");
+  expect(await review.commands["#同意入群"](oneBotId!, milkyContext)).toContain("未找到");
+  expect(calls).toEqual([]);
+
+  expect(await review.commands["#同意入群"](milkyId!, milkyContext)).toBe("已同意群请求。");
+  await review.receive(milky);
+  expect(notices).toHaveLength(2);
+  expect(review.commands["#入群申请"]("", milkyContext)).toContain("没有待审核");
+  expect(review.commands["#入群申请"]("", oneBotContext)).toContain(oneBotId!);
+  expect(calls).toEqual([[milky.flag, "add", true, undefined]]);
+});
+
+test("Milky 审核需要私聊专用权限，明确拒绝和未知回执保留请求", async () => {
+  const review = createGroupRequestReview();
+  const scope = "milky" as const;
+  let id = "";
+  await review.receive({
+    ...request, groupRequestScope: scope,
+    notifyMasters: async (message) => { id = visibleId(message); return 1; },
+  });
+  const capable = { ...owner, groupRequestScope: scope, canReviewGroupRequests: true };
+  for (const context of [
+    { ...capable, canReviewGroupRequests: undefined }, { ...capable, canReviewGroupRequests: false },
+    { ...capable, message_type: "group" as const }, { ...capable, message_type: "terminal" as const },
+    { ...capable, groupRequestScope: undefined, isMaster: false },
+  ]) {
+    expect(review.commands["#入群申请"]("", context)).toContain("主人私聊");
+    expect(await review.commands["#同意入群"](id, context)).toContain("主人私聊");
+  }
+  expect(await review.commands["#拒绝入群"](`${id} 拒绝理由`, {
+    ...capable, reviewGroupRequest: async () => false,
+  })).toContain("仍待审核");
+  expect(await review.commands["#同意入群"](id, {
+    ...capable, reviewGroupRequest: async () => { throw new Error("测试连接断开"); },
+  })).toContain("结果未确认");
+  expect(review.commands["#入群申请"]("", capable)).toContain(id);
+});

@@ -1,11 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 
 export type GroupRequestKind = "add" | "invite";
+type GroupRequestScope = "milky";
 
 export interface GroupRequestEvent {
   readonly self_id: number;
   readonly user_id: number;
+  readonly inviter_id?: number;
   readonly group_id: number;
+  readonly groupRequestScope?: GroupRequestScope;
   readonly sub_type: GroupRequestKind;
   readonly flag: string;
   readonly comment?: string;
@@ -17,12 +20,16 @@ interface CommandContext {
   readonly isMaster: boolean;
   readonly self_id?: number;
   readonly user_id?: number;
+  readonly groupRequestScope?: GroupRequestScope;
+  readonly canReviewGroupRequests?: boolean;
   readonly reviewGroupRequest?: (flag: string, subType: GroupRequestKind, approve: boolean, reason?: string) => Promise<boolean>;
 }
 
 interface PendingRequest {
   readonly botId: number;
   readonly applicant: number;
+  readonly inviter?: number;
+  readonly scope?: GroupRequestScope;
   readonly groupId: number;
   readonly kind: GroupRequestKind;
   readonly flag: string;
@@ -40,8 +47,9 @@ function isId(value: number | undefined): value is number {
 }
 
 function authorised(context: CommandContext): context is CommandContext & { readonly self_id: number } {
-  return context.message_type === "private" && context.isMaster === true &&
-    isId(context.self_id) && isId(context.user_id);
+  if (context.message_type !== "private" || !isId(context.self_id) || !isId(context.user_id)) return false;
+  if (context.groupRequestScope === "milky") return context.canReviewGroupRequests === true;
+  return context.groupRequestScope === undefined && context.isMaster === true;
 }
 
 function preview(text: string | undefined): string {
@@ -55,7 +63,12 @@ function describe(id: string, request: PendingRequest): string {
   const kind = request.kind === "invite" ? "邀请机器人加入群聊" : "成员申请入群";
   const user = request.kind === "invite" ? "邀请者" : "申请人";
   return `${id} · ${kind} · 群 ${request.groupId} · ${user} ${request.applicant}` +
+    (request.inviter === undefined ? "" : ` · 邀请者 ${request.inviter}`) +
     (request.comment ? `\n附言：${request.comment}` : "");
+}
+
+function belongsTo(request: PendingRequest, context: CommandContext): boolean {
+  return request.botId === context.self_id && request.scope === context.groupRequestScope;
 }
 
 export function createGroupRequestReview() {
@@ -64,11 +77,12 @@ export function createGroupRequestReview() {
   const completed = new Set<string>();
 
   async function receive(event: GroupRequestEvent): Promise<void> {
-    const { self_id, user_id, group_id, sub_type, flag } = event;
+    const { self_id, user_id, inviter_id, group_id, groupRequestScope, sub_type, flag } = event;
     if (!isId(self_id) || !isId(user_id) || !isId(group_id) || self_id === user_id ||
         (sub_type !== "add" && sub_type !== "invite") || typeof flag !== "string" || !flag ||
+        (groupRequestScope !== undefined && groupRequestScope !== "milky") ||
         pending.size >= maxPending) return;
-    const eventKey = createHash("sha256").update(JSON.stringify([self_id, sub_type, flag])).digest("hex");
+    const eventKey = createHash("sha256").update(JSON.stringify([groupRequestScope, self_id, sub_type, flag])).digest("hex");
     if (known.has(eventKey) || completed.has(eventKey)) return;
 
     let id;
@@ -76,7 +90,8 @@ export function createGroupRequestReview() {
       id = randomBytes(6).toString("hex");
     } while (pending.has(id));
     const request: PendingRequest = {
-      botId: self_id, applicant: user_id, groupId: group_id, kind: sub_type,
+      botId: self_id, applicant: user_id, inviter: sub_type === "add" && isId(inviter_id) ? inviter_id : undefined,
+      scope: groupRequestScope, groupId: group_id, kind: sub_type,
       flag, comment: preview(event.comment), eventKey, reviewing: false,
     };
     known.add(eventKey);
@@ -96,7 +111,7 @@ export function createGroupRequestReview() {
     const page = argument ? Number(argument) : 1;
     if (!Number.isSafeInteger(page) || page < 1) return "用法：#入群申请 [页码]";
 
-    const queue = [...pending.entries()].filter(([, request]) => request.botId === context.self_id).reverse();
+    const queue = [...pending.entries()].filter(([, request]) => belongsTo(request, context)).reverse();
     if (!queue.length) return "当前没有待审核的群请求。";
     const pages = Math.ceil(queue.length / pageSize);
     if (page > pages) return `待审核群请求共有 ${pages} 页。`;
@@ -115,7 +130,7 @@ export function createGroupRequestReview() {
       return allow ? "用法：#同意入群 <编号>" : "用法：#拒绝入群 <编号> [原因]";
     }
     const request = pending.get(id);
-    if (!request || request.botId !== context.self_id) return "未找到当前机器人的待审核群请求。";
+    if (!request || !belongsTo(request, context)) return "未找到当前机器人的待审核群请求。";
     if (!context.reviewGroupRequest) return "当前协议端不支持审核群请求。";
     if (request.reviewing) return "这个群请求正在处理。";
 
