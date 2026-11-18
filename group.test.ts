@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createGroupPlugin } from "./index.ts";
+import { createGroupPlugin } from "./likes.ts";
 
 function settings() {
   return {
