@@ -55,11 +55,7 @@ function canNotify(event: GroupMemberNotice): boolean {
 
 async function sendWithAvatar(event: GroupMemberNotice, content: readonly NoticePart[]): Promise<boolean> {
   const file = `https://q1.qlogo.cn/g?b=qq&nk=${event.user_id}&s=100`;
-  try {
-    if (await event.reply([{ type: "image", file }, "\n", ...content])) return true;
-  } catch {
-    // Retry with the same message body when the avatar cannot be sent.
-  }
+  if (await event.reply([{ type: "image", file }, "\n", ...content])) return true;
   return event.reply(content);
 }
 

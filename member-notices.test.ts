@@ -36,8 +36,8 @@ test("欢迎同一群 30 秒内只发一次，保留头像、群名和提及", a
   }
 });
 
-test("头像失败时回复无头像消息，区分退出和移出", async () => {
-  for (const rejection of [false, new Error("头像不可用")]) {
+test("头像明确失败时回复无头像消息，结果未知时不重复发送", async () => {
+  for (const rejection of [false, new Error("发送结果未知")]) {
     const sent: unknown[] = [];
     const event: GroupMemberNotice = {
       ...member, member: { card: "群\n名片", nickname: "昵称" }, operator_id: 99, action_sub_type: "kick",
@@ -48,12 +48,16 @@ test("头像失败时回复无头像消息，区分退出和移出", async () =>
         return rejection;
       },
     };
-    expect(await announceDeparture(event)).toBe(true);
-    expect(sent).toEqual([
-      [{ type: "image", file: "https://q1.qlogo.cn/g?b=qq&nk=42&s=100" }, "\n",
-        "📋 成员变动\n\n群 名片（42） 已被移出本群。"],
-      ["📋 成员变动\n\n群 名片（42） 已被移出本群。"],
-    ]);
+    if (rejection === false) {
+      expect(await announceDeparture(event)).toBe(true);
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toEqual(["📋 成员变动\n\n群 名片（42） 已被移出本群。"]);
+    } else {
+      await expect(announceDeparture(event)).rejects.toThrow("发送结果未知");
+      expect(sent).toHaveLength(1);
+    }
+    expect(sent[0]).toEqual([{ type: "image", file: "https://q1.qlogo.cn/g?b=qq&nk=42&s=100" }, "\n",
+      "📋 成员变动\n\n群 名片（42） 已被移出本群。"]);
   }
 
   const sent: unknown[] = [];
