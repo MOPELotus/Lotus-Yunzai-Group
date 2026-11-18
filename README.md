@@ -1,0 +1,16 @@
+# Lotus-Yunzai 群功能
+
+这个模块提供 QQ 资料卡点赞。群聊或私聊发送 `#赞我` 或 `#资料卡点赞`，会请求当前协议端给发送者点赞。`#全部赞我` 只在群聊处理。每次指令在当前机器人连接上最多提交一次，不切换目标或连接。
+
+主仓的 `config/group.yaml` 可配置点赞。也可用 `LOTUS_GROUP_CONFIG` 指向一个 YAML 文件，沿用旧 `thumbUp.yaml` 的字段。未配置时使用下列默认值。
+
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `enable` | `true` | 启用点赞 |
+| `cloneAllThumbUp` | `false` | 设为 `true` 时关闭 `#全部赞我` |
+| `strangeThumbUp` | `true` | 设为 `false` 时仅处理协议端确认的好友 |
+| `count` | `10` | 每次请求的点赞数，取值 1–10 |
+
+可用 `closeTips`、`successMsg`、`failsMsg` 和 `noFriendMsg` 自定义提示。空文本或 `false` 不发送提示。`{{at}}` 在群聊提及发送者，`{{userId}}` 表示「你」，`{{doType}}` 和 `{{thumbUpNum}}` 分别表示操作名称和协议端确认的数量。旧模板中的图片占位符暂不出图，消息由协议端正常保留。
+
+历史指令与开关以椰奶插件的资料卡点赞功能为参考。本模块实现基于 Lotus-Yunzai 的协议能力。
