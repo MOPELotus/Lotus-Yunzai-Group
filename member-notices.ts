@@ -18,6 +18,7 @@ export interface GroupMemberNotice {
   readonly dismiss?: boolean;
   readonly member?: MemberNames;
   readonly nickname?: string;
+  readonly getGroupName?: () => Promise<string | undefined>;
   readonly reply: (content: readonly NoticePart[]) => boolean | Promise<boolean>;
 }
 
@@ -65,7 +66,14 @@ async function sendWithAvatar(event: GroupMemberNotice, content: readonly Notice
 export async function welcomeMember(event: GroupMemberNotice, claim = claimWelcome): Promise<boolean> {
   if (!canNotify(event) || !await claim(event.group_id)) return false;
 
-  const name = displayText(event.group_name);
+  let name = displayText(event.group_name);
+  if (!name && event.getGroupName) {
+    try {
+      name = displayText(await event.getGroupName());
+    } catch {
+      // A welcome can still be sent if the adapter cannot look up the group.
+    }
+  }
   return sendWithAvatar(event, [
     `🌸 欢迎来到${name ? `「${name}」` : "本群"}\n\n`,
     { type: "at", qq: event.user_id },

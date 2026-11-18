@@ -83,3 +83,57 @@ test("未连接 Valkey 时按群分别限制欢迎频率", async () => {
     if (previous) Object.defineProperty(globalThis, "redis", previous);
   }
 });
+
+test("入群通过冷却后才查询缺失的群名，优先使用事件已提供的群名", async () => {
+  const calls: string[] = [];
+  const gate = Promise.withResolvers<boolean>();
+  const event: GroupMemberNotice = {
+    ...member,
+    async getGroupName() {
+      calls.push("查群名");
+      return " 例子\n讨论群 ";
+    },
+    reply(content) {
+      expect(content[2]).toBe("🌸 欢迎来到「例子 讨论群」\n\n");
+      calls.push("发送");
+      return true;
+    },
+  };
+  const pending = welcomeMember(event, (groupId) => {
+    expect(groupId).toBe(50);
+    calls.push("检查冷却");
+    return gate.promise;
+  });
+  expect(calls).toEqual(["检查冷却"]);
+  gate.resolve(true);
+  expect(await pending).toBe(true);
+  expect(calls).toEqual(["检查冷却", "查群名", "发送"]);
+
+  expect(await welcomeMember(event, async () => false)).toBe(false);
+  expect(await welcomeMember({ ...event, user_id: 1 }, async () => { throw new Error("不应占用冷却"); }))
+    .toBe(false);
+  expect(await welcomeMember({
+    ...event, group_name: "已有名称",
+    reply: (content) => {
+      expect(content[2]).toBe("🌸 欢迎来到「已有名称」\n\n");
+      return true;
+    },
+  }, async () => true)).toBe(true);
+  expect(calls).toEqual(["检查冷却", "查群名", "发送"]);
+});
+
+test("群名查询失败、没有结果或得到空白时仍发送欢迎", async () => {
+  for (const getGroupName of [
+    async () => { throw new Error("协议端不可用"); },
+    async () => undefined,
+    async () => " \n ",
+  ]) {
+    expect(await welcomeMember({
+      ...member, group_name: " ", getGroupName,
+      reply: (content) => {
+        expect(content[2]).toBe("🌸 欢迎来到本群\n\n");
+        return true;
+      },
+    }, async () => true)).toBe(true);
+  }
+});
