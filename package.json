@@ -2,8 +2,14 @@
   "name": "@lotus-yunzai/group",
   "private": true,
   "type": "module",
-  "exports": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./like-settings": "./like-settings.ts"
+  },
   "lotusYunzai": {
     "entry": "./index.ts"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
   }
 }

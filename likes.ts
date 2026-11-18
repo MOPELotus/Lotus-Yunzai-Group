@@ -1,3 +1,5 @@
+import { readLikeSettings, type LikeSettings } from "./like-settings.ts";
+
 interface LikeContext {
   readonly message_type: "group" | "private" | "terminal";
   readonly user_id?: number;
@@ -6,76 +8,9 @@ interface LikeContext {
   readonly likeSelf?: (count: number) => Promise<number>;
 }
 
-interface LikeConfig {
-  readonly enable: boolean;
-  readonly cloneAllThumbUp: boolean;
-  readonly strangeThumbUp: boolean;
-  readonly count: number;
-  readonly closeTips: string | false;
-  readonly successMsg: string | false;
-  readonly failsMsg: string | false;
-  readonly noFriendMsg: string | false;
-}
-
 type MessagePart = string | { readonly type: "at"; readonly qq: number };
 type Reply = string | readonly MessagePart[];
 type Handler = (argument: string, context: LikeContext) => Promise<Reply>;
-
-const defaults: LikeConfig = {
-  enable: true,
-  cloneAllThumbUp: false,
-  strangeThumbUp: true,
-  count: 10,
-  closeTips: "",
-  successMsg: "给你点了 {{thumbUpNum}} 下赞。",
-  failsMsg: "点赞未成功，可能已达到平台次数上限或协议端暂不接受。",
-  noFriendMsg: "当前仅向好友点赞。",
-};
-
-function readConfig(raw: unknown): LikeConfig {
-  if (raw == null) return defaults;
-  if (typeof raw !== "object" || Array.isArray(raw)) throw new Error("群功能配置须为映射。");
-  const mapping = raw as Record<string, unknown>;
-
-  function flag(name: "enable" | "cloneAllThumbUp" | "strangeThumbUp"): boolean {
-    const value = mapping[name];
-    if (value === undefined) return defaults[name];
-    if (typeof value !== "boolean") throw new Error(`${name} 须为布尔值。`);
-    return value;
-  }
-
-  function message(name: "closeTips" | "successMsg" | "failsMsg" | "noFriendMsg"): string | false {
-    const value = mapping[name];
-    if (value === undefined) return defaults[name];
-    if (value === false || value === "false") return false;
-    if (typeof value !== "string") throw new Error(`${name} 须为文本或 false。`);
-    return value;
-  }
-
-  const count = mapping.count ?? defaults.count;
-  if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 10) {
-    throw new Error("count 须为 1–10 的整数。");
-  }
-  return {
-    enable: flag("enable"),
-    cloneAllThumbUp: flag("cloneAllThumbUp"),
-    strangeThumbUp: flag("strangeThumbUp"),
-    count,
-    closeTips: message("closeTips"),
-    successMsg: message("successMsg"),
-    failsMsg: message("failsMsg"),
-    noFriendMsg: message("noFriendMsg"),
-  };
-}
-
-const defaultConfig = new URL("../../config/group.yaml", import.meta.url);
-
-async function loadConfig(): Promise<LikeConfig> {
-  const configuredPath = Bun.env.LOTUS_GROUP_CONFIG;
-  const file = Bun.file(configuredPath || defaultConfig);
-  if (!configuredPath && !await file.exists()) return defaults;
-  return readConfig(Bun.YAML.parse(await file.text()));
-}
 
 function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean): Reply {
   if (!template) return [];
@@ -105,14 +40,14 @@ function reply(template: string | false, context: LikeContext, style: string, co
 const aliases = ["赞我", "点赞", "资料卡点赞", "我要点赞", "给我点赞", "我要资料卡点赞", "给我资料卡点赞"];
 const colloquial = ["超我", "操我", "草我", "抄我", "吵我", "炒我"];
 
-export function createGroupPlugin(config: () => Promise<LikeConfig> = loadConfig) {
+export function createGroupPlugin(config: () => Promise<LikeSettings> = async () => (await readLikeSettings()).settings) {
   const inFlight = new Set<string>();
 
   function like(style: string, groupOnly = false): Handler {
     return async (argument, context) => {
       if (argument) return "请直接发送点赞指令。";
       if (groupOnly && context.message_type !== "group") return [];
-      let current: LikeConfig;
+      let current: LikeSettings;
       try {
         current = await config();
       } catch {
