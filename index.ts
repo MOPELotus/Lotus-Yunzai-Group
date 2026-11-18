@@ -1,5 +1,9 @@
+import group, { createGroupPlugin } from "./likes.ts";
 import { GroupDeparture, GroupNewcomer } from "./member-notices-v3.js";
 import { apps as repeat } from "./repeat.js";
+import { groupRequestReview } from "./request-review.ts";
+import { ReviewGroupRequest } from "./request-review-v3.js";
 
-export { default, createGroupPlugin } from "./likes.ts";
-export const apps = { ...repeat, GroupNewcomer, GroupDeparture };
+export { createGroupPlugin };
+export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest };
+export default { ...group, commands: { ...group.commands, ...groupRequestReview.commands } };
