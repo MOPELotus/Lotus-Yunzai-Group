@@ -6,7 +6,9 @@ export class ReviewGroupRequest extends plugin {
   }
 
   async accept() {
-    await groupRequestReview.receive(this.e);
+    const receive = () => groupRequestReview.receive(this.e);
+    if (this.e.deferManualReview) this.e.deferManualReview(receive);
+    else await receive();
     // Observing the request does not take it away from other handlers.
     return false;
   }
