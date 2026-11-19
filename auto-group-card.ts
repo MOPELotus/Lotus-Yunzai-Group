@@ -47,6 +47,15 @@ type Run = { readonly status: "complete"; readonly summary: AutoGroupCardSummary
 
 const defaultRoot = new URL("../../", import.meta.url);
 const defaultCron = "0 0,30 * * * *";
+// MOPELotus example/自动群名片.js at 3969d13.
+const originalSuffixes = [
+  "本机器人拒绝服务酷狗！",
+  "米游社区寄生的酷狗能不能滚一边去！",
+  "Hello，Kugou！",
+  "MC是Minecraft，别连简称也蹭！",
+  "在米游社区跳脸就接受后果！",
+  "推广米游不好玩呜哇好玩有素质没？",
+] as const;
 
 function positiveId(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
@@ -89,7 +98,7 @@ async function readSettings(root: URL): Promise<Settings | undefined> {
       cron: expression,
       nickname: cardPart(nickname),
       notGroup: new Set((notGroup as unknown[] | undefined)?.map(groupId)),
-      suffixes: (suffixes as unknown[] | undefined)?.map((value) => {
+      suffixes: suffixes === undefined ? originalSuffixes : (suffixes as unknown[] | null)?.map((value) => {
         const text = cardPart(value);
         if (!text) throw new TypeError("suffixes 应包含非空的单行文本。");
         return text;

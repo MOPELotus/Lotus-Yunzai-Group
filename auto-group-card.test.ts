@@ -41,7 +41,7 @@ function account({ adapter = "onebot", botId = 99, groups = [77], outcomes = [],
   return { current, connection, observed };
 }
 
-test("自动群名片只有可用配置和明确文案才访问协议，主配置优先", () => fixture(async (root, write) => {
+test("自动群名片识别旧配置和原文案，主配置和显式文案优先", () => fixture(async (root, write) => {
   const { current, observed } = account();
   const updater = createAutoGroupCard({ root, signal: new AbortController().signal, accounts: () => [current] });
   const owner = { message_type: "private" as const, isMaster: true, ownGroupCardAccount: current };
@@ -49,6 +49,8 @@ test("自动群名片只有可用配置和明确文案才访问协议，主配�
   expect(await updater.scheduled()).toBeUndefined();
   expect(await updater.command("", owner)).toContain("未启用");
   await write("nickname: 旧昵称\n", true);
+  expect(await updater.configuration()).toEqual({ cron: defaultCron });
+  await write("suffixes: []\n", true);
   expect(await updater.configuration()).toBeUndefined();
   expect(await updater.command("", owner)).toContain("配置群名片文案");
   await write(alternates, true);
@@ -145,4 +147,19 @@ test("自动群名片读取群列表后使用会话延迟确认的机器人昵�
   });
   expect(await updater.scheduled()).toMatchObject({ updated: 1 });
   expect(observed.writes).toEqual([[77, "延迟读取的昵称｜替换文案一"]]);
+}));
+
+
+test("现有旧配置省略文案时继承原文案，缺文件或明确停用时不写入", () => fixture(async (root, write) => {
+  const { current, observed } = account();
+  const updater = createAutoGroupCard({
+    root, signal: new AbortController().signal, accounts: () => [current], choose: () => 2,
+  });
+  expect(await updater.scheduled()).toBeUndefined();
+  await write("nickname: 旧昵称\n", true);
+  expect(await updater.scheduled()).toMatchObject({ updated: 1 });
+  expect(observed.writes).toEqual([[77, "旧昵称｜Hello，Kugou！"]]);
+  await write("enable: false\n");
+  expect(await updater.scheduled()).toBeUndefined();
+  expect(observed.writes).toHaveLength(1);
 }));
