@@ -190,3 +190,52 @@ test("踢人尊重旧白名单和宿主回执，无原始消息 ID、重放、�
   expect(await command("#踢43", { ...scope, message_id: 21, isBotMaster: () => true })).toBe("已将 43 踢出群聊。");
   expect(kicks).toEqual([[44, true], [45, true], [43, false]]);
 });
+
+test("旧设置及取消群管理员只由当前主人发起，支持实际多个提及和裸 QQ", async () => {
+  const { command, calls, context, whitelist } = await fixture();
+  await writeFile(whitelist, "whiteQQ: unrelated\n");
+  const actions: [number, boolean][] = [];
+  const scope = { ...context, isBotMaster: (id: number) => id === 42, async groupSetAdmin(id: number, enabled: boolean) {
+    actions.push([id, enabled]);
+    return "confirmed" as const;
+  } };
+  expect(await command("#设置管理", { ...scope, message_id: 12, message: [at(99), at(43), at("44"), at(43)] }))
+    .toBe("已将 43、44 设置为群管理员。");
+  expect(await command("#取消管理12345", { ...scope, message_id: 13 })).toBe("已取消 12345 的群管理员权限。");
+  expect(await command("#取消管理 23456", { ...scope, message_id: 14 })).toBe("已取消 23456 的群管理员权限。");
+  expect(await command("#设置管理1234", { ...scope, message_id: 15 })).toContain("有效 QQ");
+  expect(await command("#设置管理12345", { ...scope, message_id: 16, message: [at(43)] })).toContain("有效 QQ");
+  expect(await command("#设置管理", { ...scope, message_id: 17, message: [at("all"), at(43)] })).toContain("有效 QQ");
+  expect(await command("#设置管理12345", { ...scope, message_id: 18, isDelegated: true })).toContain("没有设置");
+  expect(await command("#设置管理12345", { ...scope, message_id: 19, isBotMaster: () => false })).toContain("没有设置");
+  expect(await command("#设置管理12345", { ...scope, message_id: 20, message_type: "private" })).toBeUndefined();
+  expect(await command("#设置管理12345", { ...scope, message_id: 21, group_id: undefined })).toContain("没有设置");
+  expect(await command("#设置管理12345", { ...scope, message_id: 22, groupSetAdmin: undefined })).toContain("没有设置");
+  expect(await command("#设置管理12345", scope)).toEqual([]);
+  expect(groupModerationFeature({ normalizedMessage: "#取消管理12345" })).toEqual(["[group] 群管理员"]);
+  expect(actions).toEqual([[43, true], [44, true], [12345, false], [23456, false]]);
+  expect(calls).toEqual([]);
+});
+
+test("群管理员批量每目标只收一次回执，未知不会重试", async () => {
+  const { command, context } = await fixture();
+  const actions: number[] = [];
+  const scope = { ...context, adapter: "milky" as const, message_id: 12, isBotMaster: () => true,
+    message: [at(43), at(44), at(45), at(46), at(47), at(44)], async groupSetAdmin(id: number): Promise<GroupMuteResult> {
+      actions.push(id);
+      if (id === 44) throw new Error("超时");
+      if (id === 45) return "rejected";
+      if (id === 46) return "protected";
+      if (id === 47) return "unavailable";
+      return "confirmed";
+    },
+  };
+  const reply = await command("#设置管理", scope);
+  expect(reply).toContain("已将 43 设置为群管理员");
+  expect(reply).toContain("44 的操作结果未确认");
+  expect(reply).toContain("协议端拒绝操作 45");
+  expect(reply).toContain("46 受群管保护");
+  expect(reply).toContain("无法操作 47");
+  expect(await command("#设置管理", scope)).toEqual([]);
+  expect(actions).toEqual([43, 44, 45, 46, 47]);
+});

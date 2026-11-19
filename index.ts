@@ -20,8 +20,8 @@ export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
 export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch } from "./banned-words.ts";
 export { groupTitleFeature, groupTitleFilterFeature, type GroupTitleContext, type GroupSpecialTitleResult } from "./group-title.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export { groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
-  type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
+export { groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupSetAdminFeature, maxGroupMuteSeconds,
+  type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupSetAdminResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
   ...group,
