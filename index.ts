@@ -9,11 +9,14 @@ import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccoun
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
 import { createManagedBlacklist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
+import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
+import type { GroupMuteContext } from "./group-mute.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
+export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch } from "./banned-words.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
   type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
@@ -28,7 +31,7 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
-  lockFile, registerManagedBlacklist,
+  lockFile, registerManagedBlacklist, registerGroupBannedWords,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -39,6 +42,7 @@ export async function createModule({
   readonly profileLikeImage?: ProfileLikeImage;
   readonly lockFile?: Parameters<typeof createManagedBlacklist>[1];
   readonly registerManagedBlacklist?: (policy: GroupManagedBlacklist) => () => void;
+  readonly registerGroupBannedWords?: (policy: GroupBannedWords) => () => void;
 }) {
   const updater = createAutoGroupCard({ signal, accounts: ownGroupCardAccounts ?? (() => []) });
   let stopTask: (() => void | Promise<void>) | undefined;
@@ -62,15 +66,25 @@ export async function createModule({
   }
   const blacklist = lockFile && !signal.aborted ? createManagedBlacklist(root, lockFile) : undefined;
   const stopManagedBlacklist = blacklist && registerManagedBlacklist?.(blacklist);
+  const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal) : undefined;
+  const stopBannedWords = bannedWords && registerGroupBannedWords?.(bannedWords.policy);
+  const moderation = createGroupMute(root, blacklist, signal);
   return {
     ...manifest,
-    fallback: createGroupMute(root, blacklist, signal),
+    fallback(message: string, context: GroupMuteContext & { readonly normalizedMessage: string }) {
+      return bannedWords && isGroupBannedWordCommand(context.normalizedMessage.trim())
+        ? bannedWords.command(message, context) : moderation(message, context);
+    },
+    fallbackFeatures(context: { readonly normalizedMessage: string }) {
+      return isGroupBannedWordCommand(context.normalizedMessage.trim()) ? [groupBannedWordsFeature] : groupModerationFeature(context);
+    },
     commands: {
       ...manifest.commands,
       ...(profileLikeImage ? createGroupPlugin(undefined, profileLikeImage).commands : {}),
       "#更新群名片": updater.command,
     },
     async dispose() {
+      stopBannedWords?.();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();

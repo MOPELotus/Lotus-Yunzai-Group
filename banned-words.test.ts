@@ -1,0 +1,118 @@
+import { afterEach, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { createGroupBannedWords, isGroupBannedWordCommand } from "./banned-words.ts";
+import { createManagedBlacklist } from "./managed-blacklist.ts";
+
+const temporary: string[] = [];
+afterEach(async () => {
+  await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+});
+
+async function fixture() {
+  const directory = await mkdtemp(join(tmpdir(), "lotus-banned-words-"));
+  temporary.push(directory);
+  await mkdir(join(directory, "plugins/yenai-plugin/config/group"), { recursive: true });
+  await mkdir(join(directory, "config"));
+  const root = pathToFileURL(`${directory}/`);
+  const canonical = new URL("data/group/banned-words/77.json", root);
+  const legacy = new URL("plugins/yenai-plugin/config/group/77.json", root);
+  const whitelist = new URL("config/groupAdmin.yaml", root);
+  const queues = new Map<string, Promise<void>>();
+  async function lockFile(path: string) {
+    const waiting = queues.get(path) ?? Promise.resolve();
+    const held = Promise.withResolvers<void>();
+    queues.set(path, waiting.then(() => held.promise));
+    await waiting;
+    return { close: () => held.resolve() };
+  }
+  const controller = new AbortController();
+  const blacklist = createManagedBlacklist(root, lockFile);
+  const { policy, command } = createGroupBannedWords(root, lockFile, blacklist, controller.signal);
+  const scope = { message_type: "group" as const, self_id: 99, user_id: 42, group_id: 77, async groupManageBlacklist() { return true; } };
+  let message_id = 0;
+  const run = (message: string, overrides = {}) => command(message, { ...scope, normalizedMessage: message, message_id: ++message_id, ...overrides });
+  return { policy, run, canonical, legacy, whitelist, controller, blacklist };
+}
+
+test("旧违禁词按第一条精确、模糊、正则规则执行并保护群间隔离和白名单", async () => {
+  const { policy, canonical, legacy, whitelist } = await fixture();
+  const original = JSON.stringify({ muteTime: 120, TitleBannedWords: ["旧头衔"], bannedWords: {
+    "^Foo": { matchType: 3, penaltyType: 5 },
+    FooBar: { matchType: 1, penaltyType: 1 },
+    "敏感短语": { matchType: 2, penaltyType: 3 },
+    "严格": { matchType: 1, penaltyType: 6 },
+  } });
+  await writeFile(legacy, original);
+  expect(await policy.match(77, 43, "FooBar")).toEqual({ action: "mute-recall", seconds: 120, preview: "^F**" });
+  expect(await policy.match(77, 43, "甲敏感短语乙")).toEqual({ action: "recall", seconds: 120, preview: "敏感**" });
+  expect(await policy.match(77, 43, "严格")).toEqual({ action: "kick-blacklist", seconds: 120, preview: "严格" });
+  expect(await policy.match(77, 43, "不严格")).toBeUndefined();
+  expect(await policy.match(78, 43, "严格")).toBeUndefined();
+  await writeFile(whitelist, 'whiteQQ: ["43"]\n');
+  expect(await policy.match(77, 43, "严格")).toBeUndefined();
+  expect(await policy.match(77, 44, "严格")).toMatchObject({ action: "kick-blacklist" });
+  await expect(readFile(canonical)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await readFile(legacy, "utf8")).toBe(original);
+});
+
+test("增加和删除沿用旧命令、原始列表和编辑权限，首次保存只写新文件", async () => {
+  const { policy, run, canonical, legacy } = await fixture();
+  const original = JSON.stringify({ TitleFilterModeChange: 1, bannedWords: { "{face_12}": { matchType: 1, penaltyType: 3 } } });
+  await writeFile(legacy, original);
+  expect(await run("#违禁词帮助", { groupManageBlacklist: undefined })).toContain("正则2");
+  expect(await run("#违禁词列表", { groupManageBlacklist: undefined })).toMatchObject({ type: "forward",
+    nodes: [["屏蔽词：", { type: "face", id: "12" }, expect.any(String)]] });
+  expect(await run("#违禁词列表raw")).toMatchObject({ type: "forward", nodes: [["屏蔽词：", "{face_12}", expect.any(String)]] });
+  expect(await run("新增模糊撤违禁词 验证", { groupManageBlacklist: undefined })).toContain("没有编辑");
+  expect(await run("新增模糊撤违禁词 验证", { isDelegated: true })).toBeUndefined();
+  expect(await run("新增模糊撤违禁词 验证", { message_type: "private" })).toBeUndefined();
+  expect(await run("新增模糊撤违禁词 验证", { message_id: 10 })).toContain("已添加违禁词。\n");
+  expect(await run("#删除违禁词 验证", { message_id: 10 })).toEqual([]);
+  expect(await policy.match(77, 43, "待验证中")).toMatchObject({ action: "recall" });
+  const saved = JSON.parse(await readFile(canonical, "utf8"));
+  expect(saved.TitleFilterModeChange).toBe(1);
+  expect(saved.bannedWords.验证).toMatchObject({ matchType: 2, penaltyType: 3, addedBy: 42 });
+  expect(await readFile(legacy, "utf8")).toBe(original);
+  expect(await run("#删除违禁词 验证")).toBe("已删除违禁词。");
+  expect(await policy.match(77, 43, "验证")).toBeUndefined();
+  expect(isGroupBannedWordCommand("#查看违禁词 测试")).toBe(true);
+  expect(isGroupBannedWordCommand("#增加头衔屏蔽词")).toBe(false);
+});
+
+test("隔离执行正则字面值，原始 JavaScript 字符串不执行，复杂规则可终止", async () => {
+  const { policy, run, legacy } = await fixture();
+  await writeFile(legacy, JSON.stringify({ bannedWords: { "(() => { throw 'old code'; })()": { matchType: 3, penaltyType: 1 } } }));
+  expect(await policy.match(77, 43, "无关消息")).toBeUndefined();
+  expect(await run("#新增正则2禁违禁词 非字面值")).toBe("正则表达式无效。");
+  expect(await run("#新增正则2踢黑违禁词 /^MiXeD$/i")).toContain("已添加违禁词。\n");
+  expect(await policy.match(77, 43, "mixed")).toMatchObject({ action: "kick-blacklist" });
+  expect(await run("#新增正则1禁违禁词 ^(a|aa)+$")).toContain("已添加违禁词。\n");
+  const start = performance.now();
+  expect(await policy.match(77, 43, "a".repeat(3_000) + "!" )).toBeUndefined();
+  expect(performance.now() - start).toBeLessThan(1_000);
+  const interrupted = new AbortController();
+  interrupted.abort();
+  expect(await policy.match(77, 43, "mixed", interrupted.signal)).toBeUndefined();
+});
+
+test("并发配置迁移不丢数据，提交前复核权限，已确认踢人的跨群记录同锁持久化", async () => {
+  const { policy, run, canonical, blacklist, controller } = await fixture();
+  const reports = await Promise.all([run("#新增违禁词 第一"), run("#新增禁撤违禁词 第二"), run("#设置违禁词禁言时间30")]);
+  expect(reports).toHaveLength(3);
+  expect(await policy.match(77, 43, "第一")).toMatchObject({ action: "mute", seconds: 30 });
+  expect(await policy.match(77, 43, "第二")).toMatchObject({ action: "mute-recall", seconds: 30 });
+  const saved = await readFile(canonical, "utf8");
+  let auth = 0;
+  expect(await run("#删除违禁词 第二", { async groupManageBlacklist() { return ++auth === 1; } })).toContain("没有编辑");
+  expect(await readFile(canonical, "utf8")).toBe(saved);
+  await expect(policy.recordConfirmedKick(43, controller.signal, async () => false)).rejects.toThrow();
+  expect(await blacklist.blocked(43)).toBe(false);
+  await policy.recordConfirmedKick(43, controller.signal, async () => true);
+  expect(await blacklist.blocked(43)).toBe(true);
+  await writeFile(canonical, "broken json");
+  expect(await run("#新增违禁词 内容")).toBe("违禁词配置暂不可用。");
+  expect(await readFile(canonical, "utf8")).toBe("broken json");
+});
