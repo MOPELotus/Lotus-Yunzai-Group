@@ -12,6 +12,7 @@ import { createManagedBlacklist, type GroupManagedBlacklist } from "./managed-bl
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
+import { groupActivityCommand, groupActivityFeature, isGroupActivityCommand, type GroupActivityContext } from "./group-activity.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -19,6 +20,7 @@ export * from "./group-leave-blacklist.ts";
 export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
 export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch } from "./banned-words.ts";
 export { groupTitleFeature, groupTitleFilterFeature, type GroupTitleContext, type GroupSpecialTitleResult } from "./group-title.ts";
+export { groupActivityFeature, type GroupActivityContext, type GroupActivityMember } from "./group-activity.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -75,13 +77,16 @@ export async function createModule({
   const title = bannedWords && createGroupTitle(bannedWords.titleStore, signal);
   return {
     ...manifest,
-    fallback(message: string, context: GroupMuteContext & GroupTitleContext) {
-      if (title && groupTitleCommandFeature(context.normalizedMessage.trim())) return title(context);
-      return bannedWords && isGroupBannedWordCommand(context.normalizedMessage.trim())
+    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext) {
+      const normalized = context.normalizedMessage.trim();
+      if (isGroupActivityCommand(normalized)) return groupActivityCommand(context, signal);
+      if (title && groupTitleCommandFeature(normalized)) return title(context);
+      return bannedWords && isGroupBannedWordCommand(normalized)
         ? bannedWords.command(message, context) : moderation(message, context);
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
+      if (isGroupActivityCommand(message)) return [groupActivityFeature];
       const feature = groupTitleCommandFeature(message);
       if (feature) return [feature];
       return isGroupBannedWordCommand(message) ? [groupBannedWordsFeature] : groupModerationFeature(context);

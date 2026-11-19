@@ -86,6 +86,15 @@ function amountSection(value: string): number {
     Number(ten === "" ? 1 : ten ?? 0) * 10 + Number(one ?? 0);
 }
 
+export function parseGroupInteger(value: string): number | undefined {
+  if (!value || value.length > 64) return;
+  const normalized = value.replace(/[零一壹二两三四五六七八九]/gu, (character) => digit[character]!);
+  const sections = /^(?:([^亿万]+)亿)?(?:([^亿万]+)万)?([^亿万]*)$/u.exec(normalized);
+  if (!sections) return;
+  const amount = amountSection(sections[1] ?? "") * 1e8 + amountSection(sections[2] ?? "") * 1e4 + amountSection(sections[3] ?? "");
+  if (Number.isSafeInteger(amount) && amount >= 0) return amount;
+}
+
 function duration(value: string): number | undefined {
   if (!value) return defaultMuteSeconds;
   if (value.length > 64) return;
@@ -97,12 +106,9 @@ function duration(value: string): number | undefined {
   }
   const parts = amountPattern.exec(value);
   if (!parts?.[1]) return;
-  const normalized = parts[1].replace(/[零一壹二两三四五六七八九]/gu, (character) => digit[character]!);
-  const sections = /^(?:([^亿万]+)亿)?(?:([^亿万]+)万)?([^亿万]*)$/u.exec(normalized);
-  if (!sections) return;
-  const amount = amountSection(sections[1] ?? "") * 1e8 + amountSection(sections[2] ?? "") * 1e4 + amountSection(sections[3] ?? "");
+  const amount = parseGroupInteger(parts[1]);
   const multiplier = secondsByUnit.get((parts[2] ?? "秒").toUpperCase());
-  if (multiplier === undefined) return;
+  if (amount === undefined || multiplier === undefined) return;
   const seconds = amount * multiplier;
   if (Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= maxGroupMuteSeconds) return seconds;
 }
