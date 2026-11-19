@@ -12,7 +12,8 @@ import { createManagedBlacklist, type GroupManagedBlacklist } from "./managed-bl
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
-import { groupActivityCommand, groupActivityFeature, isGroupActivityCommand, type GroupActivityContext } from "./group-activity.ts";
+import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature, isGroupActivityCleanupCommand, isGroupActivityCommand,
+  type GroupActivityContext } from "./group-activity.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -75,18 +76,20 @@ export async function createModule({
   const stopBannedWords = bannedWords && registerGroupBannedWords?.(bannedWords.policy);
   const moderation = createGroupMute(root, blacklist, signal);
   const title = bannedWords && createGroupTitle(bannedWords.titleStore, signal);
+  const activityCleanup = createGroupActivityCleanup(root, signal);
   return {
     ...manifest,
     fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext) {
       const normalized = context.normalizedMessage.trim();
       if (isGroupActivityCommand(normalized)) return groupActivityCommand(context, signal);
+      if (isGroupActivityCleanupCommand(normalized)) return activityCleanup(context);
       if (title && groupTitleCommandFeature(normalized)) return title(context);
       return bannedWords && isGroupBannedWordCommand(normalized)
         ? bannedWords.command(message, context) : moderation(message, context);
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
-      if (isGroupActivityCommand(message)) return [groupActivityFeature];
+      if (isGroupActivityCommand(message) || isGroupActivityCleanupCommand(message)) return [groupActivityFeature];
       const feature = groupTitleCommandFeature(message);
       if (feature) return [feature];
       return isGroupBannedWordCommand(message) ? [groupBannedWordsFeature] : groupModerationFeature(context);
