@@ -35,7 +35,7 @@ test("面板与指令共用配置，保留未知字段、注释、YAML 标签和
     expect(await plugin.commands["#赞我"]!("", {
       message_type: "private", user_id: 42,
       likeSelf: async (count) => { expect(count).toBe(5); return 2; },
-    })).toBe("点了 2 次。");
+    })).toEqual({ type: "quoted", message: "点了 2 次。" });
     const yaml = await readFile(file, "utf8");
     expect(yaml).toContain("# 组配置");
     expect(yaml).toContain("unrelated: &example");
@@ -109,4 +109,28 @@ test("保留符号链接，拒绝覆盖外部编辑及读写失败后留下的�
     }
     expect((await readdir(root)).sort()).toEqual(["group.yaml", "linked.yaml"]);
   }
+}));
+
+
+test("旧 thumbUp.yaml 缺少撤回字段时沿用 20 秒，新配置默认关闭", () => withDirectory(async (root) => {
+  const legacy = join(root, "thumbUp.yaml");
+  const modern = join(root, "group.yaml");
+  await writeFile(legacy, "# 旧格式\nunrelated: 保留\n");
+  expect((await readLikeSettings({ file: modern })).settings.recall).toBe(0);
+  const before = await readLikeSettings({ file: legacy });
+  expect(before.settings.recall).toBe(20);
+  const after = await saveLikeSettings({ recall: 0 }, { file: legacy, revision: before.revision });
+  expect(after.settings.recall).toBe(0);
+  expect(await readFile(legacy, "utf8")).toContain("recall: 0");
+  expect(await readFile(legacy, "utf8")).toContain("unrelated: 保留");
+  for (const recall of [-1, 121, Infinity, "20", null]) {
+    await expect(saveLikeSettings({ recall }, { file: legacy, revision: after.revision })).rejects.toMatchObject({ code: "invalid" });
+  }
+  await writeFile(modern, "recall: 600\ncount: 5\n");
+  const invalid = await readLikeSettings({ file: modern });
+  expect(invalid.settings).toMatchObject({ recall: 0, count: 5 });
+  await saveLikeSettings({ count: 6 }, { file: modern, revision: invalid.revision });
+  expect(await readFile(modern, "utf8")).toContain("recall: 600");
+  await writeFile(legacy, "recall: 0.5\n");
+  expect((await readLikeSettings({ file: legacy })).settings.recall).toBe(0.5);
 }));

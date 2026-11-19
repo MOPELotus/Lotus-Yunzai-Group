@@ -11,6 +11,7 @@ export interface LikeSettings {
   readonly cloneAllThumbUp: boolean;
   readonly strangeThumbUp: boolean;
   readonly count: number;
+  readonly recall: number;
   readonly closeTips: string | false;
   readonly successMsg: string | false;
   readonly failsMsg: string | false;
@@ -33,6 +34,7 @@ const defaults: LikeSettings = {
   cloneAllThumbUp: false,
   strangeThumbUp: true,
   count: 10,
+  recall: 0,
   closeTips: "",
   successMsg: "给你点了 {{thumbUpNum}} 下赞。",
   failsMsg: "点赞未成功，可能已达到平台次数上限或协议端暂不接受。",
@@ -46,6 +48,10 @@ function codeOf(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException | undefined)?.code;
 }
 
+function recallSeconds(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 120;
+}
+
 function validate(key: string, value: unknown): string | number | boolean {
   switch (key) {
     case "enable":
@@ -56,6 +62,9 @@ function validate(key: string, value: unknown): string | number | boolean {
     case "count":
       if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 10) return value;
       throw new LikeSettingsError("invalid", "count 须为 1–10 的整数。");
+    case "recall":
+      if (recallSeconds(value)) return value;
+      throw new LikeSettingsError("invalid", "recall 须为 0–120 秒。");
     case "closeTips":
     case "successMsg":
     case "failsMsg":
@@ -68,11 +77,15 @@ function validate(key: string, value: unknown): string | number | boolean {
   }
 }
 
-function readSettings(values: Map<unknown, unknown>): LikeSettings {
-  const result = { ...defaults };
+function readSettings(values: Map<unknown, unknown>, legacy: boolean): LikeSettings {
+  const result = { ...defaults, recall: legacy ? 20 : defaults.recall };
   for (const key of Object.keys(defaults)) {
     const value = values.get(key);
     if (value === undefined || (key === "count" && value === null)) continue;
+    if (key === "recall" && !recallSeconds(value)) {
+      result.recall = 0;
+      continue;
+    }
     Object.assign(result, { [key]: validate(key, value) });
   }
   return result;
@@ -82,8 +95,10 @@ function configLocation(options?: LikeSettingsLocation) {
   const overridden = options?.file;
   const configured = Bun.env.LOTUS_GROUP_CONFIG;
   const file = overridden ?? (configured || defaultConfig);
+  const path = typeof file === "string" ? resolve(file) : fileURLToPath(file);
   return {
-    path: typeof file === "string" ? resolve(file) : fileURLToPath(file),
+    path,
+    legacy: basename(path) === "thumbUp.yaml",
     required: overridden === undefined && Boolean(configured),
   };
 }
@@ -147,9 +162,9 @@ function conflict() {
 }
 
 export async function readLikeSettings(options?: LikeSettingsLocation) {
-  const { path, required } = configLocation(options);
+  const { path, required, legacy } = configLocation(options);
   const current = await readSnapshot(await canonical(path), required);
-  return { settings: readSettings(readDocument(current.text).values), revision: current.revision };
+  return { settings: readSettings(readDocument(current.text).values, legacy), revision: current.revision };
 }
 
 /**
@@ -166,22 +181,23 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
     throw new LikeSettingsError("invalid", "点赞配置版本无效，请重新读取。");
   }
   const updates = Object.entries(patch as Record<string, unknown>).map(([key, value]) => [key, validate(key, value)] as const);
-  const { path, required } = configLocation(options);
+  const { path, required, legacy } = configLocation(options);
   const file = await canonical(path);
   const operation = (pendingWrites.get(file) ?? Promise.resolve()).then(async () => {
     const current = await readSnapshot(file, required);
     if (current.revision !== options.revision) throw conflict();
 
     const { document, values } = readDocument(current.text);
-    const before = readSettings(values);
-    const changes = updates.filter(([key, value]) => before[key as keyof LikeSettings] !== value);
+    const before = readSettings(values, legacy);
+    const changes = updates.filter(([key, value]) => before[key as keyof LikeSettings] !== value ||
+      (key === "recall" && values.has(key) && !recallSeconds(values.get(key))));
     if (!changes.length) return { settings: before, revision: current.revision };
 
     const output = values.size || document.contents === null ? document : new Document();
     for (const [key, value] of changes) output.set(key, value);
     const yaml = output.toString();
     const after = readDocument(yaml).values;
-    const settings = readSettings(after);
+    const settings = readSettings(after, legacy);
     if (!isDeepStrictEqual(unknownFields(values), unknownFields(after)) ||
         !isDeepStrictEqual(settings, { ...before, ...Object.fromEntries(changes) })) {
       throw new LikeSettingsError("invalid", "保存将改变其他 YAML 字段，请先检查配置中的引用。");

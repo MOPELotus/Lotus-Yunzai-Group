@@ -10,7 +10,16 @@ interface LikeContext {
 
 type MessagePart = string | { readonly type: "at"; readonly qq: number };
 type Reply = string | readonly MessagePart[];
-type Handler = (argument: string, context: LikeContext) => Promise<Reply>;
+type QuotedReply = {
+  readonly type: "quoted";
+  readonly message: Reply;
+  readonly options?: { readonly recallMsg: number };
+};
+type Handler = (argument: string, context: LikeContext) => Promise<Reply | QuotedReply>;
+
+function quoted(message: Reply, recall = 0): Reply | QuotedReply {
+  return message.length ? { type: "quoted", message, ...(recall > 0 && { options: { recallMsg: recall } }) } : message;
+}
 
 function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean): Reply {
   if (!template) return [];
@@ -54,7 +63,7 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
         return "点赞配置无法读取，请联系管理员。";
       }
       if (groupOnly && current.cloneAllThumbUp) return [];
-      if (!current.enable) return reply(current.closeTips, context, style);
+      if (!current.enable) return quoted(reply(current.closeTips, context, style));
       const { likeSelf, user_id } = context;
       if (!likeSelf || user_id === undefined || context.message_type === "terminal") {
         return "当前协议端不支持资料卡点赞。";
@@ -65,18 +74,18 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
       try {
         if (!current.strangeThumbUp) {
           const friend = await context.isFriend?.().catch(() => undefined);
-          if (friend !== true) return groupOnly ? [] : reply(current.noFriendMsg, context, style, undefined, friend);
+          if (friend !== true) return groupOnly ? [] : quoted(reply(current.noFriendMsg, context, style, undefined, friend));
         }
         const count = await likeSelf(current.count);
         if (Number.isInteger(count) && count >= 1 && count <= current.count) {
-          return reply(current.successMsg, context, style, count);
+          return quoted(reply(current.successMsg, context, style, count), current.recall);
         }
       } catch {
         // A gateway refusal is never reported as a successful like.
       } finally {
         inFlight.delete(key);
       }
-      return groupOnly ? [] : reply(current.failsMsg, context, style);
+      return groupOnly ? [] : quoted(reply(current.failsMsg, context, style), current.recall);
     };
   }
 
