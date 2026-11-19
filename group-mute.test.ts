@@ -60,7 +60,7 @@ test("拒绝无效目标、@ 全体、文本伪造、委托、跨会话及无效
   expect(await command("#禁言43", { ...context, message_type: "private" })).toBeUndefined();
   expect(await command("#禁言43", { ...context, isDelegated: true })).toContain("没有群禁言权限");
   expect(await command("#禁言43", { ...context, groupMute: undefined })).toContain("没有群禁言权限");
-  expect(await command("#禁言列表", context)).toBeUndefined();
+  expect(await command("#禁言列表", context)).toContain("无法提供可靠");
   expect(calls).toEqual([]);
 });
 
@@ -111,7 +111,7 @@ test("旧全体和全员禁言、解禁使用独立群能力，个人白名单�
   expect(await command("#全员禁言", scope)).toBe("已开启全体禁言。");
   expect(await command("#全体解禁", scope)).toBe("已关闭全体禁言。");
   expect(await command("#全员解禁", scope)).toBe("已关闭全体禁言。");
-  expect(await command("#解除全部禁言", scope)).toBeUndefined();
+  expect(await command("#解除全部禁言", scope)).toContain("没有解除群禁言的权限");
   expect(await command("#全体禁言 30秒", scope)).toBeUndefined();
   expect(await command("全员禁言", scope)).toBeUndefined();
   expect(variants).toEqual([true, true, false, false]);
@@ -238,4 +238,61 @@ test("群管理员批量每目标只收一次回执，未知不会重试", async
   expect(reply).toContain("无法操作 47");
   expect(await command("#设置管理", scope)).toEqual([]);
   expect(actions).toEqual([43, 44, 45, 46, 47]);
+});
+
+test("三条旧禁言列表指令公开展示真实快照中的头像、群身份和剩余时间", async () => {
+  const { command, context, calls } = await fixture();
+  const now = Math.floor(Date.now() / 1000);
+  const scope = { ...context, user_id: 50, groupMute: undefined, async groupMuteRoster() {
+    return [{ userId: 43001, name: "群名片", role: "admin" as const, until: now + 7200 },
+      { userId: 43002, until: now + 300 }, { userId: 43003, until: now - 1 }];
+  } };
+  for (const name of ["#禁言列表", "#获取禁言列表", "#查看禁言列表"]) {
+    const result = await command(name, scope);
+    if (typeof result !== "object" || !("nodes" in result)) throw new Error("禁言列表未返回合并转发。");
+    expect(result.nodes).toHaveLength(2);
+    expect(result.nodes[0]?.[0]).toEqual({ type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=43001" });
+    expect(result.nodes[1]?.[0]).toEqual({ type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=43002" });
+    expect(result.nodes[0]?.[1]).toContain("群身份：群管理");
+    expect(result.nodes[1]?.[1]).toContain("群身份：未确认");
+    expect(JSON.stringify(result)).toContain("禁言到期时间：");
+    expect(JSON.stringify(result)).toContain("禁言剩余时间：");
+    expect(JSON.stringify(result)).toContain("群名片");
+    expect(JSON.stringify(result)).not.toContain("43003");
+  }
+  expect(await command("#禁言列表", { ...scope, async groupMuteRoster() { return []; } })).toContain("没有被禁言");
+  expect(await command("#禁言列表", { ...scope, async groupMuteRoster() {return undefined; } })).toContain("无法提供可靠");
+  expect(await command("#禁言列表", { ...scope, message_type: "private" })).toBeUndefined();
+  expect(calls).toEqual([]);
+  expect(groupModerationFeature({ normalizedMessage: "#查看禁言列表" })).toEqual(["[group] 群禁言列表"]);
+});
+
+test("解除全部禁言仅向快照中未来成员分发单人解除，回执区分且无全员变更", async () => {
+  const { command, context, calls } = await fixture(async (id) => {
+    if (id === 44) throw new Error("timeout");
+    if (id === 45) return "rejected";
+    if (id === 46) return "protected";
+    return "confirmed";
+  });
+  let rosters = 0, whole = 0;
+  const now = Math.floor(Date.now() / 1000);
+  const scope = { ...context, message_id: 59, async groupMuteRoster() {
+    rosters++;
+    return [{ userId: 42, until: now }, ...[43, 44, 45, 46].map((userId) => ({ userId, until: now + 300 }))];
+  }, async groupWholeMute() { whole++; return "confirmed" as const; } };
+  const [first, duplicate] = await Promise.all([command("#解除全部禁言", scope), command("#解除全部禁言", scope)]);
+  expect(first).toContain("已解除 1 人");
+  expect(first).toContain("1 人的解禁被协议端拒绝");
+  expect(first).toContain("1 人的解禁结果未确认");
+  expect(first).toContain("1 人未能解禁");
+  expect(duplicate).toEqual([]);
+  expect(await command("#解除全部禁言", { ...scope, message_id: 60, isDelegated: true })).toContain("没有群禁言权限");
+  expect(await command("#解除全部禁言", { ...scope, message_id: 61, groupMute: undefined })).toContain("没有解除群禁言的权限");
+  expect(await command("#解除全部禁言", { ...scope, message_id: undefined })).toEqual([]);
+  expect(await command("#解除全部禁言", { ...scope, message_id: 62, async groupMuteRoster() {
+    return [{ userId: 43, until: now + 300 }, { userId: 43, until: now + 300 }];
+  } })).toContain("无法提供可靠");
+  expect(calls).toEqual([[43, 0], [44, 0], [45, 0], [46, 0]]);
+  expect(rosters).toBe(1);
+  expect(whole).toBe(0);
 });

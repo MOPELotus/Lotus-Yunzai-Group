@@ -4,6 +4,14 @@ export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unava
 export type GroupMuteResult = GroupWholeMuteResult | "protected";
 export type GroupKickResult = GroupMuteResult;
 export type GroupSetAdminResult = GroupMuteResult;
+export interface GroupMuteRosterEntry {
+  readonly userId: number;
+  readonly name?: string;
+  readonly role?: "member" | "admin" | "owner";
+  readonly until: number;
+}
+type RosterPart = string | { readonly type: "image"; readonly file: string };
+type GroupMuteReply = string | readonly [] | { readonly type: "forward"; readonly nodes: readonly (readonly RosterPart[])[] };
 
 export interface GroupMuteContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -17,6 +25,7 @@ export interface GroupMuteContext {
   readonly normalizedMessage?: string;
   readonly isBotMaster: (userId: number) => boolean;
   readonly groupMute?: (userId: number, seconds: number) => Promise<GroupMuteResult>;
+  readonly groupMuteRoster?: () => Promise<readonly GroupMuteRosterEntry[] | undefined>;
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
   readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
   readonly groupSetAdmin?: (userId: number, enabled: boolean) => Promise<GroupSetAdminResult>;
@@ -25,6 +34,7 @@ export interface GroupMuteContext {
 }
 
 export const groupMuteFeature = "[group] 群禁言";
+export const groupMuteRosterFeature = "[group] 群禁言列表";
 export const groupKickFeature = "[group] 群成员移出";
 export const groupSetAdminFeature = "[group] 群管理员";
 export const groupManagedBlacklistFeature = "[group] 群管黑名单";
@@ -46,6 +56,7 @@ const secondsByUnit = new Map(Object.entries({
 const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...secondsByUnit.keys()].join("|")})$)`, "iu");
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
 const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
+const rosterPattern = /^#(?:(?:获取|查看)?禁言列表|解除全部禁言)$/u;
 const kickPattern = /^#踢(黑)?(\d+)?$/u;
 const adminPattern = /^#(设置|取消)管理(?:\s*(\d+))?$/u;
 const listPattern = /^#?群管(加|删)(白|黑)(?:名单)?(?:\s*(\d+))?$/u;
@@ -56,6 +67,7 @@ export function groupModerationFeature({ normalizedMessage }: { readonly normali
   const list = listPattern.exec(message);
   if (list?.[2] === "白" || autoUnmutePattern.test(message)) return [groupManagedWhitelistFeature];
   if (list) return [groupManagedBlacklistFeature];
+  if (rosterPattern.test(message)) return [groupMuteRosterFeature];
   if (adminPattern.test(message)) return [groupSetAdminFeature];
   return [kickPattern.test(message) ? groupKickFeature : groupMuteFeature];
 }
@@ -132,6 +144,48 @@ function kickTargets(context: GroupMuteContext, bot: number, numeric: string | u
   if (id !== undefined && (allowBot || id !== bot)) return [id];
 }
 
+async function activeMuteRoster(load: NonNullable<GroupMuteContext["groupMuteRoster"]>): Promise<readonly GroupMuteRosterEntry[] | undefined> {
+  let rows: readonly GroupMuteRosterEntry[] | undefined;
+  try { rows = await load(); } catch { return; }
+  if (!Array.isArray(rows)) return;
+  const seen = new Set<number>();
+  const now = Math.floor(Date.now() / 1000);
+  const active: GroupMuteRosterEntry[] = [];
+  for (const row of rows) {
+    if (!row || typeof row.userId !== "number" || positiveId(row.userId) === undefined || seen.has(row.userId) ||
+        !Number.isSafeInteger(row.until) || row.until < 0 || row.until > 8_640_000_000_000) return;
+    seen.add(row.userId);
+    if (row.until > now) active.push(row);
+  }
+  return active;
+}
+
+function formatRoster(rows: readonly GroupMuteRosterEntry[]): GroupMuteReply {
+  const now = Math.floor(Date.now() / 1000);
+  const active = rows.filter((entry) => entry.until > now);
+  if (!active.length) return "本群没有被禁言的成员。";
+  const nodes: RosterPart[][] = [];
+  const perNode = Math.ceil(active.length / 100);
+  const roles = { member: "群员", admin: "群管理", owner: "群主" } as const;
+  for (let start = 0; start < active.length; start += perNode) {
+    const node: RosterPart[] = [];
+    for (const { userId, name, role, until } of active.slice(start, start + perNode)) {
+      const nickname = typeof name === "string" ? name.replace(/[\p{Cc}\p{Cf}]/gu, "").trim().slice(0, 128).toWellFormed() : "";
+      const remaining = until - now;
+      const days = Math.floor(remaining / 86400);
+      const hours = Math.floor(remaining / 3600) % 24;
+      const minutes = Math.floor(remaining / 60) % 60;
+      const time = `${days ? `${days} 天 ` : ""}${hours ? `${hours} 小时 ` : ""}${minutes ? `${minutes} 分 ` : ""}${remaining % 60} 秒`;
+      if (node.length) node.push("\n\n");
+      node.push({ type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
+        `\n昵称：${nickname || userId}\nQQ：${userId}\n群身份：${role && Object.hasOwn(roles, role) ? roles[role] : "未确认"}\n` +
+        `禁言剩余时间：${time}\n禁言到期时间：${new Date(until * 1000).toLocaleString("zh-CN")}`);
+    }
+    nodes.push(node);
+  }
+  return { type: "forward", nodes };
+}
+
 export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlacklistStore, moduleSignal?: AbortSignal) {
   const seen = new Set<string>();
 
@@ -149,16 +203,17 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     return true;
   }
 
-  return async (message: string, context: GroupMuteContext): Promise<string | readonly [] | undefined> => {
+  return async (message: string, context: GroupMuteContext): Promise<GroupMuteReply | undefined> => {
     const command = (context.normalizedMessage ?? message).trim();
     if (context.message_type !== "group") return;
     const whole = wholeMutePattern.exec(command);
+    const roster = rosterPattern.test(command);
     const kick = kickPattern.exec(command);
     const admin = adminPattern.exec(command);
     const editList = listPattern.exec(command);
     const toggle = autoUnmutePattern.exec(command);
-    if (!whole && !kick && !admin && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
-    const { groupMute, groupWholeMute, groupKick, groupSetAdmin, user_id, self_id, group_id } = context;
+    if (!whole && !roster && !kick && !admin && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const { groupMute, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
     const list = editList?.[2] === "白" || toggle ? "白名单" : "黑名单";
     const listPermission = toggle ? "当前会话没有设置白名单自动解禁的权限。" : `当前会话没有编辑群管${list}的权限。`;
@@ -206,6 +261,33 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
         case "unavailable": return "无法设置全体禁言，请核对群管理权限。";
         default: return "全体禁言操作结果未确认，请在群内核对。";
       }
+    }
+    if (roster) {
+      const release = command === "#解除全部禁言";
+      if (release && !groupMute) return "当前会话没有解除群禁言的权限。";
+      if (!groupMuteRoster) return "当前协议端无法提供可靠的群禁言列表。";
+      if (release && !claim(context, bot, issuer, true)) return [];
+      const rows = await activeMuteRoster(groupMuteRoster);
+      if (!rows || moduleSignal?.aborted) return "当前协议端无法提供可靠的群禁言列表。";
+      if (!release) return formatRoster(rows);
+      if (!rows.length) return "本群没有被禁言的成员。";
+      const counts = { confirmed: 0, rejected: 0, unknown: 0, unavailable: 0, protected: 0, expired: 0 };
+      for (const { userId, until } of rows) {
+        if (moduleSignal?.aborted) break;
+        if (until <= Math.floor(Date.now() / 1000)) { counts.expired++; continue; }
+        let result: GroupMuteResult;
+        try { result = await groupMute!(userId, 0); } catch { result = "unknown"; }
+        counts[result]++;
+      }
+      const stopped = rows.length - Object.values(counts).reduce((total, count) => total + count, 0);
+      return [
+        `已解除 ${counts.confirmed} 人的禁言。`,
+        counts.rejected && `${counts.rejected} 人的解禁被协议端拒绝。`,
+        counts.unknown && `${counts.unknown} 人的解禁结果未确认，请在群内核对。`,
+        counts.unavailable + counts.protected > 0 && `${counts.unavailable + counts.protected} 人未能解禁，请核对群管理权限。`,
+        counts.expired && `${counts.expired} 人的禁言已到期。`,
+        stopped > 0 && `${stopped} 人尚未处理。`,
+      ].filter(Boolean).join("\n");
     }
     const issuerMaster = context.isBotMaster(issuer);
     let ids: number[];
