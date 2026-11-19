@@ -76,7 +76,7 @@ test("只有真正发送的点赞结果使用配置的自动撤回", async () =>
   const context = { message_type: "group" as const, user_id: 42,
     likeSelf: async (count: number) => { calls.push(count); return 2; } };
   const success = { type: "quoted", message: [{ type: "at", qq: 42 }, " 给", "你", "赞", "了", "2", "次"],
-    options: { recallMsg: 1.5 } };
+    options: { recallMsg: 1.5 } } as const;
   expect(await commands["#赞我"]!("", context)).toEqual(success);
   expect(await commands["#全部赞我"]!("", context)).toEqual(success);
   const refused = { ...context, async likeSelf(count: number) { calls.push(count); return 0; } };
