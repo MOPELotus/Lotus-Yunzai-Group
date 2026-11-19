@@ -198,3 +198,67 @@ test("清理待确认有效 120 秒，明确取消、撤销权限或换连接时
     expect(kicks).toBe(0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test("旧按时长查看/获取按普通成员和严格时间差分页，保留单位、中文数量与权限差异", async () => {
+  const duration = 30 * 86400;
+  const cutoff = time - duration;
+  const rows: GroupActivityMember[] = [bot, { ...bot, userId: 43, lastSentTime: 0, name: "未记录名片" },
+    { ...bot, userId: 44, lastSentTime: cutoff, role: "member" },
+    { ...bot, userId: 45, lastSentTime: cutoff - 1, role: "admin" },
+    ...Array.from({ length: 30 }, (_, index) => ({ ...bot, userId: 10_000 + index, lastSentTime: cutoff - 100 + index }))];
+  let reads = 0, management = 0;
+  const scope = { ...context, async groupActivityRoster() { reads++; return rows; }, async groupManageBlacklist() { management++; return false; } };
+  const clock = () => time * 1000 + 450;
+  expect(isGroupActivityCommand("#查看一个月没发言的人")).toBe(true);
+  expect(isGroupActivityCommand("#查看月没发言的人")).toBe(false);
+  expect(isGroupActivityCommand("#查看1day没发言的人")).toBe(false);
+  const first = await groupActivityCommand({ ...scope, normalizedMessage: "#查看一个月没发言的人" }, undefined, clock);
+  if (typeof first !== "object") throw new Error("未返回时长查询合并转发");
+  expect(first.nodes).toHaveLength(31);
+  expect(first.nodes[0]?.join("")).toContain("以下为1月没发言的人");
+  expect(first.nodes[0]?.join("")).toContain("#查看1月没发言的人第2页");
+  expect(first.nodes[1]?.[0]).toEqual({ type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=43" });
+  expect(first.nodes[1]?.join("")).toContain("最后发言时间：未记录");
+  const page = await groupActivityCommand({ ...scope, normalizedMessage: "#查看1MONTH未发言的人第二页" }, undefined, clock);
+  if (typeof page !== "object") throw new Error("未返回中文页码");
+  expect(page.nodes).toHaveLength(2);
+  expect(page.nodes[1]?.join("")).toContain("QQ：10029");
+  expect(await groupActivityCommand({ ...scope, normalizedMessage: "#获取1MONTH未发言的人" }, undefined, clock)).toContain("没有获取");
+  expect(await groupActivityCommand({ ...scope, normalizedMessage: "#查看0秒没发言的人" }, undefined, clock)).toContain("有效的未发言时长");
+  expect(await groupActivityCommand({ ...scope, normalizedMessage: "#查看一毫秒没发言的人第零页" }, undefined, clock)).toContain("有效页码");
+  expect(reads).toBe(2);
+  expect(management).toBe(1);
+});
+
+test("按时长清理分页只展示一页，确认按原截止和全量安全候选收缩", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lotus-cleanup-timed-"));
+  try {
+    const lifetime = new AbortController(), session = new AbortController();
+    const startCutoff = time - 86400;
+    let epoch = time * 1000;
+    const command = createGroupActivityCleanup(pathToFileURL(`${directory}/`), lifetime.signal, () => 0, () => epoch);
+    const member = (userId: number, lastSentTime: number, joinTime = startCutoff - 800) => ({ ...bot, userId, lastSentTime, joinTime });
+    const original = Array.from({ length: 31 }, (_, index) => member(10_000 + index, startCutoff - 100 + index));
+    let rows = [bot, ...original, member(43, 0), member(44, startCutoff - 20, startCutoff + 1), member(45, startCutoff)];
+    const calls: number[] = [];
+    const scope = { ...context, groupActivitySignal: session.signal, async groupManageBlacklist() { return true; },
+      async groupActivityRoster() { return rows; }, async groupKick(id: number, block: boolean) { expect(block).toBe(false); calls.push(id); return "confirmed" as const; } };
+    expect(await command({ ...scope, normalizedMessage: "#清理一天没发言的人第三页", message_id: 1 })).toContain("共 2 页");
+    expect(await command({ ...scope, normalizedMessage: "#确认清理", message_id: 2 })).toBeUndefined();
+    const preview = await command({ ...scope, normalizedMessage: "#清理1天没发言的人第二页", message_id: 3 });
+    if (typeof preview !== "object" || !("nodes" in preview)) throw new Error("未返回按时长清理预览");
+    expect(preview.nodes).toHaveLength(3);
+    expect(preview.nodes[0]?.join("")).toContain("31 人");
+    expect(preview.nodes[0]?.join("")).toContain("全部预览页");
+    expect(preview.nodes[2]?.join("")).toContain("QQ：10030");
+    expect(calls).toEqual([]);
+    epoch += 5000;
+    rows = [bot, ...original.slice(2), member(10000, original[0]!.lastSentTime + 1),
+      { ...original[1]!, joinTime: original[1]!.joinTime + 1 }, member(43, 0), member(45, startCutoff), member(46, startCutoff - 500)];
+    const confirmed = await command({ ...scope, normalizedMessage: "#确认清理", message_id: 4 });
+    if (typeof confirmed !== "object" || !("nodes" in confirmed)) throw new Error("未返回清理结果");
+    expect(confirmed.nodes.flat().join("\n")).toContain("1、10000\n2、10001");
+    expect(calls).toEqual(original.slice(2).map(({ userId }) => userId));
+    expect(await command({ ...scope, normalizedMessage: "#确认清理", message_id: 4 })).toBeUndefined();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

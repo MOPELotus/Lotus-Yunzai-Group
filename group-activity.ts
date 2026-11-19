@@ -1,4 +1,4 @@
-import { parseGroupInteger } from "./group-mute.ts";
+import { groupTimeUnits, parseGroupInteger } from "./group-mute.ts";
 import type { GroupKickResult } from "./group-mute.ts";
 import { readManagedWhitelist } from "./managed-blacklist.ts";
 
@@ -34,6 +34,9 @@ const commandPattern = /^#查看从未发言过?的人(?:第([零一壹二两三
 const rankPattern = /^#(?:查看|获取)?(不活跃排行榜|潜水排行榜|最近的?入群(?:情况|记录))([零一壹二两三四五六七八九十百千万亿\d]+)?$/u;
 const cleanupPattern = /^#清理从未发言过?的人$/u;
 const responsePattern = /^#?(确认|取消)清理$/u;
+const inactivityUnits = [...groupTimeUnits.keys()].join("|");
+const integerPattern = String.raw`[零一壹二两三四五六七八九十百千万亿\d]+`;
+const timedPattern = new RegExp(`^#(查看|获取|清理)(${integerPattern})个?(${inactivityUnits})(?:没|未)发言的人(?:第(${integerPattern})页)?$`, "u");
 const pageSize = 30;
 const unavailable = "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。";
 const maxDateTimestamp = 8_640_000_000_000;
@@ -41,9 +44,14 @@ const maxDateTimestamp = 8_640_000_000_000;
 type Entry = string | { readonly type: "image"; readonly file: string };
 type ActivityReply = string | { readonly type: "forward"; readonly nodes: readonly (readonly Entry[])[] };
 
-export function isGroupActivityCommand(message: string): boolean { return commandPattern.test(message); }
+export function isGroupActivityCommand(message: string): boolean {
+  const timed = timedPattern.exec(message);
+  return commandPattern.test(message) || !!timed && timed[1] !== "清理";
+}
 export function isGroupActivityRankCommand(message: string): boolean { return rankPattern.test(message); }
-export function isGroupActivityCleanupCommand(message: string): boolean { return cleanupPattern.test(message) || responsePattern.test(message); }
+export function isGroupActivityCleanupCommand(message: string): boolean {
+  return cleanupPattern.test(message) || responsePattern.test(message) || timedPattern.exec(message)?.[1] === "清理";
+}
 
 function positive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 
@@ -82,10 +90,26 @@ async function readRoster(context: GroupActivityContext, bot: number, visibility
   } catch { return; }
 }
 
-async function readMembers(context: GroupActivityContext, bot: number): Promise<GroupActivityMember[] | undefined> {
+interface InactivityWindow { readonly label: string; readonly cutoff: number; readonly page: number }
+
+function inactivityWindow(match: RegExpExecArray, epochMillis: number): InactivityWindow | string {
+  const amount = parseGroupInteger(match[2] ?? "");
+  const unit = match[3] ?? "";
+  const unitSeconds = groupTimeUnits.get(unit);
+  const seconds = amount !== undefined && unitSeconds !== undefined ? amount * unitSeconds : NaN;
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > maxDateTimestamp) return "请输入有效的未发言时长。";
+  const page = match[4] === undefined ? 1 : parseGroupInteger(match[4]);
+  if (!page) return "请输入有效页码。";
+  return { label: `${amount}${unit}`, cutoff: Math.floor(epochMillis / 1000) - seconds, page };
+}
+
+async function readMembers(context: GroupActivityContext, bot: number, window?: InactivityWindow, forCleanup = false): Promise<GroupActivityMember[] | undefined> {
   const roster = await readRoster(context, bot);
-  return roster?.filter((entry) => entry.userId !== bot && entry.role === "member" && entry.joinTime === entry.lastSentTime)
-    .sort((left, right) => left.joinTime - right.joinTime);
+  return roster?.filter((entry) => {
+    if (entry.userId === bot || entry.role !== "member") return false;
+    if (!window) return entry.joinTime === entry.lastSentTime;
+    return entry.lastSentTime < window.cutoff && (!forCleanup || entry.lastSentTime > 0 && entry.joinTime < window.cutoff);
+  }).sort(window ? (left, right) => left.lastSentTime - right.lastSentTime : (left, right) => left.joinTime - right.joinTime);
 }
 
 function activityRanking(roster: readonly GroupActivityMember[], recent: boolean, count: number): ActivityReply {
@@ -108,10 +132,33 @@ function activityRanking(roster: readonly GroupActivityMember[], recent: boolean
   return { type: "forward", nodes };
 }
 
-export async function groupActivityCommand(context: GroupActivityContext, signal?: AbortSignal): Promise<ActivityReply | undefined> {
+async function managementAllowed(context: GroupActivityContext): Promise<boolean> {
+  try { return await context.groupManageBlacklist?.() === true; } catch { return false; }
+}
+
+function activityPage(members: readonly GroupActivityMember[], page: number, window?: InactivityWindow): ActivityReply {
+  if (!members.length) return window ? `本群暂无${window.label}没发言的成员。` : "本群暂无从未发言的成员。";
+  const pages = Math.ceil(members.length / pageSize);
+  if (page > pages) return `没有第 ${page} 页。本群共 ${pages} 页。`;
+  const shown = members.slice((page - 1) * pageSize, page * pageSize);
+  const nodes: Entry[][] = [[
+    window ? `以下为${window.label}没发言的人\n` : "以下为进群后从未发言过的人\n",
+    `当前为第 ${page} 页，共 ${pages} 页，本页共 ${shown.length} 人，总共 ${members.length} 人。`,
+  ]];
+  const next = window ? `#查看${window.label}没发言的人第${page + 1}页` : `#查看从未发言过的人第${page + 1}页`;
+  if (page < pages) nodes[0]!.push(`\n可用「${next}」翻页。`);
+  for (const entry of shown) {
+    const time = window ? `最后发言时间：${entry.lastSentTime ? formattedDate(entry.lastSentTime) : "未记录"}` : `进群时间：${formattedDate(entry.joinTime)}`;
+    nodes.push([memberAvatar(entry.userId), memberLabel(entry) + time]);
+  }
+  return { type: "forward", nodes };
+}
+
+export async function groupActivityCommand(context: GroupActivityContext, signal?: AbortSignal, wallNow: () => number = Date.now): Promise<ActivityReply | undefined> {
   const command = context.normalizedMessage.trim();
   const match = commandPattern.exec(command), rank = rankPattern.exec(command);
-  if ((!match && !rank) || context.message_type !== "group" || context.isDelegated || signal?.aborted || context.groupActivitySignal?.aborted ||
+  const timed = timedPattern.exec(command);
+  if ((!match && !rank && (!timed || timed[1] === "清理")) || context.message_type !== "group" || context.isDelegated || signal?.aborted || context.groupActivitySignal?.aborted ||
       !positive(context.group_id) || !positive(context.user_id) || !positive(context.self_id)) return;
   if (rank) {
     const count = rank[2] === undefined ? 10 : parseGroupInteger(rank[2]);
@@ -121,29 +168,26 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
     if (!roster) return "当前无法读取完整的群成员发言数据，请核对当前群会话和协议端支持。";
     return activityRanking(roster, rank[1]?.startsWith("最近") === true, count);
   }
+  if (timed) {
+    const window = inactivityWindow(timed, wallNow());
+    if (typeof window === "string") return window;
+    if (timed[1] === "获取" && !await managementAllowed(context)) return "当前会话没有获取群活跃名单的权限。";
+    if (signal?.aborted || context.groupActivitySignal?.aborted) return;
+    const members = await readMembers(context, context.self_id, window);
+    if (signal?.aborted || context.groupActivitySignal?.aborted) return;
+    return members ? activityPage(members, window.page, window) : unavailable;
+  }
   if (!match) return;
   const page = match[1] === undefined ? 1 : parseGroupInteger(match[1]);
   if (!page) return "请输入有效页码。";
   const members = await readMembers(context, context.self_id);
   if (signal?.aborted) return;
-  if (!members) return unavailable;
-  if (!members.length) return "本群暂无从未发言的成员。";
-  const pages = Math.ceil(members.length / pageSize);
-  if (page > pages) return `没有第 ${page} 页。本群共 ${pages} 页。`;
-  const shown = members.slice((page - 1) * pageSize, page * pageSize);
-  const nodes: Entry[][] = [[
-    "以下为进群后从未发言过的人\n",
-    `当前为第 ${page} 页，共 ${pages} 页，本页共 ${shown.length} 人，总共 ${members.length} 人。`,
-  ]];
-  if (page < pages) nodes[0]!.push(`\n可用「#查看从未发言过的人第${page + 1}页」翻页。`);
-  for (const entry of shown) {
-    nodes.push([memberAvatar(entry.userId), `${memberLabel(entry)}进群时间：${formattedDate(entry.joinTime)}`]);
-  }
-  return { type: "forward", nodes };
+  return members ? activityPage(members, page) : unavailable;
 }
 
 interface PendingCleanup {
-  readonly members: ReadonlyMap<number, number>;
+  readonly members: ReadonlyMap<number, Pick<GroupActivityMember, "joinTime" | "lastSentTime">>;
+  readonly window?: InactivityWindow;
   readonly expires: number;
   readonly signal: AbortSignal;
 }
@@ -164,7 +208,7 @@ function cleanupResult(outcomes: ReadonlyMap<GroupKickResult | "skipped", readon
   return { type: "forward", nodes };
 }
 
-export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: () => number = () => performance.now()) {
+export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: () => number = () => performance.now(), wallNow: () => number = Date.now) {
   const pending = new Map<string, PendingCleanup>();
   const preparing = new Set<string>();
   const seen = new Set<string>();
@@ -186,7 +230,9 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
 
   return async (context: GroupActivityContext): Promise<ActivityReply | readonly [] | undefined> => {
     const text = context.normalizedMessage.trim();
-    const preview = cleanupPattern.test(text), response = responsePattern.exec(text);
+    const timed = timedPattern.exec(text);
+    const preview = cleanupPattern.test(text) || timed?.[1] === "清理";
+    const response = responsePattern.exec(text);
     const { group_id, self_id, user_id, adapter, message_id, groupActivitySignal, groupKick } = context;
     if ((!preview && !response) || context.message_type !== "group" || signal.aborted || context.isDelegated ||
         !groupActivitySignal || groupActivitySignal.aborted || !positive(group_id) || !positive(self_id) || !positive(user_id)) return;
@@ -205,33 +251,35 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     if (busy.has(group_id)) return "本群已有清理正在执行，请等待结果。";
 
     const active = () => !signal.aborted && !groupActivitySignal.aborted;
-    const authorized = async () => {
-      try { return !!groupKick && active() && await context.groupManageBlacklist?.() === true && active(); }
-      catch { return false; }
-    };
+    const authorized = async () => !!groupKick && active() && await managementAllowed(context) && active();
     const protectedId = (id: number, whitelist: ReadonlySet<number>) => id === user_id || context.isBotMaster?.(id) || whitelist.has(id);
     const denied = "当前会话没有清理群成员的权限。";
 
     if (preview) {
-      if (preparing.has(key)) return "正在核对从未发言的成员，请稍候。";
+      const window = timed ? inactivityWindow(timed, wallNow()) : undefined;
+      if (typeof window === "string") return window;
+      if (preparing.has(key)) return "正在核对本群成员，请稍候。";
       pending.delete(key);
       preparing.add(key);
       try {
         if (!await authorized()) return denied;
-        const members = await readMembers(context, self_id);
+        const members = await readMembers(context, self_id, window, true);
         if (!members || !active()) return unavailable;
         let whitelist: ReadonlySet<number>;
         try { whitelist = await readManagedWhitelist(root); } catch { return "群管白名单暂不可用。"; }
         if (!active()) return;
-        const selected = new Map(members.filter(({ userId }) => !protectedId(userId, whitelist))
-          .map(({ userId, joinTime }) => [userId, joinTime]));
-        if (!selected.size) return "本群暂无符合清理条件的从未发言成员。";
+        const eligible = members.filter(({ userId }) => !protectedId(userId, whitelist));
+        if (!eligible.length) return window ? `本群暂无符合清理条件的${window.label}没发言成员。` : "本群暂无符合清理条件的从未发言成员。";
+        const rosterPage = window ? activityPage(eligible, window.page, window) : undefined;
+        if (typeof rosterPage === "string") return rosterPage;
+        const selected = new Map(eligible.map(({ userId, joinTime, lastSentTime }) => [userId, { joinTime, lastSentTime }]));
         if (pending.size >= 128) {
           const first = pending.keys().next();
           if (!first.done) pending.delete(first.value);
         }
-        pending.set(key, { members: selected, expires: now() + 120_000, signal: groupActivitySignal });
-        return `本次共需清理 ${selected.size} 人。请在 120 秒内发送「#确认清理」开始清理，或发送「#取消清理」。`;
+        pending.set(key, { members: selected, window, expires: now() + 120_000, signal: groupActivitySignal });
+        const prompt = `本次共需清理 ${selected.size} 人。请在 120 秒内发送「#确认清理」开始清理，或发送「#取消清理」。`;
+        return rosterPage ? { type: "forward", nodes: [[prompt + "确认范围为全部预览页。"], ...rosterPage.nodes] } : prompt;
       } finally {
         preparing.delete(key);
       }
@@ -243,14 +291,15 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     busy.add(group_id);
     try {
       if (!await authorized()) return denied;
-      const members = await readMembers(context, self_id);
+      const members = await readMembers(context, self_id, current.window, true);
       if (!members || !active()) return unavailable;
       if (!await authorized()) return denied;
-      const stillEligible = new Map(members.map(({ userId, joinTime }) => [userId, joinTime]));
+      const stillEligible = new Map(members.map((member) => [member.userId, member]));
       const outcomes = new Map<GroupKickResult | "skipped", number[]>();
-      for (const [id, joined] of current.members) {
+      for (const [id, initial] of current.members) {
         let result: GroupKickResult | "skipped" = "skipped";
-        if (active() && stillEligible.get(id) === joined) {
+        const fresh = stillEligible.get(id);
+        if (active() && fresh?.joinTime === initial.joinTime && fresh.lastSentTime === initial.lastSentTime) {
           try {
             const whitelist = await readManagedWhitelist(root);
             if (protectedId(id, whitelist)) result = "protected";

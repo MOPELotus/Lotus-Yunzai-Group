@@ -45,7 +45,7 @@ const maxRememberedMessages = 2048;
 const defaultRoot = new URL("../../", import.meta.url);
 const amountPattern = /^([\d零一壹二两三四五六七八九十百千万亿]+)\s*(\S+)?$/u;
 const digit: Readonly<Record<string, string>> = { 零: "0", 一: "1", 壹: "1", 二: "2", 两: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9" };
-const secondsByUnit = new Map(Object.entries({
+export const groupTimeUnits: ReadonlyMap<string, number> = new Map(Object.entries({
   毫秒: 0.001, 秒: 1, S: 1, SECOND: 1,
   分: 60, 分钟: 60, M: 60, MIN: 60, MINUTE: 60,
   时: 3600, 小时: 3600, H: 3600, HOUR: 3600,
@@ -53,7 +53,7 @@ const secondsByUnit = new Map(Object.entries({
   周: 604800, W: 604800, WEEK: 604800, 月: 2592000, MONTH: 2592000,
   年: 31536000, Y: 31536000, YEAR: 31536000,
 }));
-const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...secondsByUnit.keys()].join("|")})$)`, "iu");
+const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...groupTimeUnits.keys()].join("|")})$)`, "iu");
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
 const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
 const rosterPattern = /^#(?:(?:获取|查看)?禁言列表|解除全部禁言)$/u;
@@ -98,7 +98,7 @@ export function parseGroupInteger(value: string): number | undefined {
 function duration(value: string): number | undefined {
   if (!value) return defaultMuteSeconds;
   if (value.length > 64) return;
-  const unitOnly = secondsByUnit.get(value.toUpperCase());
+  const unitOnly = groupTimeUnits.get(value.toUpperCase());
   if (unitOnly !== undefined) {
     const seconds = defaultMuteSeconds * unitOnly;
     if (Number.isSafeInteger(seconds) && seconds <= maxGroupMuteSeconds) return seconds;
@@ -107,7 +107,7 @@ function duration(value: string): number | undefined {
   const parts = amountPattern.exec(value);
   if (!parts?.[1]) return;
   const amount = parseGroupInteger(parts[1]);
-  const multiplier = secondsByUnit.get((parts[2] ?? "秒").toUpperCase());
+  const multiplier = groupTimeUnits.get((parts[2] ?? "秒").toUpperCase());
   if (amount === undefined || multiplier === undefined) return;
   const seconds = amount * multiplier;
   if (Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= maxGroupMuteSeconds) return seconds;
