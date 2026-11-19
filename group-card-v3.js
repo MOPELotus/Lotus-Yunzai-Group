@@ -3,7 +3,7 @@ import { changeGroupCard } from "./group-card.ts";
 export class GroupCard extends plugin {
   constructor() {
     super({
-      name: "椰奶小助手",
+      name: "[group] 群名片",
       event: "message",
       priority: 1000,
       rule: [{ reg: "^#改群名片", fnc: "changeGroupCard" }],
