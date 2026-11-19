@@ -4,6 +4,7 @@ export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unava
 export type GroupMuteResult = GroupWholeMuteResult | "protected";
 export type GroupKickResult = GroupMuteResult;
 export type GroupSetAdminResult = GroupMuteResult;
+export type GroupEssenceResult = GroupWholeMuteResult | "invalid-quote";
 export interface GroupMuteRosterEntry {
   readonly userId: number;
   readonly name?: string;
@@ -19,6 +20,7 @@ export interface GroupMuteContext {
   readonly user_id?: number;
   readonly self_id?: number;
   readonly message_id?: number | string;
+  readonly reply_id?: number | string;
   readonly adapter?: "onebot" | "milky";
   readonly isDelegated?: boolean;
   readonly message?: string | readonly { readonly type: string; readonly qq?: unknown }[];
@@ -29,6 +31,7 @@ export interface GroupMuteContext {
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
   readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
   readonly groupSetAdmin?: (userId: number, enabled: boolean) => Promise<GroupSetAdminResult>;
+  readonly groupSetQuotedEssence?: (enabled: boolean) => Promise<GroupEssenceResult>;
   readonly groupManageBlacklist?: () => Promise<boolean>;
   readonly groupManageWhitelistAutoUnmute?: () => Promise<boolean>;
 }
@@ -37,6 +40,7 @@ export const groupMuteFeature = "[group] 群禁言";
 export const groupMuteRosterFeature = "[group] 群禁言列表";
 export const groupKickFeature = "[group] 群成员移出";
 export const groupSetAdminFeature = "[group] 群管理员";
+export const groupEssenceFeature = "[group] 群精华";
 export const groupManagedBlacklistFeature = "[group] 群管黑名单";
 export const groupManagedWhitelistFeature = "[group] 群管白名单";
 export const maxGroupMuteSeconds = 2_147_483_647;
@@ -59,6 +63,7 @@ const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
 const rosterPattern = /^#(?:(?:获取|查看)?禁言列表|解除全部禁言)$/u;
 const kickPattern = /^#踢(黑)?(\d+)?$/u;
 const adminPattern = /^#(设置|取消)管理(?:\s*(\d+))?$/u;
+const essencePattern = /^#?(加|设|移)精$/u;
 const listPattern = /^#?群管(加|删)(白|黑)(?:名单)?(?:\s*(\d+))?$/u;
 const autoUnmutePattern = /^#?(开启|关闭)白名单(?:自动)?解禁$/u;
 
@@ -69,6 +74,7 @@ export function groupModerationFeature({ normalizedMessage }: { readonly normali
   if (list) return [groupManagedBlacklistFeature];
   if (rosterPattern.test(message)) return [groupMuteRosterFeature];
   if (adminPattern.test(message)) return [groupSetAdminFeature];
+  if (essencePattern.test(message)) return [groupEssenceFeature];
   return [kickPattern.test(message) ? groupKickFeature : groupMuteFeature];
 }
 
@@ -216,17 +222,37 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     const roster = rosterPattern.test(command);
     const kick = kickPattern.exec(command);
     const admin = adminPattern.exec(command);
+    const essence = essencePattern.exec(command);
     const editList = listPattern.exec(command);
     const toggle = autoUnmutePattern.exec(command);
-    if (!whole && !roster && !kick && !admin && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
-    const { groupMute, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, user_id, self_id, group_id } = context;
+    if (!whole && !roster && !kick && !admin && !essence && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const { groupMute, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, groupSetQuotedEssence, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
     const list = editList?.[2] === "白" || toggle ? "白名单" : "黑名单";
     const listPermission = toggle ? "当前会话没有设置白名单自动解禁的权限。" : `当前会话没有编辑群管${list}的权限。`;
     if (context.isDelegated || moduleSignal?.aborted || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
       if (editList || toggle) return listPermission;
       if (admin) return "当前会话没有设置群管理员的权限。";
+      if (essence) return "当前会话没有设置群精华的权限。";
       return kick ? "当前会话没有移出群成员的权限。" : "当前会话没有群禁言权限。";
+    }
+    if (essence) {
+      const enabled = essence[1] !== "移";
+      const operation = enabled ? "加精" : "移精";
+      const quoteRequired = `请引用本群要${operation}的消息。`;
+      const quote = context.reply_id;
+      if (!(typeof quote === "number" && Number.isSafeInteger(quote) && quote !== 0) && !(typeof quote === "string" && quote.trim())) return quoteRequired;
+      if (!groupSetQuotedEssence) return "当前会话无法执行群精华操作，请核对协议端支持和群管理权限。";
+      if (!claim(context, bot, issuer, true)) return [];
+      let result: GroupEssenceResult;
+      try { result = await groupSetQuotedEssence(enabled); } catch { result = "unknown"; }
+      switch (result) {
+        case "confirmed": return `已${operation}。`;
+        case "rejected": return `协议端拒绝${operation}。`;
+        case "unavailable": return "当前会话无法执行群精华操作，请核对协议端支持和群管理权限。";
+        case "invalid-quote": return quoteRequired;
+        default: return `${operation}结果未确认，请在群内核对。`;
+      }
     }
     if (editList || toggle) {
       if (!blacklist) return `群管${list}暂不可用。`;

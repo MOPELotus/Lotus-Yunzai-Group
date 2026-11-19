@@ -315,3 +315,39 @@ test("解除全部禁言在读取快照前先确认群管理身份", async () =>
   expect(reads).toBe(1);
   expect(checks).toBe(1);
 });
+
+test("旧加精、设精、移精只使用原会话引用回调，不接收任何目标参数", async () => {
+  const { command, context } = await fixture();
+  const submitted: unknown[][] = [];
+  const bound = { ...context, reply_id: -315, async groupSetQuotedEssence(...args: [boolean]) {
+    submitted.push(args);
+    return "confirmed" as const;
+  } };
+  expect(await command("#加精", { ...bound, message_id: 1 })).toBe("已加精。");
+  expect(await command("设精", { ...bound, message_id: 2 })).toBe("已加精。");
+  expect(await command("#移精", { ...bound, message_id: 3, reply_id: "opaque-native-quote" })).toBe("已移精。");
+  expect(await command("移精 -315", { ...bound, message_id: 4 })).toBeUndefined();
+  expect(await command("#加精", { ...bound, message_id: 5, reply_id: undefined })).toContain("请引用本群");
+  expect(await command("#移精", { ...bound, message_id: 6, reply_id: 0 })).toContain("请引用本群");
+  expect(await command("#设精", { ...bound, message_id: 7, isDelegated: true })).toContain("没有设置");
+  expect(await command("加精", { ...bound, message_id: 8, message_type: "private" })).toBeUndefined();
+  expect(await command("#加精", { ...bound, message_id: 9, groupSetQuotedEssence: undefined })).toContain("无法执行");
+  expect(await command("#加精", bound)).toEqual([]);
+  expect(groupModerationFeature({ normalizedMessage: "设精" })).toEqual(["[group] 群精华"]);
+  expect(submitted).toEqual([[true], [true], [false]]);
+});
+
+test("群精华区分错误引用、拒绝、不可用与未知，未知原消息不重发", async () => {
+  const { command, context } = await fixture();
+  let submissions = 0;
+  const bound = { ...context, message_id: 55, reply_id: 45, async groupSetQuotedEssence() {
+    submissions++;
+    throw new Error("未收到回执");
+  } };
+  expect(await command("#移精", bound)).toContain("移精结果未确认");
+  expect(await command("移精", bound)).toEqual([]);
+  expect(submissions).toBe(1);
+  expect(await command("#加精", { ...bound, message_id: 56, async groupSetQuotedEssence() { return "invalid-quote"; } })).toContain("请引用本群");
+  expect(await command("#加精", { ...bound, message_id: 57, async groupSetQuotedEssence() { return "rejected"; } })).toContain("协议端拒绝");
+  expect(await command("#加精", { ...bound, message_id: 58, async groupSetQuotedEssence() { return "unavailable"; } })).toContain("权限");
+});
