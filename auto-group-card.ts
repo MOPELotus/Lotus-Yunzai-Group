@@ -149,13 +149,13 @@ export function createAutoGroupCard({ root = defaultRoot, signal, accounts, choo
       for (const account of active) {
         if (signal.aborted) return { status: "stopped" };
         const accountSignal = AbortSignal.any([signal, account.signal]);
-        const nickname = settings.nickname ?? cardPart(account.nickname);
-        if (accountSignal.aborted || !nickname) {
+        if (accountSignal.aborted) {
           summary.unavailableAccounts++;
           continue;
         }
         const groups = await account.groups().catch(() => undefined);
-        if (accountSignal.aborted || !Array.isArray(groups) || ![...groups].every(positiveId)) {
+        const nickname = settings.nickname ?? cardPart(account.nickname);
+        if (accountSignal.aborted || !nickname || !Array.isArray(groups) || ![...groups].every(positiveId)) {
           summary.unavailableAccounts++;
           continue;
         }

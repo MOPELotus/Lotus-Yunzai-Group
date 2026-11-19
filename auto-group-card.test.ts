@@ -126,3 +126,23 @@ test("定时和手动不重入，停机期间的群列表不能发出写入", ()
   expect(await pending).toBeUndefined();
   expect(observed.writes).toEqual([]);
 }));
+
+
+test("自动群名片读取群列表后使用会话延迟确认的机器人昵称", () => fixture(async (root, write) => {
+  await write(alternates);
+  const { current, observed } = account();
+  let nickname: string | undefined;
+  const lazy: OwnGroupCardAccount = {
+    ...current,
+    get nickname() { return nickname; },
+    async groups() {
+      nickname = "延迟读取的昵称";
+      return current.groups();
+    },
+  };
+  const updater = createAutoGroupCard({
+    root, signal: new AbortController().signal, accounts: () => [lazy], choose: () => 0,
+  });
+  expect(await updater.scheduled()).toMatchObject({ updated: 1 });
+  expect(observed.writes).toEqual([[77, "延迟读取的昵称｜替换文案一"]]);
+}));
