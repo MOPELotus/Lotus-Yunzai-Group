@@ -276,7 +276,7 @@ test("解除全部禁言仅向快照中未来成员分发单人解除，回执�
   });
   let rosters = 0, whole = 0;
   const now = Math.floor(Date.now() / 1000);
-  const scope = { ...context, message_id: 59, async groupMuteRoster() {
+  const scope = { ...context, message_id: 59, async groupManageBlacklist() { return true; }, async groupMuteRoster() {
     rosters++;
     return [{ userId: 42, until: now }, ...[43, 44, 45, 46].map((userId) => ({ userId, until: now + 300 }))];
   }, async groupWholeMute() { whole++; return "confirmed" as const; } };
@@ -295,4 +295,23 @@ test("解除全部禁言仅向快照中未来成员分发单人解除，回执�
   expect(calls).toEqual([[43, 0], [44, 0], [45, 0], [46, 0]]);
   expect(rosters).toBe(1);
   expect(whole).toBe(0);
+});
+
+test("解除全部禁言在读取快照前先确认群管理身份", async () => {
+  const { command, context, calls } = await fixture();
+  let reads = 0, checks = 0;
+  const scope = { ...context, message_id: 1, async groupMuteRoster() {
+    reads++;
+    return [{ userId: 43, until: Math.floor(Date.now() / 1000) + 300 }];
+  }, async groupManageBlacklist() { checks++; return false; } };
+  expect(await command("#解除全部禁言", scope)).toContain("没有解除群禁言的权限");
+  expect(await command("#解除全部禁言", { ...scope, message_id: 2, async groupManageBlacklist() { throw new Error("未确认"); } }))
+    .toContain("没有解除群禁言的权限");
+  expect(await command("#解除全部禁言", { ...scope, message_id: 3, groupManageBlacklist: undefined })).toContain("没有解除群禁言的权限");
+  expect(reads).toBe(0);
+  expect(checks).toBe(1);
+  expect(calls).toEqual([]);
+  expect(await command("#查看禁言列表", scope)).toMatchObject({ type: "forward" });
+  expect(reads).toBe(1);
+  expect(checks).toBe(1);
 });

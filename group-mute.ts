@@ -264,9 +264,15 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     }
     if (roster) {
       const release = command === "#解除全部禁言";
-      if (release && !groupMute) return "当前会话没有解除群禁言的权限。";
+      if (release) {
+        const denied = "当前会话没有解除群禁言的权限。";
+        if (!groupMute || !context.groupManageBlacklist) return denied;
+        if (!claim(context, bot, issuer, true)) return [];
+        try {
+          if (!await context.groupManageBlacklist() || moduleSignal?.aborted) return denied;
+        } catch { return denied; }
+      }
       if (!groupMuteRoster) return "当前协议端无法提供可靠的群禁言列表。";
-      if (release && !claim(context, bot, issuer, true)) return [];
       const rows = await activeMuteRoster(groupMuteRoster);
       if (!rows || moduleSignal?.aborted) return "当前协议端无法提供可靠的群禁言列表。";
       if (!release) return formatRoster(rows);
