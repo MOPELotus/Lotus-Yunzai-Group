@@ -15,7 +15,7 @@ export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export { groupKickFeature, groupManagedBlacklistFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
+export { groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
   type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {

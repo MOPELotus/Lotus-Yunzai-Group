@@ -121,3 +121,67 @@ test("只持久化确认踢黑的成员，已完成的协议动作与写入失�
   expect(await command("#踢黑45", { ...scope, message_id: 2 })).toContain("协议已确认踢黑，未能将 45 保存");
   expect(await readFile(primary, "utf8")).toBe(bad);
 });
+
+test("白名单和自动解禁分别沿用旧键，规范路径显式覆盖且默认停止", async () => {
+  const { active, primary, legacy } = await fixture();
+  expect(await active.shouldAutoUnmute(43)).toBe(false);
+  await writeFile(legacy, 'whiteQQ: ["43"]\nnoBan: true # 旧设置\nblackQQ: [44]\n');
+  await writeFile(primary, "blackQQ: [45]\n");
+  expect(await active.shouldAutoUnmute(43)).toBe(true);
+  expect(await active.shouldAutoUnmute(44)).toBe(false);
+  expect(await active.blocked(45)).toBe(true);
+  expect(await active.updateWhitelist([46], true)).toBe(true);
+  expect(await active.shouldAutoUnmute(46)).toBe(true);
+  expect(await active.setAutoUnmute(false)).toBe(true);
+  expect(await active.shouldAutoUnmute(43)).toBe(false);
+  expect(await readFile(legacy, "utf8")).toContain("noBan: false # 旧设置");
+  expect(await readFile(primary, "utf8")).toBe("blackQQ: [45]\n");
+  await writeFile(primary, "whiteQQ: [47]\nnoBan: true\n");
+  expect(await active.shouldAutoUnmute(43)).toBe(false);
+  expect(await active.shouldAutoUnmute(47)).toBe(true);
+  await writeFile(primary, "whiteQQ: [47]\nnoBan: 'true'\n");
+  expect(await active.shouldAutoUnmute(47)).toBe(false);
+});
+
+test("旧群管加删白名单作用于手动禁言保护，自动解禁开关单独核验主人", async () => {
+  const { active, command } = await fixture();
+  const muted: number[] = [];
+  const scope = { message_type: "group" as const, self_id: 99, user_id: 42, group_id: 77,
+    isBotMaster: () => false, async groupManageBlacklist() { return true; },
+    async groupMute(id: number) { muted.push(id); return "confirmed" as const; } };
+  expect(await command("群管加白名单", { ...scope, message_id: 1, message: [{ type: "at", qq: 43 }] })).toContain("加入群管白名单");
+  expect(await command("#禁言43", { ...scope, message_id: 2 })).toContain("无法操作 43");
+  expect(muted).toEqual([]);
+  expect(await command("#开启白名单自动解禁", { ...scope, message_id: 3 })).toContain("没有设置");
+  expect(await active.shouldAutoUnmute(43)).toBe(false);
+  let checks = 0;
+  const owner = { ...scope, async groupManageWhitelistAutoUnmute() { checks++; return true; } };
+  expect(await command("#开启白名单自动解禁", { ...owner, message_id: 4 })).toBe("已开启白名单自动解禁。");
+  expect(checks).toBe(2);
+  expect(await active.shouldAutoUnmute(43)).toBe(true);
+  expect(await command("开启白名单解禁", { ...owner, message_id: 5 })).toContain("已处于开启状态");
+  expect(await command("关闭白名单解禁", { ...owner, message_id: 6, isDelegated: true })).toContain("没有设置");
+  expect(await command("关闭白名单解禁", { ...owner, message_id: 6, message_type: "private" })).toBeUndefined();
+  expect(await command("关闭白名单解禁", { ...owner, message_id: 6 })).toBe("已关闭白名单自动解禁。");
+  expect(await command("#群管删白43", { ...scope, message_id: 7 })).toContain("群管白名单移除");
+  expect(await command("#禁言43", { ...scope, message_id: 8 })).toContain("已将 43");
+  expect(muted).toEqual([43]);
+  expect(groupModerationFeature({ normalizedMessage: "关闭白名单解禁" })).toEqual(["[group] 群管白名单"]);
+});
+
+test("黑白名单和开关共用锁，保护引用和最新权限", async () => {
+  const { active, store, primary, command } = await fixture();
+  expect(await Promise.all([active.update([43], true), store().updateWhitelist([45], true), active.setAutoUnmute(true)])).toEqual([true, true, true]);
+  expect(await active.blocked(43)).toBe(true);
+  expect(await active.shouldAutoUnmute(45)).toBe(true);
+  let checks = 0;
+  const scope = { message_type: "group" as const, self_id: 99, user_id: 42, group_id: 77, message_id: 8,
+    isBotMaster: () => true, async groupManageWhitelistAutoUnmute() { return ++checks === 1; } };
+  expect(await command("#关闭白名单自动解禁", scope)).toContain("没有设置");
+  expect(await active.shouldAutoUnmute(45)).toBe(true);
+  const linked = "whiteQQ: &white [43]\nnoBan: &on true\nother: {skip: *white, state: *on}\n";
+  await writeFile(primary, linked);
+  await expect(active.updateWhitelist([45], true)).rejects.toThrow();
+  await expect(active.setAutoUnmute(false)).rejects.toThrow();
+  expect(await readFile(primary, "utf8")).toBe(linked);
+});

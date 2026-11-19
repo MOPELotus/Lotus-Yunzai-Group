@@ -1,6 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { parse } from "yaml";
-import { ManagedBlacklistPermissionError, type ManagedBlacklistStore } from "./managed-blacklist.ts";
+import { ManagedBlacklistPermissionError, readManagedWhitelist, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 
 export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unavailable";
 export type GroupMuteResult = GroupWholeMuteResult | "protected";
@@ -21,16 +19,17 @@ export interface GroupMuteContext {
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
   readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
   readonly groupManageBlacklist?: () => Promise<boolean>;
+  readonly groupManageWhitelistAutoUnmute?: () => Promise<boolean>;
 }
 
 export const groupMuteFeature = "[group] 群禁言";
 export const groupKickFeature = "[group] 群成员移出";
 export const groupManagedBlacklistFeature = "[group] 群管黑名单";
+export const groupManagedWhitelistFeature = "[group] 群管白名单";
 export const maxGroupMuteSeconds = 2_147_483_647;
 const defaultMuteSeconds = 300;
 const maxRememberedMessages = 2048;
 const defaultRoot = new URL("../../", import.meta.url);
-const legacyConfig = "plugins/yenai-plugin/config/config/groupAdmin.yaml";
 const amountPattern = /^([\d零一壹二两三四五六七八九十百千万亿]+)\s*(\S+)?$/u;
 const digit: Readonly<Record<string, string>> = { 零: "0", 一: "1", 壹: "1", 二: "2", 两: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9" };
 const secondsByUnit = new Map(Object.entries({
@@ -45,11 +44,14 @@ const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...secondsByUnit.keys()].jo
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
 const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
 const kickPattern = /^#踢(黑)?(\d+)?$/u;
-const blacklistPattern = /^#?群管(加|删)黑(?:名单)?(?:\s*(\d+))?$/u;
+const listPattern = /^#?群管(加|删)(白|黑)(?:名单)?(?:\s*(\d+))?$/u;
+const autoUnmutePattern = /^#?(开启|关闭)白名单(?:自动)?解禁$/u;
 
 export function groupModerationFeature({ normalizedMessage }: { readonly normalizedMessage: string }): readonly string[] {
   const message = normalizedMessage.trim();
-  if (blacklistPattern.test(message)) return [groupManagedBlacklistFeature];
+  const list = listPattern.exec(message);
+  if (list?.[2] === "白" || autoUnmutePattern.test(message)) return [groupManagedWhitelistFeature];
+  if (list) return [groupManagedBlacklistFeature];
   return [kickPattern.test(message) ? groupKickFeature : groupMuteFeature];
 }
 
@@ -125,26 +127,6 @@ function kickTargets(context: GroupMuteContext, bot: number, numeric: string | u
   if (id !== undefined && (allowBot || id !== bot)) return [id];
 }
 
-async function readWhitelist(root: URL): Promise<ReadonlySet<number>> {
-  const source = await readFile(new URL(legacyConfig, root), "utf8").catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") throw error;
-  });
-  if (source === undefined) return new Set();
-  const config: unknown = parse(source);
-  if (config == null) return new Set();
-  if (typeof config !== "object" || Array.isArray(config)) throw new TypeError("群管配置须为映射。");
-  const list = (config as Record<string, unknown>).whiteQQ;
-  if (list == null) return new Set();
-  if (!Array.isArray(list)) throw new TypeError("whiteQQ 须为 QQ 号列表。");
-  const ids = new Set<number>();
-  for (const entry of list) {
-    const id = positiveId(entry);
-    if (id === undefined) throw new TypeError("whiteQQ 包含无效的 QQ 号。");
-    ids.add(id);
-  }
-  return ids;
-}
-
 export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlacklistStore, moduleSignal?: AbortSignal) {
   const seen = new Set<string>();
 
@@ -167,32 +149,41 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     if (context.message_type !== "group") return;
     const whole = wholeMutePattern.exec(command);
     const kick = kickPattern.exec(command);
-    const editBlacklist = blacklistPattern.exec(command);
-    if (!whole && !kick && !editBlacklist && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const editList = listPattern.exec(command);
+    const toggle = autoUnmutePattern.exec(command);
+    if (!whole && !kick && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
     const { groupMute, groupWholeMute, groupKick, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
+    const list = editList?.[2] === "白" || toggle ? "白名单" : "黑名单";
+    const listPermission = toggle ? "当前会话没有设置白名单自动解禁的权限。" : `当前会话没有编辑群管${list}的权限。`;
     if (context.isDelegated || moduleSignal?.aborted || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
-      if (editBlacklist) return "当前会话没有编辑群管黑名单的权限。";
+      if (editList || toggle) return listPermission;
       return kick ? "当前会话没有移出群成员的权限。" : "当前会话没有群禁言权限。";
     }
-    if (editBlacklist) {
-      if (!blacklist) return "群管黑名单暂不可用。";
-      const action = kickTargets(context, bot, editBlacklist[2], true);
-      if (!action || action.length !== 1) return "请 @ 一位群成员，或输入一个 QQ 号。";
-      const target = action[0]!;
-      const add = editBlacklist[1] === "加";
-      const authorize = () => context.groupManageBlacklist?.().catch(() => false) ?? Promise.resolve(false);
-      if (!await authorize()) {
-        return "当前会话没有编辑群管黑名单的权限。";
-      }
+    if (editList || toggle) {
+      if (!blacklist) return `群管${list}暂不可用。`;
+      const authorize = async () => {
+        try { return await (toggle ? context.groupManageWhitelistAutoUnmute?.() : context.groupManageBlacklist?.()) === true; }
+        catch { return false; }
+      };
+      if (!await authorize()) return listPermission;
       if (!claim(context, bot, issuer, true)) return [];
       try {
-        const changed = await blacklist.update([target], add, moduleSignal, authorize);
-        if (add) return changed ? `已将 ${target} 加入群管黑名单。` : `${target} 已在群管黑名单中。`;
-        return changed ? `已从群管黑名单移除 ${target}。` : `${target} 不在群管黑名单中。`;
+        if (toggle) {
+          const enabled = toggle[1] === "开启";
+          const changed = await blacklist.setAutoUnmute(enabled, moduleSignal, authorize);
+          return changed ? `已${toggle[1]}白名单自动解禁。` : `白名单自动解禁已处于${toggle[1]}状态。`;
+        }
+        const action = kickTargets(context, bot, editList?.[3], true);
+        if (!action || action.length !== 1) return "请 @ 一位群成员，或输入一个 QQ 号。";
+        const target = action[0]!;
+        const add = editList?.[1] === "加";
+        const changed = await (list === "白名单" ? blacklist.updateWhitelist : blacklist.update)([target], add, moduleSignal, authorize);
+        if (add) return changed ? `已将 ${target} 加入群管${list}。` : `${target} 已在群管${list}中。`;
+        return changed ? `已从群管${list}移除 ${target}。` : `${target} 不在群管${list}中。`;
       } catch (error) {
-        if (error instanceof ManagedBlacklistPermissionError) return "当前会话没有编辑群管黑名单的权限。";
-        return "群管黑名单保存失败。";
+        if (error instanceof ManagedBlacklistPermissionError) return listPermission;
+        return toggle ? "白名单自动解禁设置保存失败。" : `群管${list}保存失败。`;
       }
     }
     if (whole) {
@@ -235,7 +226,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     const issuerMaster = context.isBotMaster(issuer);
     let whitelist: ReadonlySet<number> | undefined;
     if (checkWhitelist && !issuerMaster) {
-      try { whitelist = await readWhitelist(root); }
+      try { whitelist = await readManagedWhitelist(root); }
       catch { return kick ? "群管保护配置暂不可用。" : "群禁言保护配置暂不可用。"; }
     }
 
