@@ -98,3 +98,50 @@ test("每个成员只提交一次，准确列出混合结果并拒绝消息重�
   expect(calls).toEqual([43, 44, 45, 46, 47].map((id) => [id, 3600]));
   expect(await command("#禁言 1小时", { ...scope, adapter: "milky" })).toEqual(reply);
 });
+
+test("旧全体和全员禁言、解禁使用独立群能力，个人白名单不参与", async () => {
+  const { command, calls, context, whitelist } = await fixture();
+  await writeFile(whitelist, "whiteQQ: malformed\n");
+  const variants: boolean[] = [];
+  const scope = { ...context, groupMute: undefined, async groupWholeMute(enabled: boolean) {
+    variants.push(enabled);
+    return "confirmed" as const;
+  } };
+  expect(await command("#全体禁言", scope)).toBe("已开启全体禁言。");
+  expect(await command("#全员禁言", scope)).toBe("已开启全体禁言。");
+  expect(await command("#全体解禁", scope)).toBe("已关闭全体禁言。");
+  expect(await command("#全员解禁", scope)).toBe("已关闭全体禁言。");
+  expect(await command("#解除全部禁言", scope)).toBeUndefined();
+  expect(await command("#全体禁言 30秒", scope)).toBeUndefined();
+  expect(await command("全员禁言", scope)).toBeUndefined();
+  expect(variants).toEqual([true, true, false, false]);
+  expect(calls).toEqual([]);
+});
+
+test("全体禁言仅本群且非委托，原消息在结果未确认时也不重发", async () => {
+  const { command, context } = await fixture();
+  const started = Promise.withResolvers<void>();
+  const finish = Promise.withResolvers<void>();
+  const calls: boolean[] = [];
+  const scope = { ...context, message_id: 9, async groupWholeMute(enabled: boolean) {
+    calls.push(enabled);
+    started.resolve();
+    await finish.promise;
+    throw new Error("timeout");
+  } };
+  expect(await command("#全体禁言", { ...scope, message_type: "private" })).toBeUndefined();
+  expect(await command("#全体禁言", { ...scope, message_type: "terminal" })).toBeUndefined();
+  expect(await command("#全体禁言", { ...scope, isDelegated: true })).toContain("没有群禁言权限");
+  expect(await command("#全体禁言", { ...scope, group_id: undefined })).toContain("没有群禁言权限");
+  expect(await command("#全体禁言", context)).toContain("没有群禁言权限");
+  expect(calls).toEqual([]);
+  const first = command("#全体禁言", scope);
+  await started.promise;
+  expect(await command("#全员禁言", scope)).toEqual([]);
+  finish.resolve();
+  expect(await first).toContain("未确认");
+  expect(await command("#全体禁言", scope)).toEqual([]);
+  expect(calls).toEqual([true]);
+  expect(await command("#全员解禁", { ...scope, adapter: "milky", async groupWholeMute() { return "rejected"; } })).toContain("协议端拒绝");
+  expect(await command("#全员解禁", { ...scope, group_id: 78, async groupWholeMute() { return "unavailable"; } })).toContain("请核对群管理权限");
+});

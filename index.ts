@@ -13,7 +13,7 @@ export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export { groupMuteFeature, maxGroupMuteSeconds, type GroupMuteContext, type GroupMuteResult } from "./group-mute.ts";
+export { groupMuteFeature, maxGroupMuteSeconds, type GroupMuteContext, type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
   ...group,

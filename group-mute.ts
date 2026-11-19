@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 
-export type GroupMuteResult = "confirmed" | "rejected" | "unknown" | "protected" | "unavailable";
+export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unavailable";
+export type GroupMuteResult = GroupWholeMuteResult | "protected";
 
 export interface GroupMuteContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -15,6 +16,7 @@ export interface GroupMuteContext {
   readonly normalizedMessage?: string;
   readonly isBotMaster: (userId: number) => boolean;
   readonly groupMute?: (userId: number, seconds: number) => Promise<GroupMuteResult>;
+  readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
 }
 
 export const groupMuteFeature = "[group] 群禁言";
@@ -35,6 +37,7 @@ const secondsByUnit = new Map(Object.entries({
 }));
 const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...secondsByUnit.keys()].join("|")})$)`, "iu");
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
+const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
 
 function positiveId(value: unknown): number | undefined {
   const id = typeof value === "string" && /^[1-9]\d*$/u.test(value) ? Number(value) : value;
@@ -122,14 +125,46 @@ async function readWhitelist(root: URL): Promise<ReadonlySet<number>> {
 
 export function createGroupMute(root: URL = defaultRoot) {
   const seen = new Set<string>();
+
+  function claim(context: GroupMuteContext, bot: number, issuer: number): boolean {
+    const { message_id, adapter, group_id } = context;
+    if (!((typeof message_id === "number" && Number.isSafeInteger(message_id)) ||
+          (typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128))) return true;
+    const key = JSON.stringify([adapter ?? "onebot", bot, group_id, issuer, String(message_id)]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (seen.size > maxRememberedMessages) {
+      const oldest = seen.keys().next();
+      if (!oldest.done) seen.delete(oldest.value);
+    }
+    return true;
+  }
+
   return async (message: string, context: GroupMuteContext): Promise<string | readonly [] | undefined> => {
     const command = (context.normalizedMessage ?? message).trim();
-    if (context.message_type !== "group" || (!commandPattern.test(command) && !compactMuteUnit.test(command))) return;
-    const { groupMute, user_id, self_id, group_id } = context;
+    if (context.message_type !== "group") return;
+    const whole = wholeMutePattern.exec(command);
+    if (!whole && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const { groupMute, groupWholeMute, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
-    if (context.isDelegated || !groupMute || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
+    if (context.isDelegated || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
       return "当前会话没有群禁言权限。";
     }
+    if (whole) {
+      if (!groupWholeMute) return "当前会话没有群禁言权限。";
+      if (!claim(context, bot, issuer)) return [];
+      const enabled = whole[1] === "禁言";
+      let outcome: GroupWholeMuteResult;
+      try { outcome = await groupWholeMute(enabled); }
+      catch { outcome = "unknown"; }
+      switch (outcome) {
+        case "confirmed": return `已${enabled ? "开启" : "关闭"}全体禁言。`;
+        case "rejected": return "协议端拒绝全体禁言操作。";
+        case "unavailable": return "无法设置全体禁言，请核对群管理权限。";
+        default: return "全体禁言操作结果未确认，请在群内核对。";
+      }
+    }
+    if (!groupMute) return "当前会话没有群禁言权限。";
     const action = targets(command, context, bot);
     if (!action) return "请 @ 群成员或输入 QQ 号，并填写有效的禁言时长（整数秒）。";
     const { ids, seconds } = action;
@@ -140,17 +175,7 @@ export function createGroupMute(root: URL = defaultRoot) {
       catch { return "群禁言保护配置暂不可用。"; }
     }
 
-    const { message_id, adapter } = context;
-    if ((typeof message_id === "number" && Number.isSafeInteger(message_id)) ||
-        (typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128)) {
-      const key = JSON.stringify([adapter ?? "onebot", bot, group_id, issuer, String(message_id)]);
-      if (seen.has(key)) return [];
-      seen.add(key);
-      if (seen.size > maxRememberedMessages) {
-        const oldest = seen.keys().next();
-        if (!oldest.done) seen.delete(oldest.value);
-      }
-    }
+    if (!claim(context, bot, issuer)) return [];
 
     const outcomes = new Map<GroupMuteResult, number[]>();
     for (const id of ids) {
