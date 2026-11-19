@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createGroupBannedWords, isGroupBannedWordCommand } from "./banned-words.ts";
 import { createManagedBlacklist } from "./managed-blacklist.ts";
+import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
 
 const temporary: string[] = [];
 afterEach(async () => {
@@ -30,11 +31,15 @@ async function fixture() {
   }
   const controller = new AbortController();
   const blacklist = createManagedBlacklist(root, lockFile);
-  const { policy, command } = createGroupBannedWords(root, lockFile, blacklist, controller.signal);
+  const { policy, command, titleStore } = createGroupBannedWords(root, lockFile, blacklist, controller.signal);
   const scope = { message_type: "group" as const, self_id: 99, user_id: 42, group_id: 77, async groupManageBlacklist() { return true; } };
   let message_id = 0;
   const run = (message: string, overrides = {}) => command(message, { ...scope, normalizedMessage: message, message_id: ++message_id, ...overrides });
-  return { policy, run, canonical, legacy, whitelist, controller, blacklist };
+  const title = createGroupTitle(titleStore, controller.signal);
+  const runTitle = (normalizedMessage: string, overrides: Partial<GroupTitleContext> = {}) => title({
+    ...scope, normalizedMessage, message_id: ++message_id, isBotMaster: () => false, ...overrides,
+  });
+  return { policy, run, runTitle, canonical, legacy, whitelist, controller, blacklist };
 }
 
 test("旧违禁词按第一条精确、模糊、正则规则执行并保护群间隔离和白名单", async () => {
@@ -115,4 +120,64 @@ test("并发配置迁移不丢数据，提交前复核权限，已确认踢人�
   await writeFile(canonical, "broken json");
   expect(await run("#新增违禁词 内容")).toBe("违禁词配置暂不可用。");
   expect(await readFile(canonical, "utf8")).toBe("broken json");
+});
+
+test("自助群头衔按旧模式匹配，1 使用字面包含，现有违禁词 JSON 保留", async () => {
+  const { runTitle, canonical, legacy } = await fixture();
+  const original = JSON.stringify({ TitleBannedWords: ["a.b", "原名"], TitleFilterModeChange: 1, bannedWords: { "例": { matchType: 1, penaltyType: 2 } } });
+  await writeFile(legacy, original);
+  const calls: [number, string][] = [];
+  const ordinary: Partial<GroupTitleContext> = { async groupSetSpecialTitle(id, title, verify) {
+    calls.push([id, title]);
+    return await verify?.() ? "confirmed" : "protected";
+  } };
+  expect(await runTitle("#我要头衔xxa.byy", ordinary)).toContain("包含屏蔽词");
+  expect(await runTitle("#我要头衔xxaxbyy", ordinary)).toContain("xxaxbyy");
+  expect(await runTitle("#申请头衔", ordinary)).toBe("已清空你的群头衔。");
+  expect(await runTitle("#切换头衔屏蔽词匹配", ordinary)).toContain("精确匹配");
+  expect(await runTitle("#申请头衔包含原名", ordinary)).toContain("包含原名");
+  expect(await runTitle("#申请头衔原名", ordinary)).toContain("包含屏蔽词");
+  expect(await runTitle("#申请头衔原名", { ...ordinary, isBotMaster: () => true })).toContain("更换");
+  expect(calls).toEqual([[42, "xxaxbyy"], [42, ""], [42, "包含原名"], [42, "原名"]]);
+  expect(await readFile(legacy, "utf8")).toBe(original);
+  expect(JSON.parse(await readFile(canonical, "utf8"))).toMatchObject({ TitleFilterModeChange: 0, bannedWords: { "例": { matchType: 1, penaltyType: 2 } } });
+});
+
+test("主人给真实 @ 目标设置或清空头衔，拒绝委托、歧义及重放", async () => {
+  const { runTitle } = await fixture();
+  const calls: [number, string][] = [];
+  const mention = { type: "at", qq: 43 };
+  const owner: Partial<GroupTitleContext> = { isBotMaster: () => true, message: [mention], async groupSetSpecialTitle(id, title, verify) {
+    expect(verify).toBeUndefined();
+    calls.push([id, title]);
+    return title ? "unknown" : "confirmed";
+  } };
+  expect(await runTitle("#修改头衔 头衔", { ...owner, isBotMaster: () => false })).toContain("没有设置");
+  expect(await runTitle("#修改头衔 头衔", { ...owner, message: [mention, { type: "at", qq: 44 }] })).toContain("@ 一位");
+  expect(await runTitle("#修改头衔 头衔", { ...owner, isDelegated: true })).toBeUndefined();
+  expect(await runTitle("#修改头衔 头衔", { ...owner, message_type: "private" })).toBeUndefined();
+  expect(await runTitle("#设置头衔 甲 乙", { ...owner, message_id: 100 })).toContain("未确认");
+  expect(await runTitle("#设置头衔 甲 乙", { ...owner, message_id: 100 })).toEqual([]);
+  expect(await runTitle("#设置头衔", { ...owner, message: [{ type: "at", qq: 99 }, mention] })).toContain("清空 43");
+  expect(calls).toEqual([[43, "甲 乙"], [43, ""]]);
+});
+
+test("头衔词表可同群公开查询，写入需复核，协议提交前重查新屏蔽词", async () => {
+  const { runTitle, run, canonical } = await fixture();
+  expect(groupTitleCommandFeature("#查看头衔屏蔽词")).toBe("[group] 头衔屏蔽词");
+  expect(groupTitleCommandFeature("#我要头衔")).toBe("[group] 群头衔");
+  expect(await runTitle("#查看头衔屏蔽词", { groupManageBlacklist: undefined })).toContain("如下：无");
+  expect(await runTitle("#增加头衔屏蔽词甲", { groupManageBlacklist: undefined })).toContain("没有编辑");
+  const first = await Promise.all([runTitle("#增加头衔屏蔽词甲,乙，乙"), run("#新增违禁词 测试")]);
+  expect(first[0]).toContain("成功添加：甲、乙");
+  expect(await runTitle("#查看头衔屏蔽词", { groupManageBlacklist: undefined })).toContain("甲\n乙");
+  let auth = 0;
+  expect(await runTitle("#减少头衔屏蔽词乙", { async groupManageBlacklist() { return ++auth === 1; } })).toContain("没有编辑");
+  expect(await runTitle("#减少头衔屏蔽词乙,不存在")).toContain("以下词未在屏蔽词中：不存在");
+  expect(await runTitle("#申请头衔新词", { async groupSetSpecialTitle(_id, _title, verify) {
+    expect(verify).toBeDefined();
+    expect(await runTitle("#增加头衔屏蔽词新词")).toContain("成功添加");
+    return await verify?.() ? "confirmed" : "protected";
+  } })).toContain("包含屏蔽词");
+  expect(JSON.parse(await readFile(canonical, "utf8"))).toMatchObject({ TitleBannedWords: ["甲", "新词"], bannedWords: { "测试": { matchType: 1 } } });
 });

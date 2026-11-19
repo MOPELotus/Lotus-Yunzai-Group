@@ -17,6 +17,8 @@ export interface GroupBannedWords {
   recordConfirmedKick(userId: number, signal: AbortSignal, authorize: () => Promise<boolean>): Promise<void>;
 }
 
+export class GroupRulesWritePermissionError extends Error {}
+
 interface Context {
   readonly message_type: "group" | "private" | "terminal";
   readonly group_id?: number;
@@ -173,7 +175,7 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
     return { primary, target, previous, data: decode(target ?? previous) };
   }
 
-  async function update(groupId: number, authorize: () => Promise<boolean>, change: (data: Data) => string | WordReply) {
+  async function update<T extends WordReply>(groupId: number, authorize: () => Promise<boolean>, change: (data: Data) => T): Promise<T | string> {
     signal.throwIfAborted();
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const lock = await lockFile(join(directory, `.${groupId}.sqlite`), "群违禁词");
@@ -189,7 +191,7 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         const staged = join(stage, "rules.json");
         const file = await open(staged, "wx", 0o600);
         try { await file.writeFile(next); await file.sync(); } finally { await file.close(); }
-        if (!await authorize()) return "当前会话没有编辑违禁词的权限。";
+        if (!await authorize()) throw new GroupRulesWritePermissionError();
         const latest = await read(groupId);
         if (before.target ? !latest.target?.equals(before.target) : latest.target ||
             (before.previous ? !latest.previous?.equals(before.previous) : latest.previous)) {
@@ -298,8 +300,10 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         data.bannedWords = { ...rules, [word]: entry };
         return ["已添加违禁词。\n", ...display(word, entry)];
       });
-    } catch { return "违禁词配置暂不可用。"; }
+    } catch (error) {
+      return error instanceof GroupRulesWritePermissionError ? "当前会话没有编辑违禁词的权限。" : "违禁词配置暂不可用。";
+    }
   }
 
-  return { policy, command };
+  return { policy, command, titleStore: { read: async (groupId: number) => (await read(groupId)).data, update } };
 }
