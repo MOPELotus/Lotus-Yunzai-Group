@@ -60,13 +60,53 @@ test("并发编辑串行保留 YAML 注释、符号链接、BOM、CRLF 和其他
   const output = await readFile(actual, "utf8");
   expect(output).toStartWith("\uFEFF# 文件头\r\n");
   expect(output).toContain('  - "43" # 旧成员\r\n');
-  expect(output).toContain("whiteQQ: [ 44 ] # 白名单\r\n");
+  expect(output).toContain("whiteQQ: [44] # 白名单\r\n");
   expect(output).toContain("feature: true # 其他\r\n");
   expect(await active.blocked(45)).toBe(true);
   expect(await active.blocked(46)).toBe(true);
   expect(await active.update([43, 70], false)).toBe(true);
   expect(await active.blocked(43)).toBe(false);
   expect(await readFile(legacy, "utf8")).toBe(await readFile(actual, "utf8"));
+});
+
+test("只修改目标字段源码，保留紧凑 flow、非目标注释、BOM 和 CRLF 原字节", async () => {
+  const { active, primary } = await fixture();
+  const original = '\uFEFF---\r\nwhiteQQ: [41,42] # untouched 😀\r\nblackQQ: [ "43",44, ]  # members\r\nnoBan: true # switch\r\nextra: {a: [1,2],b: 3}\r\n...\r\n# footer';
+  await writeFile(primary, original);
+  await active.update([45], true);
+  const added = original.replace('[ "43",44, ]', '[ "43",44, 45, ]');
+  expect(await readFile(primary)).toEqual(Buffer.from(added));
+  await active.setAutoUnmute(false);
+  const changed = added.replace("noBan: true", "noBan: false");
+  expect(await readFile(primary)).toEqual(Buffer.from(changed));
+  await active.update([44], false);
+  expect(await readFile(primary)).toEqual(Buffer.from(changed.replace('[ "43",44, 45, ]', '["43", 45]')));
+});
+
+test("隐式空值、缺键及缩进不规则的列表只在能验证范围时发布", async () => {
+  const { active, primary } = await fixture();
+  const cases = [
+    ["blackQQ: # keep\r\nwhiteQQ: [41,42]\r\n", "blackQQ: [43] # keep\r\nwhiteQQ: [41,42]\r\n"],
+    ["blackQQ: ~ # keep\n", "blackQQ: [43] # keep\n"],
+    ["{whiteQQ: [41,42],noBan: false}\n", "{blackQQ: [43], whiteQQ: [41,42],noBan: false}\n"],
+    ["---\nwhiteQQ: [41,42]\n...\n# end", "---\nwhiteQQ: [41,42]\nblackQQ: [43]\n...\n# end"],
+    ["\uFEFF# 空配置", "\uFEFF# 空配置\nblackQQ: [43]\n"],
+    ["---\n# 空文档\n...\n", "---\n# 空文档\nblackQQ: [43]\n...\n"],
+    ["null # 空配置\n", "{blackQQ: [43]} # 空配置\n"],
+  ];
+  for (const [before, expected] of cases) {
+    await writeFile(primary, before!);
+    expect(await active.update([43], true)).toBe(true);
+    expect(await readFile(primary, "utf8")).toBe(expected!);
+  }
+  const block = "blackQQ:\n- 43 # removed\n# intervening\n- 44 # removed\nwhiteQQ: [41,42]\n";
+  await writeFile(primary, block);
+  expect(await active.update([43, 44], false)).toBe(true);
+  expect(await readFile(primary, "utf8")).toBe("blackQQ:\n  []\n# intervening\nwhiteQQ: [41,42]\n");
+  const ambiguous = "blackQQ: [43, # keep with another item?\n  44]\nwhiteQQ: [41,42]\n";
+  await writeFile(primary, ambiguous);
+  await expect(active.update([43], false)).rejects.toThrow("无法安全定位");
+  expect(await readFile(primary, "utf8")).toBe(ambiguous);
 });
 
 test("YAML 共享引用、损坏文件和锁外编辑都不会被覆盖", async () => {

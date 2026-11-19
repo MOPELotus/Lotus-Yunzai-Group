@@ -3,7 +3,7 @@ import { link, lstat, mkdir, mkdtemp, open, realpath, rename, rm } from "node:fs
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
-import { isSeq, parseDocument } from "yaml";
+import { isMap, isNode, isScalar, isSeq, parseDocument } from "yaml";
 
 export interface GroupManagedBlacklist {
   blocked(userId: number): Promise<boolean>;
@@ -71,6 +71,90 @@ function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
   return list.map(id);
 }
 
+function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: boolean | readonly number[]): string {
+  const contents = doc.contents;
+  const node = doc.get(field, true);
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const inline = typeof next === "boolean" ? String(next) : `[${next.join(", ")}]`;
+  const splice = (start: number, end: number, value: string) => text.slice(0, start) + value + text.slice(end);
+  const unsafe = () => new Error(`无法安全定位 ${field} 的 YAML 源码范围。`);
+  const lineStart = (index: number) => text.lastIndexOf("\n", index - 1) + 1;
+  if (isNode(node) && node.range) {
+    const [start, end, trailing] = node.range;
+    if (isSeq(node) && typeof next !== "boolean" && field !== "noBan") {
+      const ids = listOf(values, field);
+      const adding = next.length > ids.length;
+      if (node.flow) {
+        if (text[start] !== "[" || text[end - 1] !== "]") throw unsafe();
+        if (adding) {
+          const last = node.items.at(-1);
+          const point = isNode(last) && last.range ? last.range[1] : start + 1;
+          return splice(point, point, `${last ? ", " : ""}${next.slice(ids.length).join(", ")}`);
+        }
+        // In a flow sequence commas and comments can belong to adjacent items.
+        if (/[#&!]/u.test(text.slice(start, end))) throw unsafe();
+        const remaining = node.items.flatMap((item, index) => {
+          if (!next.includes(ids[index]!)) return [];
+          if (!isNode(item) || !item.range) throw unsafe();
+          return [text.slice(item.range[0], item.range[1])];
+        });
+        return splice(start, end, `[${remaining.join(", ")}]`);
+      }
+      const indent = text.slice(lineStart(start), start);
+      if (!/^ *$/u.test(indent) || text[start] !== "-") throw unsafe();
+      if (adding) {
+        const newline = text[trailing - 1] === "\n";
+        const items = next.slice(ids.length).map((id) => `${indent}- ${id}`).join(eol);
+        return splice(trailing, trailing, newline ? items + eol : eol + items);
+      }
+      const edits: { start: number; end: number }[] = [];
+      for (const [index, item] of node.items.entries()) {
+        if (next.includes(ids[index]!)) continue;
+        if (!isNode(item) || !item.range) throw unsafe();
+        const start = lineStart(item.range[0]);
+        const newline = text.indexOf("\n", start);
+        const end = newline >= 0 ? newline + 1 : text.length;
+        if (item.range[1] > end || !/^ *-(?:[ \t]|$)/u.test(text.slice(start, item.range[0]))) throw unsafe();
+        edits.push({ start, end });
+      }
+      let output = text;
+      for (const edit of edits.reverse()) {
+        const allRemoved = !next.length && edit === edits.at(-1);
+        const pair = isMap(contents) ? contents.items.find(({ key }) => isScalar(key) && key.value === field) : undefined;
+        const keyStart = isScalar(pair?.key) ? pair.key.range?.[0] : undefined;
+        if (allRemoved && keyStart === undefined) throw unsafe();
+        const emptyIndent = allRemoved ? Math.max(indent.length, keyStart! - lineStart(keyStart!) + 2) : 0;
+        const replacement = allRemoved ? " ".repeat(emptyIndent) + "[]" + (text[edit.end - 1] === "\n" ? eol : "") : "";
+        output = output.slice(0, edit.start) + replacement + output.slice(edit.end);
+      }
+      return output;
+    }
+    if (field !== "noBan" && listOf(values, field).length) throw unsafe();
+    if (start !== end) return splice(start, end, inline);
+    const before = text[start - 1];
+    const after = text[start];
+    // An implicit null has a zero-width range, immediately before its comment or after the colon.
+    const prefix = before === ":" ? " " : "";
+    return splice(start, start, prefix + inline + (after === "#" ? " " : ""));
+  }
+  if (isMap(contents) && contents.flow && contents.range) {
+    const start = contents.range[0];
+    if (text[start] !== "{") throw unsafe();
+    return splice(start + 1, start + 1, `${field}: ${inline}${contents.items.length ? ", " : ""}`);
+  }
+  if (isScalar(contents) && contents.value === null && contents.range && contents.range[0] !== contents.range[1]) {
+    return splice(contents.range[0], contents.range[1], `{${field}: ${inline}}`);
+  }
+  const point = isMap(contents) ? contents.range?.[1] : doc.range?.[1];
+  if (point === undefined || contents && !isMap(contents) && !isScalar(contents)) throw unsafe();
+  const beforeField = text.slice(0, point).replace(/^\uFEFF/u, "");
+  const key = isMap(contents) ? contents.items[0]?.key : undefined;
+  const keyStart = isScalar(key) ? key.range?.[0] : undefined;
+  const indent = keyStart === undefined ? "" : text.slice(lineStart(keyStart), keyStart).replace(/^\uFEFF/u, "");
+  if (!/^ *$/u.test(indent)) throw unsafe();
+  return splice(point, point, (beforeField && !beforeField.endsWith("\n") ? eol : "") + `${indent}${field}: ${inline}${eol}`);
+}
+
 function paths(root: URL) {
   const primary = fileURLToPath(new URL(canonical, root));
   const previous = fileURLToPath(new URL(legacy, root));
@@ -101,9 +185,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       const current = decode(before?.bytes);
       const next = change(current);
       if (next === undefined) return false;
-      let yaml = current.doc.toString();
-      if (current.text.includes("\r\n")) yaml = yaml.replaceAll("\n", "\r\n");
-      if (current.text.startsWith("\uFEFF")) yaml = "\uFEFF" + yaml;
+      const yaml = patchField(current, field, next);
       const bytes = Buffer.from(yaml);
       if (bytes.length > maxBytes) throw new Error("群管名单超过文件大小上限。");
       const check = decode(bytes);
@@ -151,19 +233,10 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
   function updateList(field: ListField, users: readonly number[], add: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>) {
     const selected = new Set(users.map(id));
     if (!selected.size) return Promise.resolve(false);
-    return write(field, ({ doc, values }) => {
+    return write(field, ({ values }) => {
       const current = listOf(values, field);
       const next = add ? [...current, ...[...selected].filter((qq) => !current.includes(qq))] : current.filter((qq) => !selected.has(qq));
       if (isDeepStrictEqual(current, next)) return;
-      const seq = doc.get(field, true);
-      if (isSeq(seq)) {
-        if (add) for (const qq of next.slice(current.length)) seq.add(qq);
-        else seq.items = seq.items.filter((_item, index) => !selected.has(current[index]!));
-      } else if (!seq || !current.length) {
-        doc.set(field, next);
-      } else {
-        throw new Error(`${field} 引用了其他字段，请先改为独立列表。`);
-      }
       return next;
     }, signal, authorize);
   }
@@ -183,11 +256,10 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
     update: (users, add, signal, authorize) => updateList("blackQQ", users, add, signal, authorize),
     updateWhitelist: (users, add, signal, authorize) => updateList("whiteQQ", users, add, signal, authorize),
     setAutoUnmute(enabled, signal, authorize) {
-      return write("noBan", ({ doc, values }) => {
+      return write("noBan", ({ values }) => {
         const current = values.get("noBan");
         if (current != null && typeof current !== "boolean") throw new Error("noBan 须为布尔值。");
         if ((current ?? false) === enabled) return;
-        doc.set("noBan", enabled);
         return enabled;
       }, signal, authorize);
     },
