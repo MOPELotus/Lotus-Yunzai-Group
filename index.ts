@@ -1,4 +1,4 @@
-import group, { createGroupPlugin } from "./likes.ts";
+import group, { createGroupPlugin, type ProfileLikeImage } from "./likes.ts";
 import { GroupDeparture, GroupNewcomer } from "./member-notices-v3.js";
 import { apps as repeat } from "./repeat.js";
 import { AutoRepeat, configureAutoRepeat } from "./auto-repeat-v3.js";
@@ -9,7 +9,7 @@ import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccoun
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 
 export { createGroupPlugin };
-export type { LikeContext, MentionLike } from "./likes.ts";
+export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
@@ -17,7 +17,7 @@ const manifest = { ...group, commands: { ...group.commands, ...groupRequestRevie
 export default manifest;
 
 export async function createModule({
-  signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist,
+  signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -25,6 +25,7 @@ export async function createModule({
   readonly ownGroupCardAccounts?: () => readonly OwnGroupCardAccount[];
   readonly registerAutoGroupCardTask?: (cron: string, run: () => Promise<AutoGroupCardSummary | undefined>) => (() => void | Promise<void>);
   readonly groupLeaveBlacklist?: { readonly io: GroupLeaveBlacklistIO; register(policy: GroupLeaveBlacklist): () => void };
+  readonly profileLikeImage?: ProfileLikeImage;
 }) {
   const updater = createAutoGroupCard({ signal, accounts: ownGroupCardAccounts ?? (() => []) });
   let stopTask: (() => void | Promise<void>) | undefined;
@@ -47,7 +48,11 @@ export async function createModule({
   }
   return {
     ...manifest,
-    commands: { ...manifest.commands, "#更新群名片": updater.command },
+    commands: {
+      ...manifest.commands,
+      ...(profileLikeImage ? createGroupPlugin(undefined, profileLikeImage).commands : {}),
+      "#更新群名片": updater.command,
+    },
     async dispose() {
       stopLeaveBlacklist?.();
       stopRepeat();

@@ -159,3 +159,79 @@ test("代赞只检查目标好友关系，不确认点赞失败，也不并发�
   expect(await first).toEqual({ type: "quoted", message: [{ type: "at", qq: 43 }, " ", "43", "失败"] });
   expect(calls).toBe(1);
 });
+
+test("点赞出明确回执后才按实际对象渲染，同一模板的多个图片位置复用结果", async () => {
+  const config = { ...settings(), recall: 2, successMsg: "{{img}}已赞{{userId}}{{thumbUpNum}}次{{ img }}", failsMsg: "失败{{img}}" };
+  const signal = new AbortController().signal;
+  const bytes = Uint8Array.of(2, 3);
+  const requests: unknown[] = [];
+  const { commands } = createGroupPlugin(async () => config, async (id, outcome, active) => {
+    requests.push([id, outcome, active]);
+    return bytes;
+  });
+  const started = Promise.withResolvers<void>();
+  const receipt = Promise.withResolvers<number>();
+  let submissions = 0;
+  const mentionLike = { userId: 43, async isFriend() { return true; }, async like() {
+    submissions++;
+    started.resolve();
+    return receipt.promise;
+  } };
+  const group = { message_type: "group" as const, user_id: 42, self_id: 99, mentionLike, profileLikeImageSignal: signal };
+  const pending = commands["#赞她"]!("", group);
+  await started.promise;
+  expect(requests).toEqual([]);
+  receipt.resolve(4);
+  const image = { type: "image", file: bytes } as const;
+  expect(await pending).toEqual({ type: "quoted", message: [image, "已赞", "43", "4", "次", image], options: { recallMsg: 2 } });
+  expect(await commands["#赞我"]!("", { ...group, async likeSelf() { submissions++; return 0; } })).toEqual({
+    type: "quoted", message: ["失败", image], options: { recallMsg: 2 },
+  });
+  expect(requests).toEqual([[43, "success", signal], [42, "failure", signal]]);
+  expect(submissions).toBe(2);
+});
+
+test("未确认、全部赞我失败、好友限制和普通模板均不访问头像图片", async () => {
+  const config = { ...settings(), successMsg: "成功", failsMsg: "失败{{img}}", noFriendMsg: "不是好友{{img}}", closeTips: "关闭{{img}}" };
+  let renders = 0;
+  const { commands } = createGroupPlugin(async () => config, async () => { renders++; return Uint8Array.of(1); });
+  const context = { message_type: "group" as const, user_id: 42, profileLikeImageSignal: new AbortController().signal };
+  expect(await commands["#点赞"]!("", { ...context, likeSelf: async () => 3 })).toEqual({ type: "quoted", message: "成功" });
+  for (const likeSelf of [async () => { throw new Error("未确认"); }, async () => 11, async () => -1]) {
+    expect(await commands["#赞我"]!("", { ...context, likeSelf })).toEqual({ type: "quoted", message: "失败" });
+  }
+  expect(await commands["#全部赞我"]!("", { ...context, likeSelf: async () => 0 })).toEqual([]);
+  config.strangeThumbUp = false;
+  expect(await commands["#赞我"]!("", { ...context, likeSelf: async () => 0 })).toEqual({ type: "quoted", message: "不是好友" });
+  config.enable = false;
+  expect(await commands["#赞我"]!("", { ...context, likeSelf: async () => 0 })).toEqual({ type: "quoted", message: "关闭" });
+  expect(renders).toBe(0);
+});
+
+test("素材不可用、会话缺失、委托或中断时保留已确认的文字和撤回设置", async () => {
+  const config = { ...settings(), recall: 2, successMsg: "点了{{thumbUpNum}}次{{img}}" };
+  const expected = { type: "quoted", message: "点了2次", options: { recallMsg: 2 } } as const;
+  const controller = new AbortController();
+  const started = Promise.withResolvers<void>();
+  const rendering = Promise.withResolvers<Uint8Array>();
+  let renders = 0, likes = 0;
+  const { commands } = createGroupPlugin(async () => config, async () => {
+    renders++;
+    started.resolve();
+    return rendering.promise;
+  });
+  const context = { message_type: "private" as const, user_id: 42, async likeSelf() { likes++; return 2; } };
+  expect(await commands["#赞我"]!("", context)).toEqual(expected);
+  expect(await commands["#赞我"]!("", { ...context, isDelegated: true, profileLikeImageSignal: controller.signal })).toEqual(expected);
+  expect(renders).toBe(0);
+  const pending = commands["#赞我"]!("", { ...context, profileLikeImageSignal: controller.signal });
+  await started.promise;
+  controller.abort();
+  expect(await pending).toEqual(expected);
+  rendering.resolve(Uint8Array.of(3));
+  expect(renders).toBe(1);
+  expect(likes).toBe(3);
+
+  const unavailable = createGroupPlugin(async () => config, async () => { throw new Error("素材缺失"); });
+  expect(await unavailable.commands["#赞我"]!("", { ...context, profileLikeImageSignal: new AbortController().signal })).toEqual(expected);
+});

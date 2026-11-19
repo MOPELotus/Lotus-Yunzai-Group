@@ -3,8 +3,13 @@ import { readLikeSettings, type LikeSettings } from "./like-settings.ts";
 export interface MentionLike {
   readonly userId: number;
   isFriend(): Promise<boolean>;
+  /** Return the confirmed count, zero on a definitive refusal, or throw if the result is uncertain. */
   like(count: number): Promise<number>;
 }
+
+export type ProfileLikeImage = (
+  avatarId: number, outcome: "success" | "failure", signal: AbortSignal,
+) => Promise<Uint8Array | undefined>;
 
 export interface LikeContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -12,11 +17,14 @@ export interface LikeContext {
   readonly self_id?: number;
   readonly isDelegated?: boolean;
   readonly isFriend?: () => Promise<boolean>;
+  /** Same receipt semantics as MentionLike.like. */
   readonly likeSelf?: (count: number) => Promise<number>;
   readonly mentionLike?: MentionLike;
+  readonly profileLikeImageSignal?: AbortSignal;
 }
 
-type MessagePart = string | { readonly type: "at"; readonly qq: number };
+type ImagePart = { readonly type: "image"; readonly file: Uint8Array };
+type MessagePart = string | { readonly type: "at"; readonly qq: number } | ImagePart;
 type Reply = string | readonly MessagePart[];
 type QuotedReply = {
   readonly type: "quoted";
@@ -29,7 +37,8 @@ function quoted(message: Reply, recall = 0): Reply | QuotedReply {
   return message.length ? { type: "quoted", message, ...(recall > 0 && { options: { recallMsg: recall } }) } : message;
 }
 
-function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean, mention?: MentionLike): Reply {
+function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean,
+  mention?: MentionLike, image?: ImagePart): Reply {
   if (!template) return [];
   const target = mention?.userId ?? context.user_id;
   const userLabel = mention ? String(mention.userId) : "你";
@@ -50,6 +59,8 @@ function reply(template: string | false, context: LikeContext, style: string, co
       fragments.push(style);
     } else if (part === "thumbUpNum") {
       fragments.push(String(count ?? 0));
+    } else if (part === "img" && image) {
+      fragments.push(image);
     }
   }
   return fragments.every((part) => typeof part === "string") && fragments.length
@@ -68,8 +79,28 @@ function otherMention(context: LikeContext): MentionLike | undefined {
   if (Number.isSafeInteger(userId) && userId > 0 && userId !== self_id && userId !== user_id) return mentionLike;
 }
 
-export function createGroupPlugin(config: () => Promise<LikeSettings> = async () => (await readLikeSettings()).settings) {
+export function createGroupPlugin(config: () => Promise<LikeSettings> = async () => (await readLikeSettings()).settings,
+  profileLikeImage?: ProfileLikeImage) {
   const inFlight = new Set<string>();
+
+  async function renderImage(template: string | false, context: LikeContext, avatarId: number,
+    outcome: "success" | "failure"): Promise<ImagePart | undefined> {
+    const signal = context.profileLikeImageSignal;
+    if (!profileLikeImage || !signal || signal.aborted || context.isDelegated ||
+        !Number.isSafeInteger(avatarId) || avatarId < 1 || !template || !/\{\{\s*img\s*\}\}/u.test(template)) return;
+    const result = Promise.withResolvers<Uint8Array | undefined>();
+    const abort = () => result.resolve(undefined);
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      void profileLikeImage(avatarId, outcome, signal).then(result.resolve, abort);
+      const bytes = await result.promise;
+      if (!signal.aborted && bytes instanceof Uint8Array && bytes.byteLength) return { type: "image", file: bytes };
+    } catch {
+      // The text reply remains usable when the optional renderer fails.
+    } finally {
+      signal.removeEventListener("abort", abort);
+    }
+  }
 
   function like(style: string, mode: "self" | "all" | "mention" = "self"): Handler {
     return async (argument, context) => {
@@ -100,8 +131,14 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
           if (friend !== true) return mode === "all" ? [] : quoted(reply(current.noFriendMsg, context, style, undefined, friend, mention));
         }
         const count = await submit(current.count);
+        const avatarId = mention?.userId ?? user_id;
         if (Number.isInteger(count) && count >= 1 && count <= current.count) {
-          return quoted(reply(current.successMsg, context, style, count, undefined, mention), current.recall);
+          const image = await renderImage(current.successMsg, context, avatarId, "success");
+          return quoted(reply(current.successMsg, context, style, count, undefined, mention, image), current.recall);
+        }
+        if (count === 0 && mode !== "all") {
+          const image = await renderImage(current.failsMsg, context, avatarId, "failure");
+          return quoted(reply(current.failsMsg, context, style, undefined, undefined, mention, image), current.recall);
         }
       } catch {
         // A gateway refusal is never reported as a successful like.
