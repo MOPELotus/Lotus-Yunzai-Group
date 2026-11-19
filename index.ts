@@ -8,12 +8,14 @@ import { GroupCard } from "./group-card-v3.js";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
+import { createManagedBlacklist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
+export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export { groupKickFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
+export { groupKickFeature, groupManagedBlacklistFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
   type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
@@ -26,6 +28,7 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
+  lockFile, registerManagedBlacklist,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -34,6 +37,8 @@ export async function createModule({
   readonly registerAutoGroupCardTask?: (cron: string, run: () => Promise<AutoGroupCardSummary | undefined>) => (() => void | Promise<void>);
   readonly groupLeaveBlacklist?: { readonly io: GroupLeaveBlacklistIO; register(policy: GroupLeaveBlacklist): () => void };
   readonly profileLikeImage?: ProfileLikeImage;
+  readonly lockFile?: Parameters<typeof createManagedBlacklist>[1];
+  readonly registerManagedBlacklist?: (policy: GroupManagedBlacklist) => () => void;
 }) {
   const updater = createAutoGroupCard({ signal, accounts: ownGroupCardAccounts ?? (() => []) });
   let stopTask: (() => void | Promise<void>) | undefined;
@@ -50,18 +55,23 @@ export async function createModule({
     isBot: (id: number) => ownGroupCardAccounts?.().some(({ botId }) => id === botId) ?? false,
   });
   let stopLeaveBlacklist: (() => void) | undefined;
+  const root = new URL("../../", import.meta.url);
   if (groupLeaveBlacklist && !signal.aborted) {
-    const policy = await readGroupLeaveBlacklist(new URL("../../", import.meta.url), groupLeaveBlacklist.io);
+    const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
   }
+  const blacklist = lockFile && !signal.aborted ? createManagedBlacklist(root, lockFile) : undefined;
+  const stopManagedBlacklist = blacklist && registerManagedBlacklist?.(blacklist);
   return {
     ...manifest,
+    fallback: createGroupMute(root, blacklist, signal),
     commands: {
       ...manifest.commands,
       ...(profileLikeImage ? createGroupPlugin(undefined, profileLikeImage).commands : {}),
       "#更新群名片": updater.command,
     },
     async dispose() {
+      stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();
       await stopTask?.();
