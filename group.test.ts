@@ -112,7 +112,7 @@ test("旧代赞及口语别名面向实际提及成员，保留模板变量和�
       expect(typeof commands[`#${verb}${pronoun}`]).toBe("function");
     }
   }
-  for (const [command, style] of [["#赞他", "赞"], ["#吵Ta", "超"]]) {
+  for (const [command, style] of [["#赞他", "赞"], ["#吵Ta", "超"]] as const) {
     expect(await commands[command]!("", context)).toEqual({ type: "quoted",
       message: [{ type: "at", qq: 43 }, " 给", "43", style, "了", "4", "次"], options: { recallMsg: 2 },
     });
