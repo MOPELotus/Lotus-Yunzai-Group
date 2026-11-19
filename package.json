@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./group-leave-blacklist": "./group-leave-blacklist.ts",
     "./like-settings": "./like-settings.ts"
   },
   "lotusYunzai": {
