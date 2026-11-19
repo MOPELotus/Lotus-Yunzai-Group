@@ -5,8 +5,8 @@ export class GroupNewcomer extends plugin {
     super({ name: "欢迎新人", event: "notice.group.increase" });
   }
 
-  accept() {
-    return welcomeMember(this.e);
+  async accept() {
+    await welcomeMember(this.e);
   }
 }
 
@@ -15,7 +15,7 @@ export class GroupDeparture extends plugin {
     super({ name: "退群通知", event: "notice.group.decrease" });
   }
 
-  accept() {
-    return announceDeparture(this.e);
+  async accept() {
+    await announceDeparture(this.e);
   }
 }

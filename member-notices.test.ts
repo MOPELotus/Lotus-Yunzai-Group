@@ -141,3 +141,20 @@ test("群名查询失败、没有结果或得到空白时仍发送欢迎", async
     }, async () => true)).toBe(true);
   }
 });
+
+test("旧进退群通知发送后继续让其他 V3 accept 监听器处理同一事件", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "plugin");
+  Object.assign(globalThis, { plugin: class {} });
+  const { GroupNewcomer, GroupDeparture } = await import("./member-notices-v3.js").finally(() => {
+    if (previous) Object.defineProperty(globalThis, "plugin", previous);
+    else Reflect.deleteProperty(globalThis, "plugin");
+  });
+  const sent: unknown[] = [];
+  const event: GroupMemberNotice = {
+    ...member, group_id: 52, group_name: "夹具群",
+    reply(content) { sent.push(content); return true; },
+  };
+  expect(await Object.assign(new GroupNewcomer(), { e: event }).accept()).toBeUndefined();
+  expect(await Object.assign(new GroupDeparture(), { e: event }).accept()).toBeUndefined();
+  expect(sent).toHaveLength(2);
+});
