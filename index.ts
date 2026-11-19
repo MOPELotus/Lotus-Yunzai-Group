@@ -1,6 +1,7 @@
 import group, { createGroupPlugin } from "./likes.ts";
 import { GroupDeparture, GroupNewcomer } from "./member-notices-v3.js";
 import { apps as repeat } from "./repeat.js";
+import { AutoRepeat, configureAutoRepeat } from "./auto-repeat-v3.js";
 import { groupRequestReview } from "./request-review.ts";
 import { ReviewGroupRequest } from "./request-review-v3.js";
 import { GroupCard } from "./group-card-v3.js";
@@ -8,12 +9,16 @@ import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccoun
 
 export { createGroupPlugin };
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard };
+export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = { ...group, commands: { ...group.commands, ...groupRequestReview.commands } };
 export default manifest;
 
-export async function createModule({ signal, ownGroupCardAccounts, registerAutoGroupCardTask }: {
+export async function createModule({
+  signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal,
+}: {
   readonly signal: AbortSignal;
+  readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
+  readonly autoRepeatSessionSignal?: (event: unknown) => AbortSignal | undefined;
   readonly ownGroupCardAccounts?: () => readonly OwnGroupCardAccount[];
   readonly registerAutoGroupCardTask?: (cron: string, run: () => Promise<AutoGroupCardSummary | undefined>) => (() => void | Promise<void>);
 }) {
@@ -27,9 +32,16 @@ export async function createModule({ signal, ownGroupCardAccounts, registerAutoG
       console.warn("[group] 自动群名片配置无效，未启动定时更新。");
     }
   }
+  const stopRepeat = configureAutoRepeat({
+    signal, readImage: readAutoRepeatImage, sessionSignal: autoRepeatSessionSignal,
+    isBot: (id: number) => ownGroupCardAccounts?.().some(({ botId }) => id === botId) ?? false,
+  });
   return {
     ...manifest,
     commands: { ...manifest.commands, "#更新群名片": updater.command },
-    dispose: stopTask,
+    async dispose() {
+      stopRepeat();
+      await stopTask?.();
+    },
   };
 }
