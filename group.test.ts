@@ -91,3 +91,71 @@ test("只有真正发送的点赞结果使用配置的自动撤回", async () =>
   expect(await commands["#赞我"]!("", context)).toEqual({ type: "quoted", message: "关闭" });
   expect(calls).toEqual([10, 10, 10, 10]);
 });
+
+test("旧代赞及口语别名面向实际提及成员，保留模板变量和一次协议确认", async () => {
+  const config = settings();
+  config.recall = 2;
+  const { commands, aliases } = createGroupPlugin(async () => config);
+  const calls: number[] = [];
+  const context = {
+    message_type: "group" as const, user_id: 42, self_id: 99,
+    async likeSelf() { throw new Error("must not like the sender"); },
+    mentionLike: {
+      userId: 43,
+      async isFriend() { throw new Error("only queried in friend-only mode"); },
+      async like(count: number) { calls.push(count); return 4; },
+    },
+  };
+  for (const verb of ["赞", "超", "操", "草", "抄", "吵", "炒"]) {
+    for (const pronoun of ["他", "她", "它", "TA", "ta", "Ta"]) {
+      expect(aliases[verb + pronoun]).toBe(`#${verb}${pronoun}`);
+      expect(typeof commands[`#${verb}${pronoun}`]).toBe("function");
+    }
+  }
+  for (const [command, style] of [["#赞他", "赞"], ["#吵Ta", "超"]]) {
+    expect(await commands[command]!("", context)).toEqual({ type: "quoted",
+      message: [{ type: "at", qq: 43 }, " 给", "43", style, "了", "4", "次"], options: { recallMsg: 2 },
+    });
+  }
+  expect(calls).toEqual([10, 10]);
+});
+
+test("代赞没有唯一合法群提及时只提示，绝不回退为自赞", async () => {
+  const { commands } = createGroupPlugin(async () => settings());
+  let calls = 0;
+  const context = { message_type: "group" as const, self_id: 99, user_id: 42, async likeSelf() { return ++calls; } };
+  const mentionLike = { userId: 43, async isFriend() { return true; }, async like() { return ++calls; } };
+  for (const invalid of [context, { ...context, mentionLike, isDelegated: true },
+    { ...context, mentionLike, message_type: "private" as const }, ...[42, 99, 0, -1, Number.NaN].map((userId) => ({
+      ...context, mentionLike: { ...mentionLike, userId },
+    }))]) {
+    expect(await commands["#赞她"]!("", invalid)).toContain("@ 一位其他群成员");
+  }
+  expect(await commands["#赞她"]!("43", context)).toContain("@ 一位其他群成员");
+  expect(calls).toBe(0);
+});
+
+test("代赞只检查目标好友关系，不确认点赞失败，也不并发点赞同一目标", async () => {
+  const config = settings();
+  config.strangeThumbUp = false;
+  config.noFriendMsg = "{{at}} {{userId}} {{noFriend:请{userId}先添加好友}}";
+  config.failsMsg = "{{at}} {{userId}}失败";
+  const { commands } = createGroupPlugin(async () => config);
+  const started = Promise.withResolvers<void>();
+  const pending = Promise.withResolvers<number>();
+  let calls = 0;
+  const target = { userId: 43, async isFriend() { return false; }, like() { calls++; started.resolve(); return pending.promise; } };
+  const context = { message_type: "group" as const, user_id: 42, self_id: 99, async isFriend() { return true; } };
+  expect(await commands["#赞TA"]!("", { ...context, mentionLike: target })).toEqual({
+    type: "quoted", message: [{ type: "at", qq: 43 }, " ", "43", " 请43先添加好友"],
+  });
+  expect(calls).toBe(0);
+  const eligible = { ...target, async isFriend() { return true; } };
+  const first = commands["#赞TA"]!("", { ...context, mentionLike: eligible });
+  await started.promise;
+  expect(await commands["#赞他"]!("", { ...context, user_id: 44, mentionLike: eligible })).toContain("正在处理");
+  expect(await commands["#赞我"]!("", { ...context, user_id: 43, async likeSelf() { return ++calls; } })).toContain("正在处理");
+  pending.resolve(0);
+  expect(await first).toEqual({ type: "quoted", message: [{ type: "at", qq: 43 }, " ", "43", "失败"] });
+  expect(calls).toBe(1);
+});

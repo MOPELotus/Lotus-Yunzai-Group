@@ -1,11 +1,19 @@
 import { readLikeSettings, type LikeSettings } from "./like-settings.ts";
 
-interface LikeContext {
+export interface MentionLike {
+  readonly userId: number;
+  isFriend(): Promise<boolean>;
+  like(count: number): Promise<number>;
+}
+
+export interface LikeContext {
   readonly message_type: "group" | "private" | "terminal";
   readonly user_id?: number;
   readonly self_id?: number;
+  readonly isDelegated?: boolean;
   readonly isFriend?: () => Promise<boolean>;
   readonly likeSelf?: (count: number) => Promise<number>;
+  readonly mentionLike?: MentionLike;
 }
 
 type MessagePart = string | { readonly type: "at"; readonly qq: number };
@@ -21,21 +29,23 @@ function quoted(message: Reply, recall = 0): Reply | QuotedReply {
   return message.length ? { type: "quoted", message, ...(recall > 0 && { options: { recallMsg: recall } }) } : message;
 }
 
-function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean): Reply {
+function reply(template: string | false, context: LikeContext, style: string, count?: number, friend?: boolean, mention?: MentionLike): Reply {
   if (!template) return [];
+  const target = mention?.userId ?? context.user_id;
+  const userLabel = mention ? String(mention.userId) : "你";
   const fragments: MessagePart[] = [];
   const expanded = template.replace(/\{\{\s*noFriend:([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\}/gu,
     (_whole, body: string) => friend === false ? body.replace(/\{\s*(doType|userId|thumbUpNum)\s*\}/gu,
-      (_match, key: string) => key === "doType" ? style : key === "userId" ? "你" : String(count ?? 0)) : "");
+      (_match, key: string) => key === "doType" ? style : key === "userId" ? userLabel : String(count ?? 0)) : "");
   for (const [index, part] of expanded.split(/\{\{\s*(at|userId|doType|thumbUpNum|img)\s*\}\}/gu).entries()) {
     if (index % 2 === 0) {
       if (part) fragments.push(part);
       continue;
     }
-    if (part === "at" && context.message_type === "group" && context.user_id !== undefined) {
-      fragments.push({ type: "at", qq: context.user_id });
+    if (part === "at" && context.message_type === "group" && target !== undefined) {
+      fragments.push({ type: "at", qq: target });
     } else if (part === "userId") {
-      fragments.push("你");
+      fragments.push(userLabel);
     } else if (part === "doType") {
       fragments.push(style);
     } else if (part === "thumbUpNum") {
@@ -47,52 +57,69 @@ function reply(template: string | false, context: LikeContext, style: string, co
 }
 
 const aliases = ["赞我", "点赞", "资料卡点赞", "我要点赞", "给我点赞", "我要资料卡点赞", "给我资料卡点赞"];
-const colloquial = ["超我", "操我", "草我", "抄我", "吵我", "炒我"];
+const colloquial = ["超", "操", "草", "抄", "吵", "炒"];
+const mentionPronouns = ["他", "她", "它", "TA", "ta", "Ta"];
+const mentionPrompt = "请在群聊中只 @ 一位其他群成员。";
+
+function otherMention(context: LikeContext): MentionLike | undefined {
+  const { message_type, isDelegated, mentionLike, user_id, self_id } = context;
+  if (message_type !== "group" || isDelegated || !mentionLike) return;
+  const { userId } = mentionLike;
+  if (Number.isSafeInteger(userId) && userId > 0 && userId !== self_id && userId !== user_id) return mentionLike;
+}
 
 export function createGroupPlugin(config: () => Promise<LikeSettings> = async () => (await readLikeSettings()).settings) {
   const inFlight = new Set<string>();
 
-  function like(style: string, groupOnly = false): Handler {
+  function like(style: string, mode: "self" | "all" | "mention" = "self"): Handler {
     return async (argument, context) => {
-      if (argument) return "请直接发送点赞指令。";
-      if (groupOnly && context.message_type !== "group") return [];
+      if (argument) return mode === "mention" ? mentionPrompt : "请直接发送点赞指令。";
+      if (mode === "all" && context.message_type !== "group") return [];
       let current: LikeSettings;
       try {
         current = await config();
       } catch {
         return "点赞配置无法读取，请联系管理员。";
       }
-      if (groupOnly && current.cloneAllThumbUp) return [];
-      if (!current.enable) return quoted(reply(current.closeTips, context, style));
+      if (mode === "all" && current.cloneAllThumbUp) return [];
+      const mention = mode === "mention" ? otherMention(context) : undefined;
+      if (!current.enable) return quoted(reply(current.closeTips, context, style, undefined, undefined, mention));
+      if (mode === "mention" && !mention) return mentionPrompt;
       const { likeSelf, user_id } = context;
-      if (!likeSelf || user_id === undefined || context.message_type === "terminal") {
-        return "当前协议端不支持资料卡点赞。";
-      }
-      const key = `${context.self_id ?? "unknown"}:${user_id}`;
-      if (inFlight.has(key)) return groupOnly ? [] : "正在处理你的点赞请求。";
-      inFlight.add(key);
+      const submit = mention ? (count: number) => mention.like(count) : likeSelf;
+      if (!submit || user_id === undefined || context.message_type === "terminal") return "当前协议端不支持资料卡点赞。";
+      const botId = context.self_id ?? "unknown";
+      const requesterKey = `${botId}:${user_id}`;
+      const targetKey = `${botId}:${mention?.userId ?? user_id}`;
+      if (inFlight.has(requesterKey) || inFlight.has(targetKey)) return mode === "all" ? [] : "正在处理你的点赞请求。";
+      inFlight.add(requesterKey);
+      inFlight.add(targetKey);
       try {
         if (!current.strangeThumbUp) {
-          const friend = await context.isFriend?.().catch(() => undefined);
-          if (friend !== true) return groupOnly ? [] : quoted(reply(current.noFriendMsg, context, style, undefined, friend));
+          const friend = await (mention ? mention.isFriend() : context.isFriend?.())?.catch(() => undefined);
+          if (friend !== true) return mode === "all" ? [] : quoted(reply(current.noFriendMsg, context, style, undefined, friend, mention));
         }
-        const count = await likeSelf(current.count);
+        const count = await submit(current.count);
         if (Number.isInteger(count) && count >= 1 && count <= current.count) {
-          return quoted(reply(current.successMsg, context, style, count), current.recall);
+          return quoted(reply(current.successMsg, context, style, count, undefined, mention), current.recall);
         }
       } catch {
         // A gateway refusal is never reported as a successful like.
       } finally {
-        inFlight.delete(key);
+        inFlight.delete(requesterKey);
+        inFlight.delete(targetKey);
       }
-      return groupOnly ? [] : quoted(reply(current.failsMsg, context, style), current.recall);
+      return mode === "all" ? [] : quoted(reply(current.failsMsg, context, style, undefined, undefined, mention), current.recall);
     };
   }
 
-  const commands: Record<string, Handler> = { "#全部赞我": like("赞", true) };
+  const commands: Record<string, Handler> = { "#全部赞我": like("赞", "all") };
   for (const name of aliases) commands[`#${name}`] = like("赞");
-  for (const name of colloquial) commands[`#${name}`] = like("超");
-  const bareAliases = Object.fromEntries([...aliases, ...colloquial].map((name) => [name, `#${name}`]));
+  for (const verb of colloquial) commands[`#${verb}我`] = like("超");
+  for (const verb of ["赞", ...colloquial]) {
+    for (const pronoun of mentionPronouns) commands[`#${verb}${pronoun}`] = like(verb === "赞" ? "赞" : "超", "mention");
+  }
+  const bareAliases = Object.fromEntries(Object.keys(commands).filter((name) => name !== "#全部赞我").map((name) => [name.slice(1), name]));
   return { commands, aliases: bareAliases };
 }
 

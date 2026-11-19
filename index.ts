@@ -9,6 +9,7 @@ import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccoun
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 
 export { createGroupPlugin };
+export type { LikeContext, MentionLike } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
