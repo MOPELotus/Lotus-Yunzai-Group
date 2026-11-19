@@ -10,6 +10,8 @@ export interface GroupActivityMember {
   readonly name?: string;
 }
 
+export type GroupActivityVisibility = "management" | "member";
+
 export interface GroupActivityContext {
   readonly message_type: "group" | "private" | "terminal";
   readonly self_id?: number;
@@ -19,7 +21,7 @@ export interface GroupActivityContext {
   readonly message_id?: number | string;
   readonly isDelegated?: boolean;
   readonly normalizedMessage: string;
-  readonly groupActivityRoster?: () => Promise<readonly GroupActivityMember[] | undefined>;
+  readonly groupActivityRoster?: (visibility?: GroupActivityVisibility) => Promise<readonly GroupActivityMember[] | undefined>;
   readonly groupActivitySignal?: AbortSignal;
   readonly groupManageBlacklist?: () => Promise<boolean>;
   readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
@@ -27,7 +29,9 @@ export interface GroupActivityContext {
 }
 
 export const groupActivityFeature = "[group] 从未发言成员";
+export const groupActivityRankFeature = "[group] 群成员活动排行";
 const commandPattern = /^#查看从未发言过?的人(?:第([零一壹二两三四五六七八九十百千万亿\d]+)页)?$/u;
+const rankPattern = /^#(?:查看|获取)?(不活跃排行榜|潜水排行榜|最近的?入群(?:情况|记录))([零一壹二两三四五六七八九十百千万亿\d]+)?$/u;
 const cleanupPattern = /^#清理从未发言过?的人$/u;
 const responsePattern = /^#?(确认|取消)清理$/u;
 const pageSize = 30;
@@ -38,22 +42,21 @@ type Entry = string | { readonly type: "image"; readonly file: string };
 type ActivityReply = string | { readonly type: "forward"; readonly nodes: readonly (readonly Entry[])[] };
 
 export function isGroupActivityCommand(message: string): boolean { return commandPattern.test(message); }
+export function isGroupActivityRankCommand(message: string): boolean { return rankPattern.test(message); }
 export function isGroupActivityCleanupCommand(message: string): boolean { return cleanupPattern.test(message) || responsePattern.test(message); }
 
 function positive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 
-function selectMembers(members: readonly GroupActivityMember[], bot: number): GroupActivityMember[] | undefined {
-  if (!Array.isArray(members)) return;
+function verifiedMembers(members: readonly GroupActivityMember[], bot: number): boolean {
+  if (!Array.isArray(members)) return false;
   const identities = new Set<number>();
-  const selected: GroupActivityMember[] = [];
   for (const entry of members) {
     if (!entry || !positive(entry.userId) || identities.has(entry.userId) || !positive(entry.joinTime) ||
         entry.joinTime > maxDateTimestamp || !Number.isSafeInteger(entry.lastSentTime) || entry.lastSentTime < 0 ||
-        entry.lastSentTime > maxDateTimestamp || !["member", "admin", "owner"].includes(entry.role)) return;
+        entry.lastSentTime > maxDateTimestamp || !["member", "admin", "owner"].includes(entry.role)) return false;
     identities.add(entry.userId);
-    if (entry.userId !== bot && entry.role === "member" && entry.joinTime === entry.lastSentTime) selected.push(entry);
   }
-  return identities.has(bot) ? selected.sort((left, right) => left.joinTime - right.joinTime) : undefined;
+  return identities.has(bot);
 }
 
 function formattedDate(seconds: number): string {
@@ -63,17 +66,62 @@ function formattedDate(seconds: number): string {
     `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-async function readMembers(context: GroupActivityContext, bot: number): Promise<GroupActivityMember[] | undefined> {
+function memberAvatar(userId: number): Entry {
+  return { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` };
+}
+
+function memberLabel({ userId, name }: GroupActivityMember): string {
+  const nickname = typeof name === "string" ? name.replace(/[\p{Cc}\p{Cf}]/gu, "").trim().slice(0, 128).toWellFormed() : "";
+  return `\nQQ：${userId}\n昵称：${nickname || userId}\n`;
+}
+
+async function readRoster(context: GroupActivityContext, bot: number, visibility?: GroupActivityVisibility): Promise<readonly GroupActivityMember[] | undefined> {
   try {
-    const roster = await context.groupActivityRoster?.();
-    return roster && selectMembers(roster, bot);
+    const roster = await context.groupActivityRoster?.(visibility);
+    if (roster && verifiedMembers(roster, bot)) return roster;
   } catch { return; }
 }
 
+async function readMembers(context: GroupActivityContext, bot: number): Promise<GroupActivityMember[] | undefined> {
+  const roster = await readRoster(context, bot);
+  return roster?.filter((entry) => entry.userId !== bot && entry.role === "member" && entry.joinTime === entry.lastSentTime)
+    .sort((left, right) => left.joinTime - right.joinTime);
+}
+
+function activityRanking(roster: readonly GroupActivityMember[], recent: boolean, count: number): ActivityReply {
+  const sorted = [...roster].sort(recent
+    ? (left, right) => right.joinTime - left.joinTime
+    : (left, right) => left.lastSentTime - right.lastSentTime).slice(0, count);
+  const nodes: Entry[][] = [[recent ? `最近的${sorted.length}条入群记录` : `不活跃排行榜top1 - top${sorted.length}`]];
+  const perNode = Math.max(1, Math.ceil(sorted.length / 99));
+  for (let start = 0; start < sorted.length; start += perNode) {
+    const node: Entry[] = [];
+    for (const [index, entry] of sorted.slice(start, start + perNode).entries()) {
+      if (node.length) node.push("\n\n");
+      if (!recent) node.push(`第${start + index + 1}名：\n`);
+      node.push(memberAvatar(entry.userId), memberLabel(entry));
+      if (recent) node.push(`入群时间：${formattedDate(entry.joinTime)}\n`);
+      node.push(`最后发言时间：${entry.lastSentTime === 0 ? "未记录" : formattedDate(entry.lastSentTime)}`);
+    }
+    nodes.push(node);
+  }
+  return { type: "forward", nodes };
+}
+
 export async function groupActivityCommand(context: GroupActivityContext, signal?: AbortSignal): Promise<ActivityReply | undefined> {
-  const match = commandPattern.exec(context.normalizedMessage.trim());
-  if (!match || context.message_type !== "group" || context.isDelegated || signal?.aborted ||
+  const command = context.normalizedMessage.trim();
+  const match = commandPattern.exec(command), rank = rankPattern.exec(command);
+  if ((!match && !rank) || context.message_type !== "group" || context.isDelegated || signal?.aborted || context.groupActivitySignal?.aborted ||
       !positive(context.group_id) || !positive(context.user_id) || !positive(context.self_id)) return;
+  if (rank) {
+    const count = rank[2] === undefined ? 10 : parseGroupInteger(rank[2]);
+    if (!count) return "请输入有效的成员数量。";
+    const roster = await readRoster(context, context.self_id, "member");
+    if (signal?.aborted || context.groupActivitySignal?.aborted) return;
+    if (!roster) return "当前无法读取完整的群成员发言数据，请核对当前群会话和协议端支持。";
+    return activityRanking(roster, rank[1]?.startsWith("最近") === true, count);
+  }
+  if (!match) return;
   const page = match[1] === undefined ? 1 : parseGroupInteger(match[1]);
   if (!page) return "请输入有效页码。";
   const members = await readMembers(context, context.self_id);
@@ -88,12 +136,8 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
     `当前为第 ${page} 页，共 ${pages} 页，本页共 ${shown.length} 人，总共 ${members.length} 人。`,
   ]];
   if (page < pages) nodes[0]!.push(`\n可用「#查看从未发言过的人第${page + 1}页」翻页。`);
-  for (const { userId, name, joinTime } of shown) {
-    const nickname = typeof name === "string" ? name.replace(/[\p{Cc}\p{Cf}]/gu, "").trim().slice(0, 128).toWellFormed() : "";
-    nodes.push([
-      { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-      `\nQQ：${userId}\n昵称：${nickname || userId}\n进群时间：${formattedDate(joinTime)}`,
-    ]);
+  for (const entry of shown) {
+    nodes.push([memberAvatar(entry.userId), `${memberLabel(entry)}进群时间：${formattedDate(entry.joinTime)}`]);
   }
   return { type: "forward", nodes };
 }

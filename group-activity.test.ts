@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createGroupActivityCleanup, groupActivityCommand, isGroupActivityCleanupCommand, isGroupActivityCommand,
-  type GroupActivityContext, type GroupActivityMember } from "./group-activity.ts";
+import { createGroupActivityCleanup, groupActivityCommand, isGroupActivityCleanupCommand, isGroupActivityCommand, isGroupActivityRankCommand,
+  type GroupActivityContext, type GroupActivityMember, type GroupActivityVisibility } from "./group-activity.ts";
 
 const time = 1_700_000_000;
 const bot = { userId: 999, joinTime: time, lastSentTime: time, role: "member" } as const;
@@ -62,6 +62,56 @@ test("只读入口不接管确认或清理，跨会话和无效页码不发查�
   stopped.abort();
   expect(await groupActivityCommand(scope, stopped.signal)).toBeUndefined();
   expect(reads).toBe(0);
+});
+
+test("旧活动排行榜读同群公开快照，使用原头像、字段、中文人数和排序", async () => {
+  const requests: (GroupActivityVisibility | undefined)[] = [];
+  const rows: readonly GroupActivityMember[] = [bot, { userId: 43, joinTime: time + 12, lastSentTime: 0, role: "admin", name: "群名片" },
+    { userId: 44, joinTime: time + 20, lastSentTime: time + 80, role: "owner", name: "最新" },
+    { userId: 45, joinTime: time + 10, lastSentTime: time, role: "member" }];
+  const scope = { ...context, async groupActivityRoster(visibility?: GroupActivityVisibility) {
+    requests.push(visibility);
+    return rows;
+  } };
+  const inactive = await groupActivityCommand({ ...scope, normalizedMessage: "#获取潜水排行榜三" });
+  if (typeof inactive !== "object") throw new Error("未返回合并排行榜");
+  expect(inactive.nodes[0]).toEqual(["不活跃排行榜top1 - top3"]);
+  expect(inactive.nodes[1]?.[0]).toBe("第1名：\n");
+  expect(inactive.nodes[1]?.[1]).toEqual({ type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=43" });
+  expect(inactive.nodes[1]?.[2]).toContain("昵称：群名片");
+  expect(inactive.nodes[1]?.[3]).toBe("最后发言时间：未记录");
+  expect(inactive.nodes[2]?.join("")).toContain("QQ：999");
+  expect(inactive.nodes[3]?.join("")).toContain("QQ：45");
+  const recent = await groupActivityCommand({ ...scope, normalizedMessage: "#查看最近的入群情况二" });
+  if (typeof recent !== "object") throw new Error("未返回合并入群记录");
+  expect(recent.nodes[0]).toEqual(["最近的2条入群记录"]);
+  expect(recent.nodes[1]?.join("")).toContain("昵称：最新");
+  expect(recent.nodes[1]?.join("")).toContain("入群时间：");
+  expect(recent.nodes[1]?.join("")).toContain("最后发言时间：");
+  expect(recent.nodes[2]?.join("")).toContain("QQ：43");
+  await groupActivityCommand(scope);
+  expect(requests).toEqual(["member", "member", undefined]);
+  expect(rows[0]).toBe(bot);
+});
+
+test("活动排行默认十名，不补造不完整快照，旧命令不带分页", async () => {
+  const rows: GroupActivityMember[] = [bot, ...Array.from({ length: 109 }, (_, index) => ({ ...bot, userId: 10_000 + index }))];
+  let reads = 0;
+  const scope = { ...context, normalizedMessage: "#不活跃排行榜", async groupActivityRoster() { reads++; return rows; } };
+  const defaultResult = await groupActivityCommand(scope);
+  if (typeof defaultResult !== "object") throw new Error("未返回默认十名");
+  expect(defaultResult.nodes).toHaveLength(11);
+  const longResult = await groupActivityCommand({ ...scope, normalizedMessage: "#最近入群记录二百" });
+  if (typeof longResult !== "object") throw new Error("未返回大于网关节点上限的合并列表");
+  expect(longResult.nodes.length).toBeLessThanOrEqual(100);
+  expect(longResult.nodes[0]).toEqual(["最近的110条入群记录"]);
+  expect(longResult.nodes.flat().filter((part) => typeof part === "object")).toHaveLength(110);
+  expect(await groupActivityCommand({ ...scope, normalizedMessage: "#不活跃排行榜零" })).toContain("有效的成员数量");
+  expect(isGroupActivityRankCommand("#最近入群记录第2页")).toBe(false);
+  expect(await groupActivityCommand({ ...scope, message_type: "private" })).toBeUndefined();
+  expect(await groupActivityCommand({ ...scope, isDelegated: true })).toBeUndefined();
+  expect(await groupActivityCommand({ ...scope, async groupActivityRoster() { return [rows[1]!]; } })).toContain("无法读取完整");
+  expect(reads).toBe(2);
 });
 
 test("清理按同群确认且重读完整名单，只操作首次选中仍符合条件的成员", async () => {
