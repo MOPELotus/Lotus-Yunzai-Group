@@ -3,6 +3,7 @@ import { parse } from "yaml";
 
 export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unavailable";
 export type GroupMuteResult = GroupWholeMuteResult | "protected";
+export type GroupKickResult = GroupMuteResult;
 
 export interface GroupMuteContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -17,9 +18,11 @@ export interface GroupMuteContext {
   readonly isBotMaster: (userId: number) => boolean;
   readonly groupMute?: (userId: number, seconds: number) => Promise<GroupMuteResult>;
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
+  readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
 }
 
 export const groupMuteFeature = "[group] 群禁言";
+export const groupKickFeature = "[group] 群成员移出";
 export const maxGroupMuteSeconds = 2_147_483_647;
 const defaultMuteSeconds = 300;
 const maxRememberedMessages = 2048;
@@ -38,6 +41,11 @@ const secondsByUnit = new Map(Object.entries({
 const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...secondsByUnit.keys()].join("|")})$)`, "iu");
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
 const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
+const kickPattern = /^#踢(黑)?(\d+)?$/u;
+
+export function groupModerationFeature({ normalizedMessage }: { readonly normalizedMessage: string }): readonly string[] {
+  return [kickPattern.test(normalizedMessage.trim()) ? groupKickFeature : groupMuteFeature];
+}
 
 function positiveId(value: unknown): number | undefined {
   const id = typeof value === "string" && /^[1-9]\d*$/u.test(value) ? Number(value) : value;
@@ -103,6 +111,14 @@ function targets(message: string, group: GroupMuteContext, botId: number) {
   if (seconds !== undefined && ids.every((id) => id !== botId)) return { ids, seconds };
 }
 
+function kickTargets(context: GroupMuteContext, bot: number, numeric: string | undefined): number[] | undefined {
+  const ids = mentionedIds(context.message, bot);
+  if (!ids || (ids.length && numeric !== undefined)) return;
+  if (ids.length) return ids;
+  const id = positiveId(numeric);
+  if (id !== undefined && id !== bot) return [id];
+}
+
 async function readWhitelist(root: URL): Promise<ReadonlySet<number>> {
   const source = await readFile(new URL(legacyConfig, root), "utf8").catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
@@ -126,10 +142,10 @@ async function readWhitelist(root: URL): Promise<ReadonlySet<number>> {
 export function createGroupMute(root: URL = defaultRoot) {
   const seen = new Set<string>();
 
-  function claim(context: GroupMuteContext, bot: number, issuer: number): boolean {
+  function claim(context: GroupMuteContext, bot: number, issuer: number, requireId = false): boolean {
     const { message_id, adapter, group_id } = context;
     if (!((typeof message_id === "number" && Number.isSafeInteger(message_id)) ||
-          (typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128))) return true;
+          (typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128))) return !requireId;
     const key = JSON.stringify([adapter ?? "onebot", bot, group_id, issuer, String(message_id)]);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -144,11 +160,12 @@ export function createGroupMute(root: URL = defaultRoot) {
     const command = (context.normalizedMessage ?? message).trim();
     if (context.message_type !== "group") return;
     const whole = wholeMutePattern.exec(command);
-    if (!whole && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
-    const { groupMute, groupWholeMute, user_id, self_id, group_id } = context;
+    const kick = kickPattern.exec(command);
+    if (!whole && !kick && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const { groupMute, groupWholeMute, groupKick, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
     if (context.isDelegated || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
-      return "当前会话没有群禁言权限。";
+      return kick ? "当前会话没有移出群成员的权限。" : "当前会话没有群禁言权限。";
     }
     if (whole) {
       if (!groupWholeMute) return "当前会话没有群禁言权限。";
@@ -164,30 +181,48 @@ export function createGroupMute(root: URL = defaultRoot) {
         default: return "全体禁言操作结果未确认，请在群内核对。";
       }
     }
-    if (!groupMute) return "当前会话没有群禁言权限。";
-    const action = targets(command, context, bot);
-    if (!action) return "请 @ 群成员或输入 QQ 号，并填写有效的禁言时长（整数秒）。";
-    const { ids, seconds } = action;
+    let ids: number[];
+    let perform: (id: number) => Promise<GroupMuteResult>;
+    let operation: string;
+    let checkWhitelist: boolean;
+    if (kick) {
+      if (!groupKick) return "当前会话没有移出群成员的权限。";
+      const selected = kickTargets(context, bot, kick[2]);
+      if (!selected) return "请 @ 要移出的群成员，或直接在指令后填写一个 QQ 号。";
+      ids = selected;
+      const block = kick[1] === "黑";
+      perform = (id) => groupKick(id, block);
+      operation = block ? "踢出群聊，协议端已确认踢黑请求" : "踢出群聊";
+      checkWhitelist = true;
+    } else {
+      if (!groupMute) return "当前会话没有群禁言权限。";
+      const action = targets(command, context, bot);
+      if (!action) return "请 @ 群成员或输入 QQ 号，并填写有效的禁言时长（整数秒）。";
+      const { seconds } = action;
+      ids = action.ids;
+      perform = (id) => groupMute(id, seconds);
+      operation = seconds ? `禁言 ${seconds} 秒` : "解除禁言";
+      checkWhitelist = seconds > 0;
+    }
     const issuerMaster = context.isBotMaster(issuer);
     let whitelist: ReadonlySet<number> | undefined;
-    if (seconds > 0 && !issuerMaster) {
+    if (checkWhitelist && !issuerMaster) {
       try { whitelist = await readWhitelist(root); }
-      catch { return "群禁言保护配置暂不可用。"; }
+      catch { return kick ? "群管保护配置暂不可用。" : "群禁言保护配置暂不可用。"; }
     }
 
-    if (!claim(context, bot, issuer)) return [];
+    if (!claim(context, bot, issuer, Boolean(kick))) return [];
 
     const outcomes = new Map<GroupMuteResult, number[]>();
     for (const id of ids) {
       let result: GroupMuteResult;
-      try { result = whitelist?.has(id) ? "protected" : await groupMute(id, seconds); }
+      try { result = whitelist?.has(id) ? "protected" : await perform(id); }
       catch { result = "unknown"; }
       if (result === "protected" && !issuerMaster) result = "unavailable";
       const handled = outcomes.get(result);
       if (handled) handled.push(id);
       else outcomes.set(result, [id]);
     }
-    const operation = seconds ? `禁言 ${seconds} 秒` : "解除禁言";
     const confirmed = outcomes.get("confirmed");
     const rejected = outcomes.get("rejected");
     const unknown = outcomes.get("unknown");
@@ -197,7 +232,7 @@ export function createGroupMute(root: URL = defaultRoot) {
       confirmed && `已将 ${confirmed.join("、")} ${operation}。`,
       rejected && `协议端拒绝操作 ${rejected.join("、")}。`,
       unknown && `${unknown.join("、")} 的操作结果未确认，请在群内核对。`,
-      protectedIds && `${protectedIds.join("、")} 受群禁言保护。`,
+      protectedIds && `${protectedIds.join("、")} ${kick ? "受群管保护" : "受群禁言保护"}。`,
       unavailable && `无法操作 ${unavailable.join("、")}，请核对群成员和管理权限。`,
     ].filter(Boolean).join("\n");
   };

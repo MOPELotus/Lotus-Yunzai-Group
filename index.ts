@@ -7,19 +7,20 @@ import { ReviewGroupRequest } from "./request-review-v3.js";
 import { GroupCard } from "./group-card-v3.js";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
-import { createGroupMute, groupMuteFeature } from "./group-mute.ts";
+import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
-export { groupMuteFeature, maxGroupMuteSeconds, type GroupMuteContext, type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
+export { groupKickFeature, groupMuteFeature, maxGroupMuteSeconds, type GroupKickResult, type GroupMuteContext,
+  type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
   ...group,
   commands: { ...group.commands, ...groupRequestReview.commands },
   fallback: createGroupMute(),
-  fallbackFeatures: () => [groupMuteFeature],
+  fallbackFeatures: groupModerationFeature,
 };
 export default manifest;
 

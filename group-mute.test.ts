@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createGroupMute, maxGroupMuteSeconds, type GroupMuteResult } from "./group-mute.ts";
+import { createGroupMute, groupModerationFeature, maxGroupMuteSeconds, type GroupMuteResult } from "./group-mute.ts";
 
 const temporary: string[] = [];
 afterEach(async () => {
@@ -144,4 +144,49 @@ test("全体禁言仅本群且非委托，原消息在结果未确认时也不�
   expect(calls).toEqual([true]);
   expect(await command("#全员解禁", { ...scope, adapter: "milky", async groupWholeMute() { return "rejected"; } })).toContain("协议端拒绝");
   expect(await command("#全员解禁", { ...scope, group_id: 78, async groupWholeMute() { return "unavailable"; } })).toContain("请核对群管理权限");
+});
+
+test("旧踢人与踢黑入口只操作明确本群成员，精确命令控制协议 block", async () => {
+  const { command, calls, context } = await fixture();
+  const kicks: [number, boolean][] = [];
+  const scope = { ...context, async groupKick(id: number, block: boolean) {
+    kicks.push([id, block]);
+    return "confirmed" as const;
+  } };
+  expect(await command("#踢43", { ...scope, message_id: 10, message: [at(99)] })).toBe("已将 43 踢出群聊。");
+  expect(await command("#踢黑", { ...scope, message_id: 11, message: [at(43), at("44"), at(43)] }))
+    .toBe("已将 43、44 踢出群聊，协议端已确认踢黑请求。");
+  expect(await command("#踢黑", { ...scope, message_id: 12, normalizedMessage: "#踢黑45" })).toContain("踢黑请求");
+  expect(await command("#踢黑 45", { ...scope, message_id: 13 })).toBeUndefined();
+  expect(await command("#踢黑45", { ...scope, message_id: 14, message: [at(46)] })).toContain("请 @ 要移出的群成员");
+  expect(await command("#踢", { ...scope, message_id: 15, message: [at("all"), at(43)] })).toContain("请 @ 要移出的群成员");
+  expect(await command("#踢99", { ...scope, message_id: 16 })).toContain("请 @ 要移出的群成员");
+  expect(groupModerationFeature({ normalizedMessage: "#踢黑45" })).toEqual(["[group] 群成员移出"]);
+  expect(groupModerationFeature({ normalizedMessage: "#禁言45" })).toEqual(["[group] 群禁言"]);
+  expect(kicks).toEqual([[43, false], [43, true], [44, true], [45, true]]);
+  expect(calls).toEqual([]);
+});
+
+test("踢人尊重旧白名单和宿主回执，无原始消息 ID、重放、委托及跨会话均不写", async () => {
+  const { command, context, whitelist } = await fixture();
+  await writeFile(whitelist, 'whiteQQ: ["43"]\n');
+  const kicks: [number, boolean][] = [];
+  const scope = { ...context, async groupKick(id: number, block: boolean): Promise<GroupMuteResult> {
+    kicks.push([id, block]);
+    if (id === 44) throw new Error("timeout");
+    if (id === 45) return "rejected";
+    return "confirmed";
+  } };
+  expect(await command("#踢黑44", scope)).toEqual([]);
+  expect(await command("#踢黑44", { ...scope, message_id: 20, isDelegated: true })).toContain("没有移出群成员的权限");
+  expect(await command("#踢黑44", { ...scope, message_id: 20, group_id: undefined })).toContain("没有移出群成员的权限");
+  expect(await command("#踢黑44", { ...scope, message_id: 20, message_type: "private" })).toBeUndefined();
+  const targeted = { ...scope, message_id: 20, message: [at(43), at(44), at(44), at(45)] };
+  const reply = await command("#踢黑", targeted);
+  expect(reply).toContain("无法操作 43");
+  expect(reply).toContain("44 的操作结果未确认");
+  expect(reply).toContain("协议端拒绝操作 45");
+  expect(await command("#踢黑", targeted)).toEqual([]);
+  expect(await command("#踢43", { ...scope, message_id: 21, isBotMaster: () => true })).toBe("已将 43 踢出群聊。");
+  expect(kicks).toEqual([[44, true], [45, true], [43, false]]);
 });
