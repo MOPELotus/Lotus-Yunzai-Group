@@ -24,7 +24,7 @@ const fields = {
   好友消息: { key: "privateMessage", specific: "bot", note: "（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
   群消息: { key: "groupMessage", specific: "group", note: "（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
   群临时消息: { key: "grouptemporaryMessage", specific: "group", note: "（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
-  群撤回: { key: "groupRecall", specific: "group", note: "（支持文本、表情和已核验原图混排）" },
+  群撤回: { key: "groupRecall", specific: "group", note: "（支持文本、表情和已核验原图混排，原音限已核验的独立 QQ SILK）" },
   好友撤回: { key: "PrivateRecall", specific: "bot", note: "（支持文本、表情和已核验原图混排，原音限已核验的独立 QQ SILK）" },
   好友申请: { key: "friendRequest", specific: "bot", note: "" },
   群邀请: { key: "groupInviteRequest", specific: "bot", note: "（主人编号通知详情）" },

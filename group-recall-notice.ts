@@ -9,6 +9,7 @@ export interface GroupRecallNoticeInput {
   readonly groupId: number;
   readonly userId: number;
   readonly operatorId?: number;
+  readonly special?: "[语音]";
   readonly time: number;
   readonly text: string;
   readonly parts?: readonly MessageNoticePart[];
@@ -33,7 +34,7 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
   const retention = createRecallRetention(options, "groupRecall");
   return {
     retention,
-    async format({ botId, groupId, userId, operatorId, time, text, parts, groupName, nickname, operatorName }, signal) {
+    async format({ botId, groupId, userId, operatorId, special, time, text, parts, groupName, nickname, operatorName }, signal) {
       if (!positiveRecallId(userId) || botId === userId || botId === operatorId || typeof text !== "string") return;
       const when = formatRecallTime(time);
       const content = formatRecallBody(text, parts);
@@ -53,6 +54,7 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
         summary.push(`撤回管理：${operator ? `${operator}(${manager})` : manager}\n`, `被撤回人：${author}\n`);
       } else summary.push(`撤回人员：${author}\n`);
       summary.push(`撤回时间：${when}`);
+      if (special === "[语音]") summary.push("\n特殊消息：[语音]");
       return { summary, ...content, ...(name && { nickname: name }) };
     },
   };
