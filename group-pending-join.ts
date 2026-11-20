@@ -59,7 +59,7 @@ function positiveId(id: number | undefined): boolean {
   return id !== undefined && Number.isSafeInteger(id) && id > 0;
 }
 
-function display(value: string | undefined, limit: number): string {
+export function displayRequestField(value: string | undefined, limit: number): string {
   if (typeof value !== "string") return "";
   const cleaned = value.slice(0, limit * 2)
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ")
@@ -91,13 +91,13 @@ export async function groupPendingJoinCommand(message: string, context: GroupPen
       ...(shown.length < entries.length ? [`\n仅展示前 ${shown.length} 条，请在 QQ 中查看其余申请。`] : []),
     ];
     const nodes = shown.map(({ userId, nickname, comment, tip, risk }): Part[] => {
-      const note = display(tip, 256);
+      const note = displayRequestField(tip, 256);
       return [
         { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-        `\nQQ：${userId}\n昵称：${display(nickname, 128) || "未知"}` +
+        `\nQQ：${userId}\n昵称：${displayRequestField(nickname, 128) || "未知"}` +
         (risk === true ? "\n风险申请，请在 QQ 中处理。" : "") +
         (note ? `\nTips：${note}` : "") +
-        `\n附加信息：${display(comment, 512) || "无附加信息"}`,
+        `\n附加信息：${displayRequestField(comment, 512) || "无附加信息"}`,
       ];
     });
     return { type: "forward", nodes: [summary, ...nodes] };
@@ -113,7 +113,7 @@ const reviewUnknown = "加群申请处理结果未确认，请先在 QQ 核对�
 function reviewReply(result: PendingGroupJoinReviewResult, verb: string, applicant: number): string {
   switch (result.status) {
     case "confirmed": {
-      const name = display(result.nickname, 128);
+      const name = displayRequestField(result.nickname, 128);
       return `已${verb}${name ? `${name}(${applicant})` : applicant}的加群申请辣٩(๑^o^๑)۶`;
     }
     case "rejected": return "呜呜呜，处理失败辣(இωஇ)，协议端拒绝了这次审核。";
