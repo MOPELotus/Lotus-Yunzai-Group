@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createOwnerFriendReply, isOwnerFriendReplyCommand, type OwnerFriendReplyBody, type OwnerFriendReplyContext, type OwnerFriendReplyResult } from "./owner-friend-reply.ts";
+import { createOwnerFriendReply, isOwnerFriendReplyCommand, type OwnerFriendReplyBody, type OwnerFriendReplyContext, type OwnerFriendReplyResult, type QuotedOwnerFriendReplyResult } from "./owner-friend-reply.ts";
 
 const owner = {
   message_type: "private", self_id: 99, user_id: 42, message_id: 1, isBotMaster: (id: number) => id === 42,
@@ -116,4 +116,50 @@ test("不支持的段或命令前有媒体时整条不发送，宿主媒体不�
   expect(await handle(command, { ...scope, message })).toContain("无法核验原消息中的图片或 QQ 表情，整条消息未发送");
   expect(await handle(command, { ...scope, message })).toEqual([]);
   expect(calls).toBe(1);
+});
+
+test("真实引用只将本条正文交给宿主，包括开头数字与原图片/表情索引", async () => {
+  const handle = createOwnerFriendReply();
+  const bodies: OwnerFriendReplyBody[] = [];
+  const scope: OwnerFriendReplyContext = { ...owner, reply_id: "17",
+    async sendQuotedOwnerFriendReply(body) { bodies.push(body); return "confirmed"; },
+    async sendOwnerFriendReply() { throw new Error("引用消息不能由命令文字选择目标"); },
+  };
+  expect(isOwnerFriendReplyCommand("回复 510 好友你好", "17")).toBe(true);
+  expect(await handle("回复 510 好友你好", scope)).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("#回复 前面  后面", { ...scope, message_id: 2, adapter: "milky",
+    message: [{ type: "reply" }, { type: "text", text: "#回复 前面  " }, { type: "image" },
+      { type: "text", text: "后面" }, { type: "face" }] })).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("#回复", { ...scope, message_id: 3,
+    message: [{ type: "text", text: "#回复 " }, { type: "face" }, { type: "reply" }] })).toBe("✅ 已把消息发给它了哦~");
+  expect(bodies).toEqual(["510 好友你好", ["前面  ", { sourceIndex: 2 }, "后面", { sourceIndex: 4 }], [{ sourceIndex: 1 }]]);
+  for (const invalid of [{ reply_id: undefined }, { reply_id: "" }, { message_type: "group" as const }, { isDelegated: true },
+    { isBotMaster: () => false }, { sendQuotedOwnerFriendReply: undefined },
+    { message: [{ type: "reply" }, { type: "text", text: "#回复 好友你好" }, { type: "video" }] },
+    { message: [{ type: "reply" }, { type: "quote" }, { type: "text", text: "#回复 好友你好" }] }]) {
+    expect(await handle("#回复 好友你好", { ...scope, ...invalid })).toBeUndefined();
+  }
+  expect(await handle("#回复510 好友你好", scope)).toBeUndefined();
+  expect(bodies).toHaveLength(3);
+});
+
+test("引用与直接回复共享原消息去重，未知不重发，无关并发或重放继续派发", async () => {
+  const handle = createOwnerFriendReply();
+  let finish!: (result: QuotedOwnerFriendReplyResult) => void;
+  const pending = new Promise<QuotedOwnerFriendReplyResult>((resolve) => { finish = resolve; });
+  let calls = 0;
+  const scope: OwnerFriendReplyContext = { ...owner, reply_id: 17, sendQuotedOwnerFriendReply() { calls++; return pending; } };
+  const first = handle("#回复 一句", scope);
+  const replay = handle("#回复 一句", scope);
+  expect(await handle("#回复51 不该发送", { ...owner, sendOwnerFriendReply: async () => { calls++; return "confirmed"; } })).toEqual([]);
+  finish("unknown");
+  expect(await first).toContain("发送结果未确认");
+  expect(await replay).toEqual([]);
+  expect(await handle("#回复 一句", scope)).toEqual([]);
+  expect(calls).toBe(1);
+
+  const unrelated = { ...scope, message_id: 2, sendQuotedOwnerFriendReply: async () => "unrelated" as const };
+  expect(await Promise.all([handle("回复 一句", unrelated), handle("回复 一句", unrelated)])).toEqual([undefined, undefined]);
+  expect(await handle("回复 一句", unrelated)).toBeUndefined();
+  expect(await handle("回复 一句", { ...scope, message_id: 3, sendQuotedOwnerFriendReply: async () => "expired" })).toContain("改用「回复 QQ号 <内容>」");
 });

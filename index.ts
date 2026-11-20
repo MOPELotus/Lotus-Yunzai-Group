@@ -50,7 +50,7 @@ export { createFriendMessageNotice, friendMessageNoticeFeature, type FriendMessa
 export { createFriendRequestNotice, friendRequestNoticeFeature, type FriendRequestNotice, type FriendRequestNoticeInput, type FriendRequestNoticeOptions, type FriendRequestNoticePart } from "./friend-request-notice.ts";
 export { friendRequestReviewFeature, type FriendRequestReviewContext, type PendingFriendRequestReviewResult } from "./friend-request-review.ts";
 export { friendRequestListFeature, type FriendRequestListContext, type PendingFriendRequest, type PendingFriendRequests } from "./friend-request-list.ts";
-export { ownerFriendReplyFeature, type OwnerFriendReplyContext, type OwnerFriendReplyBody, type OwnerFriendReplyResult } from "./owner-friend-reply.ts";
+export { ownerFriendReplyFeature, type OwnerFriendReplyContext, type OwnerFriendReplyBody, type OwnerFriendReplyResult, type QuotedOwnerFriendReplyResult } from "./owner-friend-reply.ts";
 export { requestOverviewFeature } from "./request-overview.ts";
 export { groupInvitationReviewFeature, type GroupInvitationReviewContext, type PendingGroupInvitationReviewResult, type QuotedGroupInvitationReviewResult } from "./group-invitation-review.ts";
 export { groupInvitationListFeature, type GroupInvitationListContext, type PendingGroupInvitation, type PendingGroupInvitations } from "./group-invitation-list.ts";

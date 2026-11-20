@@ -7,6 +7,7 @@ export interface FriendMessageNoticeInput {
   readonly userId: number;
   readonly nickname?: string;
   readonly text: string;
+  readonly canQuote?: boolean;
   readonly showHint?: boolean | (() => Promise<boolean>);
 }
 export type FriendMessageNotice = (message: FriendMessageNoticeInput, signal?: AbortSignal) =>
@@ -27,7 +28,7 @@ function messageText(value: string): string {
 
 export function createFriendMessageNotice(options: PrivateNoticeOptions): FriendMessageNotice {
   const isEnabled = createPrivateNoticeSettings(options, "privateMessage");
-  return async ({ botId, userId, nickname, text, showHint }, signal) => {
+  return async ({ botId, userId, nickname, text, showHint, canQuote }, signal) => {
     if (!positiveId(botId) || !positiveId(userId) || botId === userId || typeof text !== "string") return;
     const content = messageText(text);
     if (!content.trim() || !await isEnabled(botId, signal) || options.signal?.aborted || signal?.aborted) return;
@@ -45,7 +46,10 @@ export function createFriendMessageNotice(options: PrivateNoticeOptions): Friend
       `好友昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
       "消息内容：", content,
     ];
-    if (includeHint) parts.push(`\n-------------\n可发送：回复 ${userId} <内容>`);
+    if (includeHint) {
+      const quoteHint = canQuote === true ? "引用该消息：回复 <内容>\n" : "";
+      parts.push(`\n-------------\n${quoteHint}可发送：回复 ${userId} <内容>`);
+    }
     return parts;
   };
 }

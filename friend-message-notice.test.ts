@@ -79,3 +79,13 @@ test("模块生命周期或事件中止后不再输出好友通知", async () =>
   expect(await notice({ ...message, showHint: async () => { controller.abort(); return true; } })).toBeUndefined();
   expect(await notice(message)).toBeUndefined();
 });
+
+test("只有真实可引用且本次允许提示时才展示引用回复与直接 QQ 指令", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { privateMessage: true }\n");
+  const notice = createFriendMessageNotice(paths);
+  const quote = await notice({ ...message, canQuote: true, showHint: async () => true });
+  expect(quote?.join("")).toContain("引用该消息：回复 <内容>\n可发送：回复 42 <内容>");
+  expect((await notice({ ...message, canQuote: true, showHint: false }))?.join("")).not.toContain("引用该消息");
+  expect((await notice({ ...message, canQuote: false, showHint: true }))?.join("")).not.toContain("引用该消息");
+});
