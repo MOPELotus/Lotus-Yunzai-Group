@@ -127,3 +127,52 @@ test("已确认的延后邀请不入队，非 Milky 或未知和失败不清现�
   expect(list()).not.toContain("邀请者 52");
   expect(list()).toContain("邀请者 51");
 });
+
+test("仅接当前 Milky 主人原生私聊的引用，确认后清同一编号且不披露 flag", async () => {
+  const queue = createGroupRequestReview();
+  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const flag = "opaque-invitation";
+  await queue.receive({ self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag });
+  let calls = 0;
+  const scope: GroupInvitationReviewContext = { ...owner, reply_id: "7", async reviewQuotedGroupInvitation(approve) {
+    calls++;
+    expect(approve).toBe(false);
+    return { status: "confirmed", resolvedFlag: flag, groupId: 77 };
+  } };
+  for (const invalid of [{ reply_id: undefined }, { reply_id: "not-native" }, { adapter: undefined },
+    { isDelegated: true }, { isBotMaster: () => false }, { message_type: "group" as const }, { message_id: undefined }]) {
+    expect(await handle("#拒绝", { ...scope, ...invalid })).toBeUndefined();
+  }
+  expect(calls).toBe(0);
+  const result = await handle("#拒绝", scope);
+  expect(result).toBe("✅ 已拒绝群 77 的邀请");
+  expect(result).not.toContain(flag);
+  expect(await handle("#拒绝", scope)).toEqual([]);
+  expect(calls).toBe(1);
+  expect(queue.commands["#入群申请"]("", {
+    ...owner, groupRequestScope: "milky", canReviewGroupRequests: true, isMaster: true,
+  })).toContain("没有待审核");
+});
+
+test("无关原引用继续派发，已过期和未知各自反馈且不重复送审", async () => {
+  const handle = createGroupInvitationReview();
+  let finish!: (value: { status: "unrelated" }) => void;
+  const pending = new Promise<{ status: "unrelated" }>((resolve) => { finish = resolve; });
+  let calls = 0;
+  const scope: GroupInvitationReviewContext = { ...owner, reply_id: 7, reviewQuotedGroupInvitation() { calls++; return pending; } };
+  const first = handle("同意", scope);
+  const duplicate = handle("同意", scope);
+  finish({ status: "unrelated" });
+  expect(await Promise.all([first, duplicate])).toEqual([undefined, undefined]);
+  expect(calls).toBe(1);
+  expect(await handle("同意", scope)).toBeUndefined();
+
+  for (const [message_id, status, message] of [
+    [2, "expired", "原群邀请通知已过期或已处理"], [3, "unknown", "处理结果未确认，请先在 QQ 中核对"],
+    [4, "unavailable", "无法核实并处理原群邀请"], [5, "rejected", "协议端拒绝"],
+  ] as const) {
+    const current = { ...scope, message_id, reviewQuotedGroupInvitation: async () => ({ status }) };
+    expect(await handle("同意", current)).toContain(message);
+    expect(await handle("同意", current)).toEqual([]);
+  }
+});

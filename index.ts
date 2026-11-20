@@ -22,7 +22,7 @@ import { createFriendRequestNotice, type FriendRequestNotice } from "./friend-re
 import { createFriendRequestReview, friendRequestReviewFeature, isFriendRequestReviewCommand, type FriendRequestReviewContext } from "./friend-request-review.ts";
 import { friendRequestListCommand, friendRequestListFeature, isFriendRequestListCommand, type FriendRequestListContext } from "./friend-request-list.ts";
 import { isRequestOverviewCommand, requestOverviewCommand, requestOverviewFeature } from "./request-overview.ts";
-import { createGroupInvitationReview, groupInvitationReviewFeature, isGroupInvitationReviewCommand, type GroupInvitationReviewContext } from "./group-invitation-review.ts";
+import { createGroupInvitationReview, groupInvitationReviewFeature, isGroupInvitationReviewCommand, isQuotedGroupInvitationReviewCommand, type GroupInvitationReviewContext } from "./group-invitation-review.ts";
 import { groupInvitationListCommand, groupInvitationListFeature, isGroupInvitationListCommand, type GroupInvitationListContext } from "./group-invitation-list.ts";
 import { createGroupPendingJoinReview, groupPendingJoinCommand, groupPendingJoinFeature, groupPendingJoinReviewFeature,
   isGroupPendingJoinCommand, isGroupPendingJoinReviewCommand, type GroupPendingJoinContext } from "./group-pending-join.ts";
@@ -48,7 +48,7 @@ export { createFriendRequestNotice, friendRequestNoticeFeature, type FriendReque
 export { friendRequestReviewFeature, type FriendRequestReviewContext, type PendingFriendRequestReviewResult } from "./friend-request-review.ts";
 export { friendRequestListFeature, type FriendRequestListContext, type PendingFriendRequest, type PendingFriendRequests } from "./friend-request-list.ts";
 export { requestOverviewFeature } from "./request-overview.ts";
-export { groupInvitationReviewFeature, type GroupInvitationReviewContext, type PendingGroupInvitationReviewResult } from "./group-invitation-review.ts";
+export { groupInvitationReviewFeature, type GroupInvitationReviewContext, type PendingGroupInvitationReviewResult, type QuotedGroupInvitationReviewResult } from "./group-invitation-review.ts";
 export { groupInvitationListFeature, type GroupInvitationListContext, type PendingGroupInvitation, type PendingGroupInvitations } from "./group-invitation-list.ts";
 export { groupPendingJoinFeature, groupPendingJoinReviewFeature, type PendingGroupJoin, type PendingGroupJoins, type PendingGroupJoinReviewResult, type PendingGroupJoinBatchResult, type GroupPendingJoinContext } from "./group-pending-join.ts";
 export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
@@ -64,6 +64,13 @@ export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, gr
 export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult, type PrivateGroupWholeMuteResult } from "./private-group-mute.ts";
 
 type ModerationContext = GroupMuteContext & PrivateGroupMuteContext & GroupPendingJoinContext & GroupInvitationListContext & FriendRequestListContext & FriendRequestReviewContext & GroupInvitationReviewContext;
+function privateInvitationReviewCommand(
+  context: Pick<ModerationContext, "message_type" | "reply_id" | "adapter">, command: string,
+) {
+  return context.message_type === "private" && (isGroupInvitationReviewCommand(command) ||
+    (context.adapter === "milky" && isQuotedGroupInvitationReviewCommand(command, context.reply_id)));
+}
+
 function privateMuteCommand(context: Pick<ModerationContext, "message_type">, command: string) {
   return context.message_type === "private" && isPrivateGroupMuteCommand(command);
 }
@@ -82,18 +89,18 @@ const manifest = {
     const normalized = (context.normalizedMessage ?? message).trim();
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context);
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
-    if (context.message_type === "private" && isGroupInvitationReviewCommand(normalized)) return defaultGroupInvitationReview(normalized, context);
+    if (privateInvitationReviewCommand(context, normalized)) return defaultGroupInvitationReview(normalized, context);
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return defaultFriendRequestReview(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return groupPendingJoinCommand(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinReviewCommand(normalized)) return defaultPendingJoinReview(normalized, context);
     return privateMuteCommand(context, normalized) ? defaultPrivateMute(message, context) : defaultModeration(message, context);
   },
-  fallbackFeatures(context: { readonly normalizedMessage: string; readonly message_type: ModerationContext["message_type"] }) {
+  fallbackFeatures(context: Pick<ModerationContext, "message_type" | "reply_id" | "adapter"> & { readonly normalizedMessage: string }) {
     const normalized = context.normalizedMessage.trim();
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return [requestOverviewFeature];
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
-    if (context.message_type === "private" && isGroupInvitationReviewCommand(normalized)) return [groupInvitationReviewFeature];
+    if (privateInvitationReviewCommand(context, normalized)) return [groupInvitationReviewFeature];
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return [friendRequestReviewFeature];
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return [groupPendingJoinFeature];
@@ -176,7 +183,7 @@ export async function createModule({
       if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context, signal);
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
-      if (context.message_type === "private" && isGroupInvitationReviewCommand(normalized)) return groupInvitationReview(normalized, context);
+      if (privateInvitationReviewCommand(context, normalized)) return groupInvitationReview(normalized, context);
       if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
       if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return friendRequestReview(normalized, context);
       if (verification && isGroupVerificationCommand(normalized)) return verification.command(normalized, context);
@@ -201,7 +208,7 @@ export async function createModule({
       if (context.message_type !== "terminal" && isRequestOverviewCommand(message)) return [requestOverviewFeature];
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
-      if (context.message_type === "private" && isGroupInvitationReviewCommand(message)) return [groupInvitationReviewFeature];
+      if (privateInvitationReviewCommand(context, message)) return [groupInvitationReviewFeature];
       if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
       if (context.message_type === "private" && isFriendRequestReviewCommand(message)) return [friendRequestReviewFeature];
       if (isGroupVerificationCommand(message)) return [groupVerificationFeature];
@@ -209,7 +216,7 @@ export async function createModule({
       if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message) || isGroupAnnouncementDeleteCommand(message)) return [groupAnnouncementsFeature];
       if (context.message_type === "group" && isGroupPendingJoinCommand(message)) return [groupPendingJoinFeature];
       if (context.message_type === "group" && isGroupPendingJoinReviewCommand(message)) return [groupPendingJoinReviewFeature];
-      if (isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
+      if (context.message_type === "group" && isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
       if (isGroupAddNoticeCommand(message)) return [groupAddNoticeFeature];
       if (isGroupNotificationCommand(message)) return [groupNotificationFeature];
       if (isGroupTimedMuteCommand(message)) return [groupTimedMuteFeature];

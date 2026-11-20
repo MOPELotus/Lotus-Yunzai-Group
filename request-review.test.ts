@@ -152,3 +152,20 @@ test("Milky 审核需要私聊专用权限，明确拒绝和未知回执保留�
   })).toContain("结果未确认");
   expect(review.commands["#入群申请"]("", capable)).toContain(id);
 });
+
+test("Milky 群邀请优先发可追踪主人通知并保留编号，其他请求不提示引用审核", async () => {
+  const review = createGroupRequestReview();
+  const messages: string[] = [];
+  let legacyCalls = 0;
+  const notifyRequestOwners = async (message: string) => { messages.push(message); return 1; };
+  const notifyMasters = async () => { legacyCalls++; return 1; };
+  await review.receive({ ...request, groupRequestScope: "milky", sub_type: "invite", flag: "quote-invite", notifyRequestOwners, notifyMasters });
+  await review.receive({ ...request, groupRequestScope: "milky", notifyRequestOwners, notifyMasters });
+  await review.receive({ ...request, sub_type: "invite", flag: "legacy", notifyMasters });
+  expect(messages).toHaveLength(2);
+  expect(visibleId(messages[0]!)).toHaveLength(12);
+  expect(messages[0]).toContain("引用此通知回复「同意」或「拒绝」");
+  expect(messages[0]).not.toContain("quote-invite");
+  expect(messages[1]).not.toContain("引用此通知");
+  expect(legacyCalls).toBe(1);
+});
