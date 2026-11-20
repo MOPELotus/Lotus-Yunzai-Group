@@ -18,6 +18,7 @@ import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature,
 import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
+import { friendRequestListCommand, friendRequestListFeature, isFriendRequestListCommand, type FriendRequestListContext } from "./friend-request-list.ts";
 import { groupInvitationListCommand, groupInvitationListFeature, isGroupInvitationListCommand, type GroupInvitationListContext } from "./group-invitation-list.ts";
 import { createGroupPendingJoinReview, groupPendingJoinCommand, groupPendingJoinFeature, groupPendingJoinReviewFeature,
   isGroupPendingJoinCommand, isGroupPendingJoinReviewCommand, type GroupPendingJoinContext } from "./group-pending-join.ts";
@@ -39,6 +40,7 @@ export { groupActivityFeature, groupActivityRankFeature, type GroupActivityConte
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 export { groupNotificationFeature, type GroupNotificationContext, type GroupNotificationPart } from "./group-notify.ts";
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
+export { friendRequestListFeature, type FriendRequestListContext, type PendingFriendRequest, type PendingFriendRequests } from "./friend-request-list.ts";
 export { groupInvitationListFeature, type GroupInvitationListContext, type PendingGroupInvitation, type PendingGroupInvitations } from "./group-invitation-list.ts";
 export { groupPendingJoinFeature, groupPendingJoinReviewFeature, type PendingGroupJoin, type PendingGroupJoins, type PendingGroupJoinReviewResult, type PendingGroupJoinBatchResult, type GroupPendingJoinContext } from "./group-pending-join.ts";
 export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
@@ -53,7 +55,7 @@ export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, gr
   type GroupSetAdminResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult, type PrivateGroupWholeMuteResult } from "./private-group-mute.ts";
 
-type ModerationContext = GroupMuteContext & PrivateGroupMuteContext & GroupPendingJoinContext & GroupInvitationListContext;
+type ModerationContext = GroupMuteContext & PrivateGroupMuteContext & GroupPendingJoinContext & GroupInvitationListContext & FriendRequestListContext;
 function privateMuteCommand(context: Pick<ModerationContext, "message_type">, command: string) {
   return context.message_type === "private" && isPrivateGroupMuteCommand(command);
 }
@@ -69,6 +71,7 @@ const manifest = {
   fallback(message: string, context: ModerationContext) {
     const normalized = (context.normalizedMessage ?? message).trim();
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
+    if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return groupPendingJoinCommand(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinReviewCommand(normalized)) return defaultPendingJoinReview(normalized, context);
     return privateMuteCommand(context, normalized) ? defaultPrivateMute(message, context) : defaultModeration(message, context);
@@ -76,6 +79,7 @@ const manifest = {
   fallbackFeatures(context: { readonly normalizedMessage: string; readonly message_type: ModerationContext["message_type"] }) {
     const normalized = context.normalizedMessage.trim();
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
+    if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return [groupPendingJoinFeature];
     if (context.message_type === "group" && isGroupPendingJoinReviewCommand(normalized)) return [groupPendingJoinReviewFeature];
     return privateMuteCommand(context, normalized) ? [privateGroupMuteFeature] : groupModerationFeature(context);
@@ -147,6 +151,7 @@ export async function createModule({
       const normalized = context.normalizedMessage.trim();
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
+      if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
       if (verification && isGroupVerificationCommand(normalized)) return verification.command(normalized, context);
       if (vote && isGroupVoteCommand(normalized)) return vote.command(normalized, context);
       if (isGroupAnnouncementsCommand(normalized)) return groupAnnouncementsCommand(normalized, context, signal);
@@ -168,6 +173,7 @@ export async function createModule({
       const message = context.normalizedMessage.trim();
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
+      if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
       if (isGroupVerificationCommand(message)) return [groupVerificationFeature];
       if (isGroupVoteCommand(message)) return [groupVoteFeature];
       if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message) || isGroupAnnouncementDeleteCommand(message)) return [groupAnnouncementsFeature];
