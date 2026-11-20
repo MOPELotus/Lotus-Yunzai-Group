@@ -30,6 +30,7 @@ interface Context {
   readonly isDelegated?: boolean;
   readonly normalizedMessage: string;
   readonly groupManageBlacklist?: () => Promise<boolean>;
+  readonly groupRuleImageDigest?: (signal: AbortSignal) => Promise<string | undefined>;
 }
 
 type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;
@@ -59,6 +60,7 @@ const help = "违禁词帮助\n新增：#新增违禁词 内容（默认精确�
   "支持精确、模糊、正则1（表达式）、正则2（/表达式/标志），以及踢、禁、撤、踢撤、禁撤、踢黑。\n" +
   "例如：#新增模糊撤违禁词 内容；#新增正则2禁违禁词 /^示例$/i\n" +
   "查看：#查看违禁词 内容；#违禁词列表；#违禁词列表原始\n删除：#删除违禁词 内容\n" +
+  "新增、查看或删除精确图片规则时，可在命令后附一张原图。\n" +
   "设置禁言秒数：#设置违禁词禁言时间300";
 
 export function isGroupBannedWordCommand(message: string): boolean {
@@ -122,6 +124,10 @@ function imageRuleMd5(raw: string, entry: unknown): string | undefined {
   if (matchType(entry) === 1 && penalty(entry)) return imageRule.exec(raw)?.[1]?.toUpperCase();
 }
 
+function findImageRule(rules: Data, digest: string) {
+  return Object.entries(rules).slice(0, maxRules).find(([raw, entry]) => imageRuleMd5(raw, entry) === digest);
+}
+
 function wordMatch(data: Data, matched: readonly [string, unknown], image = false): GroupBannedWordMatch | undefined {
   let action = penalty(matched[1]);
   if (!action) return;
@@ -136,7 +142,7 @@ function wordMatch(data: Data, matched: readonly [string, unknown], image = fals
 function display(raw: string, entry: unknown, rawMode = false): readonly WordPart[] {
   const info = record(entry) ? entry : {};
   const clean = raw.slice(0, maxWordLength).replace(/[\p{Cc}\p{Cf}]/gu, "");
-  const word: WordPart[] = rawMode ? [clean] : clean.split(/(\{face[:_](\d+)\})/u).flatMap<WordPart>((part, index) => {
+  const word: WordPart[] = rawMode ? [clean] : imageRule.test(clean) ? ["[图片]"] : clean.split(/(\{face[:_](\d+)\})/u).flatMap<WordPart>((part, index) => {
     if (index % 3 === 1 || !part) return [];
     return index % 3 === 2 ? [{ type: "face" as const, id: part }] : [part];
   });
@@ -235,10 +241,8 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         let digest: string | undefined;
         try { digest = await readImageMd5(active); } catch { return; }
         if (typeof digest !== "string" || !md5.test(digest) || active.aborted) return;
-        const normalized = digest.toUpperCase();
         const current = (await read(groupId)).data;
-        const matched = Object.entries(current.bannedWords ?? {}).slice(0, maxRules)
-          .find(([raw, entry]) => imageRuleMd5(raw, entry) === normalized);
+        const matched = findImageRule(record(current.bannedWords) ? current.bannedWords : {}, digest.toUpperCase());
         if (!matched || active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
         return wordMatch(current, matched, true);
       }
@@ -278,10 +282,13 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         !positive(group_id) || !positive(self_id) || !positive(user_id) || !isGroupBannedWordCommand(value)) return;
     if (helpCommand.test(value)) return help;
     const add = addRule.exec(value), query = queryRule.exec(value), list = listRules.exec(value), time = setTime.exec(value);
-    const word = (add?.[3] ?? query?.[2])?.trim();
-    if ((add || query) && (!word || word.length > maxWordLength)) return add && !word ? help : "请填写有效的违禁词。";
+    let word = (add?.[3] ?? query?.[2])?.trim();
+    const readImage = !word && (add || query) ? context.groupRuleImageDigest : undefined;
+    if ((add || query) && (!word && !readImage || word && word.length > maxWordLength)) return add && !word ? help : "请填写有效的违禁词。";
+    const viewing = query?.[1] === "查看";
+    const permission = "当前会话没有编辑违禁词的权限。";
     try {
-      if (list || query?.[1] === "查看") {
+      if (list || viewing && !readImage) {
         const data = (await read(group_id)).data;
         const records = record(data.bannedWords) ? data.bannedWords : {};
         if (list) return forwardRules(records, !!list[1]);
@@ -291,8 +298,9 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         try { return !signal.aborted && await context.groupManageBlacklist?.() === true && !signal.aborted; }
         catch { return false; }
       };
-      if (!await authorize()) return "当前会话没有编辑违禁词的权限。";
+      if (!viewing && !await authorize()) return permission;
       const ruleMode = add?.[1]?.startsWith("正则") ? 3 : add?.[1] === "模糊" ? 2 : 1;
+      if (readImage && ruleMode !== 1) return "图片违禁词仅支持精确匹配。";
       const seconds = Number(time?.[1]);
       if (time && (!Number.isInteger(seconds) || seconds < 0 || seconds > maxMuteSeconds)) return "请输入有效的禁言秒数。";
       if (add && word && ruleMode === 3 && !regexRule(word, add[1] === "正则2")) return "正则表达式无效。";
@@ -305,6 +313,21 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         const oldest = recognized.values().next();
         if (!oldest.done) recognized.delete(oldest.value);
       }
+      let digest: string | undefined;
+      if (readImage) {
+        let received: string | undefined;
+        try { received = await readImage(signal); } catch { /* The original image was unavailable. */ }
+        if (signal.aborted || typeof received !== "string" || !md5.test(received)) return "无法读取原消息的违禁词图片。";
+        digest = received.toUpperCase();
+        word = `{image:${digest}}`;
+        if (viewing) {
+          const { data } = await read(group_id);
+          if (signal.aborted) return;
+          const matched = findImageRule(record(data.bannedWords) ? data.bannedWords : {}, digest);
+          return matched ? display(...matched) : "这条违禁词不存在。";
+        }
+        if (!await authorize()) return permission;
+      }
       return await update(group_id, authorize, (data) => {
         if (time) {
           data.muteTime = seconds;
@@ -312,12 +335,14 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         }
         const rules = record(data.bannedWords) ? data.bannedWords : {};
         if (!word) return "请填写有效的违禁词。";
+        const imageKey = digest && findImageRule(rules, digest)?.[0];
         if (query) {
-          if (!Object.hasOwn(rules, word)) return "这条违禁词不存在。";
-          delete rules[word];
+          const target = digest ? imageKey : word;
+          if (!target || !Object.hasOwn(rules, target)) return "这条违禁词不存在。";
+          delete rules[target];
           return "已删除违禁词。";
         }
-        if (Object.hasOwn(rules, word)) return "这条违禁词已存在。";
+        if (imageKey || Object.hasOwn(rules, word)) return "这条违禁词已存在。";
         if (Object.keys(rules).length >= maxRules) return "本群违禁词已达上限。";
         const entry = { matchType: ruleMode, penaltyType: penaltyNames.indexOf((add?.[2] ?? "禁") as typeof penaltyNames[number]) + 1,
           addedBy: user_id, date: new Date().toISOString() };
@@ -325,7 +350,7 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         return ["已添加违禁词。\n", ...display(word, entry)];
       });
     } catch (error) {
-      return error instanceof GroupRulesWritePermissionError ? "当前会话没有编辑违禁词的权限。" : "违禁词配置暂不可用。";
+      return error instanceof GroupRulesWritePermissionError ? permission : "违禁词配置暂不可用。";
     }
   }
 

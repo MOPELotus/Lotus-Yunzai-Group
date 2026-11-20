@@ -122,6 +122,58 @@ test("图指纹惰性读取只用于精确规则，配置更新、连接结束�
   })).toBeUndefined();
 });
 
+test("单图增查删重用旧 JSON 键和权限，兼容冒号与下划线的同一摘要", async () => {
+  const { policy, run, canonical, legacy } = await fixture();
+  const digest = "cab2e7e0da87d6c74c692bc1ded40e0f";
+  const underscore = `{image_${digest}}`;
+  const colon = `{image:${digest.toUpperCase()}}`;
+  const original = JSON.stringify({ muteTime: 120, TitleBannedWords: ["原规则"], bannedWords: { [underscore]: { matchType: 1, penaltyType: 3 } } });
+  await writeFile(legacy, original);
+  let calls = 0;
+  const groupRuleImageDigest = async () => { calls++; return digest; };
+  expect(await run("#新增撤违禁词", { groupRuleImageDigest })).toBe("这条违禁词已存在。");
+  expect(await run("#查看违禁词", { groupRuleImageDigest, groupManageBlacklist: undefined })).toContain("[图片]");
+  expect(await run("#违禁词列表原始")).toMatchObject({ type: "forward", nodes: [["屏蔽词：", underscore, expect.any(String)]] });
+  expect(await run("#删除违禁词", { groupRuleImageDigest })).toBe("已删除违禁词。");
+  expect(await run("#查看违禁词", { groupRuleImageDigest, groupManageBlacklist: undefined })).toBe("这条违禁词不存在。");
+  expect(await run("#新增精确踢撤违禁词", { groupRuleImageDigest })).toContain("[图片]");
+  expect(calls).toBe(5);
+  const saved = JSON.parse(await readFile(canonical, "utf8"));
+  expect(saved.bannedWords[underscore]).toBeUndefined();
+  expect(saved.bannedWords[colon]).toMatchObject({ matchType: 1, penaltyType: 4, addedBy: 42 });
+  expect(saved.TitleBannedWords).toEqual(["原规则"]);
+  expect(await readFile(legacy, "utf8")).toBe(original);
+  expect(await policy.match(77, 43, "", undefined, groupRuleImageDigest)).toEqual({ action: "kick-recall", seconds: 120, preview: "[图片]" });
+});
+
+test("图片权限在读和提交前核验，带正文、非精确模式和重放不重复读取原图", async () => {
+  const { run, policy, canonical } = await fixture();
+  let calls = 0;
+  const digest = "e41a19596c948700acbc6ce37c285bdd";
+  const groupRuleImageDigest = async () => { calls++; return digest; };
+  expect(await run("#新增违禁词", { groupRuleImageDigest, groupManageBlacklist: async () => false })).toContain("没有编辑");
+  expect(await run("#删除违禁词", { groupRuleImageDigest, isDelegated: true })).toBeUndefined();
+  expect(await run("#新增模糊违禁词", { groupRuleImageDigest })).toContain("仅支持精确");
+  expect(await run("#新增正则1违禁词", { groupRuleImageDigest })).toContain("仅支持精确");
+  expect(calls).toBe(0);
+  let checks = 0;
+  expect(await run("#新增违禁词", { groupRuleImageDigest, groupManageBlacklist: async () => ++checks < 3 })).toContain("没有编辑");
+  expect(checks).toBe(3);
+  expect(calls).toBe(1);
+  await expect(readFile(canonical)).rejects.toMatchObject({ code: "ENOENT" });
+
+  expect(await run("#新增精确撤违禁词 正文优先", { groupRuleImageDigest })).toContain("已添加违禁词。\n");
+  expect(await run("#查看违禁词正文优先", { groupRuleImageDigest, groupManageBlacklist: undefined })).toContain("正文优先");
+  expect(await policy.match(77, 43, "正文优先")).toMatchObject({ action: "recall" });
+  expect(await run("#删除违禁词正文优先", { groupRuleImageDigest })).toBe("已删除违禁词。");
+  expect(calls).toBe(1);
+  const message_id = 100;
+  const unavailable = { groupRuleImageDigest: async () => { calls++; throw new Error("失效图片"); }, message_id };
+  expect(await run("#查看违禁词", unavailable)).toContain("无法读取原消息");
+  expect(await run("#查看违禁词", unavailable)).toEqual([]);
+  expect(calls).toBe(2);
+});
+
 test("增加和删除沿用旧命令、原始列表和编辑权限，首次保存只写新文件", async () => {
   const { policy, run, canonical, legacy } = await fixture();
   const original = JSON.stringify({ TitleFilterModeChange: 1, bannedWords: { "{face_12}": { matchType: 1, penaltyType: 3 } } });
