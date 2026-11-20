@@ -241,11 +241,11 @@ test("群邀请仅开放旧默认和当前 bot 设置", async () => {
 test("群消息主人通知沿用旧群作用域且列明支持的正文类型", async () => {
   const { command, legacy } = await fixture();
   await writeFile(legacy, "default: { groupMessage: false, privateMessage: true }\n");
-  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
+  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
   expect(await command("#通知设置群消息bot单独开启", groupOwner)).toContain("不支持此作用域");
-  expect(await command("#通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
-  expect(await command("#通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
-  expect(await command("#通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
+  expect(await command("#通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
+  expect(await command("#通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
+  expect(await command("#通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
   expect(await readFile(legacy, "utf8")).toContain("privateMessage: true");
 });
 
@@ -398,7 +398,7 @@ test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群�
   expect(models[0]?.groups[4]?.rows.map(row => row.hint)).toEqual([
     "#通知设置全部通知 + 开启/关闭", "#通知设置删除缓存时间 + 时间(秒)",
   ]);
-  expect(groupMessage?.description).toBe("转发文本、图片和表情，语音原音限已核验的 QQ SILK");
+  expect(groupMessage?.description).toBe("转发文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4");
   expect(models[0]?.groups[6]).toEqual({
     title: "群:77 单独配置", override: true, rows: [{ label: "群消息", value: "已关闭", off: true }],
   });
