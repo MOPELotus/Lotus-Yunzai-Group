@@ -113,14 +113,19 @@ test("群撤回保持摘要字节，输出一个按原序的正文段列表", as
   expect(await notice.format({ ...event, parts: [] })).toBeUndefined();
 });
 
-test("群撤回语音在原摘要后单行标记特殊消息", async () => {
+test("群撤回仅在原摘要后标记经过核验的固定语音或视频类型", async () => {
   const paths = await fixture();
   await writeFile(paths.config, "default: { groupRecall: true }\n");
   const notice = createGroupRecallNotice(paths);
-  const plain = await notice.format({ ...event, operatorId: 43, operatorName: "管理员", text: "[语音]" });
-  if (!plain) throw new Error("群撤回摘要缺失");
-  expect(await notice.format({
-    ...event, operatorId: 43, operatorName: "管理员", text: "[语音]", special: "[语音]",
-  })).toEqual({ ...plain, summary: [...plain.summary, "\n特殊消息：[语音]"] });
-  expect(await notice.format({ ...event, text: "[语音]", special: "[语音]" }, AbortSignal.abort())).toBeUndefined();
+  for (const special of ["[语音]", "[视频]"] as const) {
+    const input = { ...event, operatorId: 43, operatorName: "管理员", text: special };
+    const plain = await notice.format(input);
+    if (!plain) throw new Error("群撤回摘要缺失");
+    expect(await notice.format({ ...input, special })).toEqual({
+      ...plain, summary: [...plain.summary, `\n特殊消息：${special}`],
+    });
+    expect(await notice.format({ ...input, special }, AbortSignal.abort())).toBeUndefined();
+    const unrecognised = "[XML]" as Parameters<typeof notice.format>[0]["special"];
+    expect(await notice.format({ ...input, special: unrecognised })).toEqual(plain);
+  }
 });

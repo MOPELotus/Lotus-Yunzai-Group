@@ -25,8 +25,8 @@ const eventGroups = [
     ["privateMessage", "好友消息", "已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
     ["groupMessage", "群消息", "转发文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
     ["grouptemporaryMessage", "群临时消息", "转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
-    ["groupRecall", "群撤回", "群撤回与好友撤回均支持文本、表情和已核验原图混排，原音限已核验的独立 QQ SILK"],
-    ["PrivateRecall", "好友撤回", "原音限已核验的独立 QQ SILK"],
+    ["groupRecall", "群撤回", "图文表情可混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4"],
+    ["PrivateRecall", "好友撤回", "图文表情可混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4"],
   ] },
   { title: "申请通知", rows: [
     ["friendRequest", "好友申请", "通知主人有新的好友申请"],

@@ -9,7 +9,7 @@ export interface GroupRecallNoticeInput {
   readonly groupId: number;
   readonly userId: number;
   readonly operatorId?: number;
-  readonly special?: "[语音]";
+  readonly special?: "[语音]" | "[视频]";
   readonly time: number;
   readonly text: string;
   readonly parts?: readonly MessageNoticePart[];
@@ -54,7 +54,7 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
         summary.push(`撤回管理：${operator ? `${operator}(${manager})` : manager}\n`, `被撤回人：${author}\n`);
       } else summary.push(`撤回人员：${author}\n`);
       summary.push(`撤回时间：${when}`);
-      if (special === "[语音]") summary.push("\n特殊消息：[语音]");
+      if (special === "[语音]" || special === "[视频]") summary.push(`\n特殊消息：${special}`);
       return { summary, ...content, ...(name && { nickname: name }) };
     },
   };
