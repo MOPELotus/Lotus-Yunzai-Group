@@ -25,7 +25,7 @@ const eventGroups = [
     ["privateMessage", "好友消息", "已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK"],
     ["groupMessage", "群消息", "转发文本、图片和表情，语音原音限已核验的 QQ SILK"],
     ["grouptemporaryMessage", "群临时消息", "转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK"],
-    ["groupRecall", "群撤回", "群撤回与好友撤回均支持文本、表情及已核验的独立原图"],
+    ["groupRecall", "群撤回", "群撤回与好友撤回均支持文本、表情和已核验原图混排"],
     ["PrivateRecall", "好友撤回"],
   ] },
   { title: "申请通知", rows: [
