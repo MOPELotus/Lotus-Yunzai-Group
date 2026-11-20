@@ -57,7 +57,8 @@ function fixture(override: Partial<GroupVerificationSettings> = {}) {
   };
   const command = (changes: Partial<GroupVerificationContext> = {}): GroupVerificationContext => ({
     message_type: "group", adapter: "onebot", self_id: 99, user_id: 55, group_id: 77, message_id: ++messageId,
-    groupVerification: { ...scope, async canConfigure() { return false; } }, async groupManageBlacklist() { return true; }, ...changes,
+    groupVerification: { ...scope, async canConfigure() { return false; }, async prepare() { return undefined; } },
+    async groupManageBlacklist() { return true; }, ...changes,
   });
   async function advance(ms: number) {
     now += ms;
@@ -234,7 +235,10 @@ test("旧验证 YAML 深层配置与群成功语，启停只写原 openGroup 字
 test("配置模式和时限只给当前群内主人，无需群管，回执区分短时限和旧语法", async () => {
   const f = fixture({ enabled: false });
   expect(await f.verify.command("#切换验证模式", f.command())).toContain("仅当前机器人主人");
-  const context = () => f.command({ groupVerification: { ...f.event, canConfigure: async () => true }, groupManageBlacklist: undefined });
+  const context = () => {
+    const original = f.command();
+    return { ...original, groupVerification: { ...original.groupVerification!, canConfigure: async () => true }, groupManageBlacklist: undefined };
+  };
   expect(await f.verify.command("#切换验证模式", context())).toBe("✅ 已切换验证模式为模糊验证");
   expect(await f.verify.command("#切换验证模式", context())).toBe("✅ 已切换验证模式为精确验证");
   expect(await f.verify.command("#设置验证超时时间30秒", context())).toContain("至少一分钟");
@@ -244,6 +248,71 @@ test("配置模式和时限只给当前群内主人，无需群管，回执区�
   expect(await f.verify.command("#设置验证超时时间2147484秒", context())).toContain("有效的正整数");
   expect(await f.verify.command("#设置验证超时时间2分钟", context())).toBeUndefined();
   expect(await f.verify.command("#开启验证", context())).toContain("没有管理");
+});
+
+test("单人重验立即用真实目标发题，允许明确选中白名单成员，已有挑战不重复", async () => {
+  const f = fixture({ delay: 20, time: 2 });
+  const prepared: number[] = [];
+  const context = (changes?: Partial<GroupVerificationContext>, event = f.event) => {
+    const original = f.command(changes);
+    return { ...original, groupVerification: { ...original.groupVerification!, async prepare(target: number) { prepared.push(target); return event; } } };
+  };
+  f.setWhitelist(43);
+  await f.verify.policy.join(f.event);
+  await f.advance(20_005);
+  expect(f.sent).toEqual([]);
+  expect(await f.verify.command("#重新验证", context({ message: [{ type: "at", qq: 99 }, { type: "at", qq: 43 }] }))).toEqual([]);
+  expect(prepared).toEqual([43]);
+  expect(f.sent[0]?.parts.join(" ")).toContain("11 + 10");
+  expect(await f.verify.command("#重新验证43", context())).toContain("处于验证状态");
+  expect(prepared).toEqual([43]);
+  expect(await f.verify.policy.answer(f.answer("21"))).toBe(true);
+  expect(f.sent.at(-1)?.parts).toEqual(["本群验证成功"]);
+  expect(await f.verify.command("#重新验证43", context())).toEqual([]);
+  await f.advance(2010);
+  expect(f.kicks).toEqual([99]);
+});
+
+test("手动重验只准原群原连接，保护管理员、主人和机器人，关闭时不准备能力", async () => {
+  const f = fixture();
+  const original = f.command().groupVerification!;
+  const contexts = (event: GroupVerificationJoin = f.event, extra: Partial<GroupVerificationContext> = {}) =>
+    f.command({ ...extra, groupVerification: { ...original, async prepare() { calls++; return event; } } });
+  let calls = 0;
+  expect(await f.verify.command("#重新验证从未发言的人", contexts())).toBeUndefined();
+  expect(await f.verify.command("#重新验证99", contexts())).toContain("正确");
+  expect(await f.verify.command("#重新验证", contexts(f.event, { message: [{ type: "at", qq: 43 }, { type: "at", qq: 45 }] }))).toContain("正确");
+  expect(await f.verify.command("#重新验证43", contexts(f.event, { groupManageBlacklist: async () => false }))).toContain("没有管理");
+  f.setConfig({ enabled: false });
+  expect(await f.verify.command("#重新验证43", contexts())).toContain("未开启验证");
+  expect(calls).toBe(0);
+  f.setConfig({ enabled: true });
+  for (const mismatch of [{ userId: 45 }, { groupId: 78 }, { botId: 100 }, { adapter: "milky" as const }, { connection: new AbortController().signal }]) {
+    expect(await f.verify.command("#重新验证43", contexts({ ...f.event, ...mismatch }))).toContain("无法确认目标群成员");
+  }
+  f.setRoles({ botRole: "owner", targetRole: "admin", protectedTarget: false });
+  expect(await f.verify.command("#重新验证43", contexts())).toContain("对群主或管理员无效");
+  f.setRoles({ botRole: "owner", targetRole: "member", protectedTarget: true });
+  expect(await f.verify.command("#重新验证43", contexts())).toContain("对机器人主人无效");
+  expect(f.sent).toEqual([]);
+});
+
+test("手动时间不改变入群水位，真实离群清理后，新入群仍按真实时间送题", async () => {
+  const f = fixture({ delay: 2, time: 10 });
+  const original = f.command();
+  const event = { ...f.event, time: 2_000_000_000 };
+  expect(await f.verify.command("#重新验证43", { ...original, groupVerification: { ...original.groupVerification!, prepare: async () => event } })).toEqual([]);
+  await f.verify.policy.leave({ ...f.event, time: 98, voluntary: true });
+  expect(f.tasks.size).toBe(1);
+  await f.verify.policy.join(f.event);
+  await f.advance(2_005);
+  expect(f.sent).toHaveLength(1);
+  await f.verify.policy.leave({ ...f.event, time: 105 });
+  expect(f.tasks.size).toBe(0);
+  expect(await f.verify.policy.answer(f.answer("21"))).toBe(false);
+  await f.verify.policy.join({ ...f.event, time: 106 });
+  await f.advance(2_005);
+  expect(f.sent).toHaveLength(2);
 });
 
 test("模式与时限写入复用 YAML 原范围及锁，兼容新旧路径和同一资源并发翻转", async () => {
