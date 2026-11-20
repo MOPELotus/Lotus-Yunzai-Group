@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { ManagedBlacklistPermissionError, type GroupVerificationSettings, type ManagedBlacklistStore } from "./managed-blacklist.ts";
+import { ManagedBlacklistPermissionError, maxGroupVerificationSeconds, type GroupVerificationSettings, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 import type { GroupVotePart, GroupVoteResult } from "./group-vote.ts";
 
 interface VerificationScope {
@@ -52,13 +52,20 @@ export interface GroupVerificationContext {
   readonly isDelegated?: boolean;
   readonly message?: string | readonly { readonly type: string; readonly qq?: unknown }[];
   readonly groupManageBlacklist?: () => Promise<boolean>;
-  readonly groupVerification?: { readonly connection: AbortSignal; readonly signal: AbortSignal };
+  readonly groupVerification?: {
+    readonly connection: AbortSignal;
+    readonly signal: AbortSignal;
+    canConfigure(): Promise<boolean>;
+  };
 }
 
 export const groupVerificationFeature = "[group] 入群验证";
 const switchPattern = /^#(开启|关闭)验证$/u;
 const bypassPattern = /^#绕过验证(\d+)?$/u;
-export const isGroupVerificationCommand = (message: string) => switchPattern.test(message) || bypassPattern.test(message);
+const modeCommand = "#切换验证模式";
+const timeCommand = /^#设置验证超时时间(\d+)(?:s|秒)?$/u;
+export const isGroupVerificationCommand = (message: string) => switchPattern.test(message) || bypassPattern.test(message) ||
+  message === modeCommand || timeCommand.test(message);
 
 type Clock = { now(): number; schedule(milliseconds: number, callback: () => void): () => void; random(min: number, max: number): number };
 const nativeClock: Clock = {
@@ -113,7 +120,8 @@ function commandTarget(message: GroupVerificationContext["message"], spelling: s
   return mentioned ?? explicit;
 }
 
-export function createGroupVerification(store: Pick<ManagedBlacklistStore, "readGroupVerificationSettings" | "setGroupVerification">,
+export function createGroupVerification(store: Pick<ManagedBlacklistStore, "readGroupVerificationSettings" | "setGroupVerification" |
+  "toggleGroupVerificationMode" | "setGroupVerificationTime">,
   whitelisted: (user: number) => Promise<boolean>, signal: AbortSignal, clock: Clock = nativeClock) {
   const challenges = new Map<string, Challenge>();
   const events = new Map<string, number>();
@@ -293,10 +301,16 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
   async function command(text: string, context: GroupVerificationContext): Promise<string | readonly [] | undefined> {
     if (context.message_type !== "group" || !isGroupVerificationCommand(text)) return;
     const { group_id: group, self_id: bot, user_id: user, groupVerification: session, message_id } = context;
-    const permission = "当前会话没有管理入群验证的权限。";
+    const timed = timeCommand.exec(text);
+    const ownerCommand = text === modeCommand || timed !== null;
+    const permission = ownerCommand ? "仅当前机器人主人可以设置入群验证模式和时限。" : "当前会话没有管理入群验证的权限。";
     if (stopped || signal.aborted || context.isDelegated || !session || !live(session) || !id(group) || !id(bot) || !id(user)) return permission;
     const authorize = async () => {
-      try { return !stopped && !signal.aborted && live(session) && await context.groupManageBlacklist?.() === true && live(session); }
+      try {
+        if (stopped || signal.aborted || !live(session)) return false;
+        const allowed = ownerCommand ? await session.canConfigure() : await context.groupManageBlacklist?.();
+        return allowed === true && !stopped && !signal.aborted && live(session);
+      }
       catch { return false; }
     };
     if (!await authorize()) return permission;
@@ -309,10 +323,22 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       if (oldest) commands.delete(oldest);
     }
     try {
+      const commandSignal = AbortSignal.any([signal, session.signal, session.connection]);
+      if (text === modeCommand) {
+        const mode = await store.toggleGroupVerificationMode(commandSignal, authorize);
+        return `✅ 已切换验证模式为${mode}验证`;
+      }
+      if (timed) {
+        const seconds = Number(timed[1]);
+        if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > maxGroupVerificationSeconds) return "请填写有效的正整数验证秒数。";
+        const changed = await store.setGroupVerificationTime(seconds, commandSignal, authorize);
+        const reply = changed ? `✅ 已将验证超时时间设置为${seconds}秒` : `验证超时时间已是${seconds}秒。`;
+        return seconds < 60 ? `${reply}\n建议至少一分钟（60秒）` : reply;
+      }
       const toggle = switchPattern.exec(text);
       if (toggle) {
         const enabled = toggle[1] === "开启";
-        const changed = await store.setGroupVerification(group, enabled, AbortSignal.any([signal, session.signal, session.connection]), authorize);
+        const changed = await store.setGroupVerification(group, enabled, commandSignal, authorize);
         if (!enabled) for (const challenge of challenges.values()) if (challenge.event.groupId === group) remove(challenge);
         if (!changed) return enabled ? "❎ 本群验证已处于开启状态" : "❎ 本群暂未开启验证";
         return `✅ 已${toggle[1]}本群验证`;

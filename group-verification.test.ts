@@ -28,6 +28,16 @@ function fixture(override: Partial<GroupVerificationSettings> = {}) {
       config = { ...config, enabled };
       return true;
     },
+    async toggleGroupVerificationMode(_signal, authorize) {
+      if (await authorize?.() !== true) throw new Error("permission");
+      config = { ...config, mode: config.mode === "精确" ? "模糊" : "精确" };
+      return config.mode;
+    },
+    async setGroupVerificationTime(time, _signal, authorize) {
+      if (await authorize?.() !== true || config.time === time) return false;
+      config = { ...config, time };
+      return true;
+    },
   }, async user => whitelist.has(user), module.signal, {
     random: min => min, now: () => now, schedule(delay, callback) {
       const entry = { at: now + delay, callback };
@@ -47,7 +57,7 @@ function fixture(override: Partial<GroupVerificationSettings> = {}) {
   };
   const command = (changes: Partial<GroupVerificationContext> = {}): GroupVerificationContext => ({
     message_type: "group", adapter: "onebot", self_id: 99, user_id: 55, group_id: 77, message_id: ++messageId,
-    groupVerification: scope, async groupManageBlacklist() { return true; }, ...changes,
+    groupVerification: { ...scope, async canConfigure() { return false; } }, async groupManageBlacklist() { return true; }, ...changes,
   });
   async function advance(ms: number) {
     now += ms;
@@ -218,5 +228,49 @@ test("旧验证 YAML 深层配置与群成功语，启停只写原 openGroup 字
     expect(await readFile(legacy, "utf8")).toBe(original.replace("[88]", "[88, 77]"));
     expect(await store.setGroupVerification(77, false, undefined, async () => true)).toBe(true);
     expect(await readFile(legacy, "utf8")).toBe(original);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("配置模式和时限只给当前群内主人，无需群管，回执区分短时限和旧语法", async () => {
+  const f = fixture({ enabled: false });
+  expect(await f.verify.command("#切换验证模式", f.command())).toContain("仅当前机器人主人");
+  const context = () => f.command({ groupVerification: { ...f.event, canConfigure: async () => true }, groupManageBlacklist: undefined });
+  expect(await f.verify.command("#切换验证模式", context())).toBe("✅ 已切换验证模式为模糊验证");
+  expect(await f.verify.command("#切换验证模式", context())).toBe("✅ 已切换验证模式为精确验证");
+  expect(await f.verify.command("#设置验证超时时间30秒", context())).toContain("至少一分钟");
+  expect(await f.verify.command("#设置验证超时时间75s", context())).toBe("✅ 已将验证超时时间设置为75秒");
+  expect(await f.verify.command("#设置验证超时时间90", context())).toBe("✅ 已将验证超时时间设置为90秒");
+  expect(await f.verify.command("#设置验证超时时间0秒", context())).toContain("有效的正整数");
+  expect(await f.verify.command("#设置验证超时时间2147484秒", context())).toContain("有效的正整数");
+  expect(await f.verify.command("#设置验证超时时间2分钟", context())).toBeUndefined();
+  expect(await f.verify.command("#开启验证", context())).toContain("没有管理");
+});
+
+test("模式与时限写入复用 YAML 原范围及锁，兼容新旧路径和同一资源并发翻转", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lotus-group-verify-options-"));
+  try {
+    const legacy = join(directory, "plugins/yenai-plugin/config/config/groupAdmin.yaml");
+    const primary = join(directory, "config/groupAdmin.yaml");
+    await mkdir(join(directory, "plugins/yenai-plugin/config/config"), { recursive: true });
+    await mkdir(join(directory, "config"), { recursive: true });
+    let queue = Promise.resolve();
+    const store = createManagedBlacklist(pathToFileURL(directory + "/"), async () => {
+      const waiting = queue;
+      const held = Promise.withResolvers<void>();
+      queue = waiting.then(() => held.promise);
+      await waiting;
+      return { close: () => held.resolve() };
+    });
+    const original = 'groupVerify:\r\n  openGroup: [77,88]\r\n  mode: "精确" # 旧模式\r\n  time: "120" # 旧时限\r\n  range: {min: 7,max: 10}\r\nother: [a,b]\r\n';
+    const canonical = "groupVerify: {time: 180,other: [x,y]} # 现时限\n";
+    await writeFile(legacy, original);
+    await writeFile(primary, canonical);
+    await expect(store.toggleGroupVerificationMode(undefined, async () => false)).rejects.toThrow();
+    expect(await readFile(legacy, "utf8")).toBe(original);
+    const both = await Promise.all([store.toggleGroupVerificationMode(), store.toggleGroupVerificationMode(), store.setGroupVerificationTime(360)]);
+    expect(both).toEqual(["模糊", "精确", true]);
+    expect(await readFile(legacy, "utf8")).toBe(original.replace('"精确"', "精确"));
+    expect(await readFile(primary, "utf8")).toBe(canonical.replace("180", "360"));
+    expect(await store.readGroupVerificationSettings(77)).toMatchObject({ enabled: true, time: 360, mode: "精确" });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
