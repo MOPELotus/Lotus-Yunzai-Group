@@ -60,7 +60,7 @@ test("旧状态列当前生效值和已支持范围，普通群员可读，未�
   expect(result).toContain("群撤回：开启（当前仅文本）");
   expect(result).toContain("删除缓存时间：150 秒");
   expect(result).toContain("群邀请：开启（主人编号通知详情）");
-  for (const privateDetails of ["群消息", "bot:100", "notice.yaml"]) expect(result).not.toContain(privateDetails);
+  for (const privateDetails of ["bot:100", "notice.yaml"]) expect(result).not.toContain(privateDetails);
   expect(await command(overview, privateOwner)).toContain("群撤回：关闭");
   expect(await command(overview, { ...groupOwner, isDelegated: true })).toBeUndefined();
 });
@@ -113,7 +113,6 @@ test("权限按四种作用域传入，撤权、非法及未实现操作不写",
   expect(await command("#椰奶通知设置群撤回群单独开启", privateOwner)).toContain("权限");
   expect(await command("#椰奶通知设置好友消息群单独开启", groupOwner)).toContain("不支持此作用域");
   expect(await command("#椰奶通知设置删除缓存时间0", privateOwner)).toContain("正整数");
-  expect(await command("#椰奶通知设置群消息开启", privateOwner)).toContain("尚不支持");
   expect(await command("#椰奶启用全部通知", privateOwner)).toContain("尚不支持");
   expect(await readFile(legacy, "utf8")).toBe(raw);
   expect(isNoticeSettingsCommand("#椰奶通知设置群邀请开启")).toBe(true);
@@ -229,4 +228,15 @@ test("群邀请仅开放旧默认和当前 bot 设置", async () => {
   expect(await command("#椰奶通知设置群邀请bot单独关闭", groupOwner)).toContain("群邀请：关闭");
   expect(await command("#椰奶通知设置群邀请bot单独取消", groupOwner)).toContain("群邀请：开启");
   expect(await readFile(legacy, "utf8")).toContain("addGroupApplication: true");
+});
+
+test("群文本主人通知沿用旧群作用域且说明仅文本", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { groupMessage: false, privateMessage: true }\n");
+  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前仅文本）");
+  expect(await command("#椰奶通知设置群消息bot单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前仅文本）");
+  expect(await command("#椰奶通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前仅文本）");
+  expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前仅文本）");
+  expect(await readFile(legacy, "utf8")).toContain("privateMessage: true");
 });
