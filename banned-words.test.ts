@@ -63,6 +63,65 @@ test("旧违禁词按第一条精确、模糊、正则规则执行并保护群�
   expect(await readFile(legacy, "utf8")).toBe(original);
 });
 
+test("旧单图精确指纹按群和原规则顺序匹配，纯文字不能假冒图片", async () => {
+  const { policy, canonical, legacy, whitelist } = await fixture();
+  const digest = "7e461ff4387de0cd2f227d0440e9bbe3";
+  const underscore = `{image_${digest.toUpperCase()}}`;
+  const colon = `{image:${digest}}`;
+  const original = JSON.stringify({ muteTime: 120, bannedWords: {
+    差异: { matchType: 1, penaltyType: 1 },
+    [underscore]: { matchType: 1, penaltyType: 5 },
+    [colon]: { matchType: 1, penaltyType: 1 },
+  } });
+  await writeFile(legacy, original);
+  let reads = 0;
+  const readDigest = async () => { reads++; return digest; };
+  expect(await policy.match(77, 43, colon, undefined, readDigest)).toBeUndefined();
+  expect(await policy.match(77, 43, underscore)).toBeUndefined();
+  expect(await policy.match(77, 43, "差异", undefined, readDigest)).toMatchObject({ action: "kick" });
+  expect(await policy.match(78, 43, "", undefined, readDigest)).toBeUndefined();
+  expect(await policy.match(77, 43, "")).toBeUndefined();
+  expect(reads).toBe(0);
+  expect(await policy.match(77, 43, "", undefined, readDigest)).toEqual({ action: "mute-recall", preview: "[图片]", seconds: 120 });
+  expect(reads).toBe(1);
+  await writeFile(whitelist, "whiteQQ: [43]\n");
+  expect(await policy.match(77, 43, "", undefined, readDigest)).toBeUndefined();
+  expect(reads).toBe(1);
+  await expect(readFile(canonical)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await readFile(legacy, "utf8")).toBe(original);
+});
+
+test("图指纹惰性读取只用于精确规则，配置更新、连接结束和读取未确认均跳过", async () => {
+  const { policy, legacy, whitelist } = await fixture();
+  const digest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const key = `{image:${digest}}`;
+  const rules = (matchType: number) => JSON.stringify({ bannedWords: { [key]: { matchType, penaltyType: 3 } } });
+  await writeFile(legacy, rules(2));
+  let reads = 0;
+  const readDigest = async () => { reads++; return digest; };
+  expect(await policy.match(77, 43, "", undefined, readDigest)).toBeUndefined();
+  expect(await policy.match(77, 43, key)).toBeUndefined();
+  expect(reads).toBe(0);
+  await writeFile(legacy, rules(1));
+  expect(await policy.match(77, 43, "", undefined, async () => "错误的摘要")).toBeUndefined();
+  expect(await policy.match(77, 43, "", undefined, async () => { throw new Error("网络中断"); })).toBeUndefined();
+  expect(await policy.match(77, 43, "", undefined, async () => {
+    await writeFile(legacy, rules(2));
+    return digest;
+  })).toBeUndefined();
+  await writeFile(legacy, rules(1));
+  expect(await policy.match(77, 43, "", undefined, async () => {
+    await writeFile(whitelist, "whiteQQ: [43]\n");
+    return digest;
+  })).toBeUndefined();
+  const session = new AbortController();
+  expect(await policy.match(77, 44, "", session.signal, async (active) => {
+    session.abort();
+    expect(active.aborted).toBe(true);
+    return digest;
+  })).toBeUndefined();
+});
+
 test("增加和删除沿用旧命令、原始列表和编辑权限，首次保存只写新文件", async () => {
   const { policy, run, canonical, legacy } = await fixture();
   const original = JSON.stringify({ TitleFilterModeChange: 1, bannedWords: { "{face_12}": { matchType: 1, penaltyType: 3 } } });

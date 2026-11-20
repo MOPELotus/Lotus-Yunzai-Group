@@ -13,7 +13,8 @@ export interface GroupBannedWordMatch {
 }
 
 export interface GroupBannedWords {
-  match(groupId: number, userId: number, text: string, signal?: AbortSignal): Promise<GroupBannedWordMatch | undefined>;
+  match(groupId: number, userId: number, text: string, signal?: AbortSignal,
+    readImageMd5?: (signal: AbortSignal) => Promise<string | undefined>): Promise<GroupBannedWordMatch | undefined>;
   recordConfirmedKick(userId: number, signal: AbortSignal, authorize: () => Promise<boolean>): Promise<void>;
 }
 
@@ -50,6 +51,8 @@ const queryRule = /^#?(删除|查看)违禁词([\s\S]*)$/u;
 const listRules = /^#?违禁词列表(原始|raw)?$/u;
 const setTime = /^#?设置违禁词禁言时间(\d+)$/u;
 const helpCommand = /^#?违禁词帮助$/u;
+const imageRule = /^\{image[:_]([a-fA-F0-9]{32})\}$/u;
+const md5 = /^[a-fA-F0-9]{32}$/u;
 export const groupBannedWordsFeature = "[group] 违禁词";
 
 const help = "违禁词帮助\n新增：#新增违禁词 内容（默认精确匹配、禁言）\n" +
@@ -114,6 +117,21 @@ function regexRule(raw: string, requireLiteral = false): { source: string; flags
 
 function matchType(entry: unknown) { return record(entry) ? Number(entry.matchType) : 0; }
 function penalty(entry: unknown) { return record(entry) ? actions[Number(entry.penaltyType) - 1] : undefined; }
+
+function imageRuleMd5(raw: string, entry: unknown): string | undefined {
+  if (matchType(entry) === 1 && penalty(entry)) return imageRule.exec(raw)?.[1]?.toUpperCase();
+}
+
+function wordMatch(data: Data, matched: readonly [string, unknown], image = false): GroupBannedWordMatch | undefined {
+  let action = penalty(matched[1]);
+  if (!action) return;
+  const seconds = muteTime(data);
+  if (!seconds && action === "mute") return;
+  if (!seconds && action === "mute-recall") action = "recall";
+  if (image) return { action, seconds, preview: "[图片]" };
+  const characters = Array.from(matched[0].replace(/[\p{Cc}\p{Cf}]/gu, ""));
+  return { action, seconds, preview: characters.slice(0, 2).join("") + "*".repeat(Math.max(0, characters.length - 2)) };
+}
 
 function display(raw: string, entry: unknown, rawMode = false): readonly WordPart[] {
   const info = record(entry) ? entry : {};
@@ -206,15 +224,27 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
   }
 
   const policy: GroupBannedWords = {
-    async match(groupId, userId, text, eventSignal) {
+    async match(groupId, userId, text, eventSignal, readImageMd5) {
       const active = eventSignal ? AbortSignal.any([signal, eventSignal]) : signal;
-      if (!positive(groupId) || !positive(userId) || active.aborted || !text || text.length > maxTextLength) return;
+      if (!positive(groupId) || !positive(userId) || active.aborted || (!text && !readImageMd5) || text.length > maxTextLength) return;
       const data = (await read(groupId)).data;
       const rules = Object.entries(data.bannedWords ?? {}).slice(0, maxRules);
       if (!rules.length || active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
+      if (!text && readImageMd5) {
+        if (!rules.some(([raw, entry]) => imageRuleMd5(raw, entry))) return;
+        let digest: string | undefined;
+        try { digest = await readImageMd5(active); } catch { return; }
+        if (typeof digest !== "string" || !md5.test(digest) || active.aborted) return;
+        const normalized = digest.toUpperCase();
+        const current = (await read(groupId)).data;
+        const matched = Object.entries(current.bannedWords ?? {}).slice(0, maxRules)
+          .find(([raw, entry]) => imageRuleMd5(raw, entry) === normalized);
+        if (!matched || active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
+        return wordMatch(current, matched, true);
+      }
       const candidates: RegexCandidate[] = [];
       for (const [index, [raw, entry]] of rules.entries()) {
-        if (!penalty(entry) || !raw || raw.length > maxWordLength) continue;
+        if (!penalty(entry) || !raw || raw.length > maxWordLength || imageRule.test(raw)) continue;
         const mode = matchType(entry);
         if (mode === 3) {
           const regex = regexRule(raw);
@@ -234,13 +264,7 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
       }
       const matched = rules[index];
       if (active.aborted || !matched) return;
-      let action = penalty(matched[1]);
-      if (!action) return;
-      const seconds = muteTime(data);
-      if (!seconds && action === "mute") return;
-      if (!seconds && action === "mute-recall") action = "recall";
-      const characters = Array.from(matched[0].replace(/[\p{Cc}\p{Cf}]/gu, ""));
-      return { action, seconds, preview: characters.slice(0, 2).join("") + "*".repeat(Math.max(0, characters.length - 2)) };
+      return wordMatch(data, matched);
     },
     async recordConfirmedKick(userId, eventSignal, authorize) {
       await blacklist.update([userId], true, AbortSignal.any([signal, eventSignal]), authorize);
