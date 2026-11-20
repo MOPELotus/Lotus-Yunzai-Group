@@ -6,7 +6,7 @@ export interface PrivateNoticeOptions {
   readonly legacyConfig?: URL;
   readonly signal?: AbortSignal;
 }
-type NoticeField = "friendRequest" | "privateMessage" | "grouptemporaryMessage" | "friendNumberChange";
+type NoticeField = "friendRequest" | "privateMessage" | "grouptemporaryMessage" | "friendNumberChange" | "PrivateRecall";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
@@ -20,29 +20,40 @@ async function fileText(path: URL | undefined): Promise<string | undefined> {
   }
 }
 
-export function configuredPrivateNotice(value: unknown, botId: number, field: NoticeField, groupId?: number): boolean {
+export function privateNoticeSetting(value: unknown, botId: number, field: NoticeField | "msgSaveDeltime", groupId?: number): unknown {
   const config = record(value);
-  if (!config) return false;
+  if (!config) return;
   const bot = `bot:${botId}`;
   const group = groupId === undefined ? "" : String(groupId);
   // Unlike friend messages, a temporary message with no verified group must not use group overrides.
   const keys = field === "grouptemporaryMessage" && groupId === undefined
     ? ["default", bot] : ["default", group, bot, `${bot}:${group}`];
-  let enabled = false;
+  let setting: unknown;
   for (const key of keys) {
     const section = Object.hasOwn(config, key) ? record(config[key]) : undefined;
-    if (section && Object.hasOwn(section, field)) enabled = section[field] === true;
+    if (section && Object.hasOwn(section, field)) setting = section[field];
   }
-  return enabled;
+  return setting;
 }
 
-export function createPrivateNoticeSettings({ config, legacyConfig, signal: moduleSignal }: PrivateNoticeOptions, field: NoticeField) {
-  return async (botId: number, signal?: AbortSignal, groupId?: number): Promise<boolean> => {
-    if (moduleSignal?.aborted || signal?.aborted) return false;
+export function configuredPrivateNotice(value: unknown, botId: number, field: NoticeField, groupId?: number): boolean {
+  return privateNoticeSetting(value, botId, field, groupId) === true;
+}
+
+export function createPrivateNoticeReader({ config, legacyConfig, signal: moduleSignal }: PrivateNoticeOptions) {
+  return async (signal?: AbortSignal): Promise<unknown> => {
+    if (moduleSignal?.aborted || signal?.aborted) return;
     try {
       const text = await fileText(config) ?? await fileText(legacyConfig);
-      return text !== undefined && !moduleSignal?.aborted && !signal?.aborted &&
-        configuredPrivateNotice(parse(text, { merge: true, maxAliasCount: 50 }), botId, field, groupId);
-    } catch { return false; }
+      if (text !== undefined && !moduleSignal?.aborted && !signal?.aborted) return parse(text, { merge: true, maxAliasCount: 50 });
+    } catch { return; }
+  };
+}
+
+export function createPrivateNoticeSettings(options: PrivateNoticeOptions, field: NoticeField) {
+  const read = createPrivateNoticeReader(options);
+  return async (botId: number, signal?: AbortSignal, groupId?: number): Promise<boolean> => {
+    const config = await read(signal);
+    return !options.signal?.aborted && !signal?.aborted && configuredPrivateNotice(config, botId, field, groupId);
   };
 }
