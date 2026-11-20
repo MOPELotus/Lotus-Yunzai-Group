@@ -24,7 +24,8 @@ export function formatRecallTime(seconds: number): string | undefined {
   return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
-export type RecallNoticeBodyPart = Extract<MessageNoticePart, string | { readonly type: "face" }>;
+export type RecallNoticeBodyPart = Extract<MessageNoticePart, string | { readonly type: "face" }> |
+  { readonly type: "image"; readonly file: Uint8Array };
 
 export function formatRecallBody(text: string, parts?: readonly MessageNoticePart[]): {
   readonly text: string;
@@ -35,7 +36,7 @@ export function formatRecallBody(text: string, parts?: readonly MessageNoticePar
 
   const verified = verifyMessageNoticeParts(parts);
   if (!verified?.every((part): part is RecallNoticeBodyPart =>
-    typeof part === "string" || part.type === "face")) return;
+    typeof part === "string" || part.type === "face" || part.file instanceof Uint8Array)) return;
   return { text: content, parts: verified };
 }
 

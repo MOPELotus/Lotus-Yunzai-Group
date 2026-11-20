@@ -76,15 +76,17 @@ test("无有效账号、原文或时刻，不生成通知，事件和模块中�
   expect(await notice.retention(99)).toBeUndefined();
 });
 
-test("好友撤回在原正文标签后保留文本及真实 QQ 表情顺序，支持纯表情", async () => {
+test("好友撤回在原正文标签后保留文本、原图和真实 QQ 表情顺序", async () => {
   const paths = await fixture();
   await writeFile(paths.config, "default: { PrivateRecall: true }\n");
   const notice = createFriendRecallNotice(paths);
   const face = { type: "face", data: { id: 21, is_large: true } } as const;
+  const image = { type: "image", file: new Uint8Array([1, 2, 3]) } as const;
   const original = await notice.format(event);
-  const rich = await notice.format({ ...event, parts: ["第一\r\n行", face, "第二行"] });
-  expect(rich).toEqual([...original!.slice(0, -1), "第一\n行", face, "第二行"]);
+  const rich = await notice.format({ ...event, parts: ["第一\r\n行", face, image, "第二行"] });
+  expect(rich).toEqual([...original!.slice(0, -1), "第一\n行", face, image, "第二行"]);
   expect(await notice.format({ ...event, text: "", parts: [face] })).toEqual([...original!.slice(0, -1), face]);
+  expect(await notice.format({ ...event, text: "", parts: [image] })).toEqual([...original!.slice(0, -1), image]);
   expect(await notice.format({ ...event, parts: [
     "勿发送前半段", { type: "image", file: "https://example.invalid/picture" },
   ] })).toBeUndefined();
