@@ -17,7 +17,21 @@ export interface ManagedBlacklistStore extends GroupManagedBlacklist {
   setAutoUnmute(enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
   readGroupAddNotice(groupId: number): Promise<string | undefined>;
   setGroupAddNotice(groupId: number, enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
+  readGroupVoteSettings(): Promise<GroupVoteSettings>;
+  setGroupVoteSetting(field: GroupVoteEditableSetting, value: boolean | number, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
 }
+
+export interface GroupVoteSettings {
+  readonly VoteBan: boolean;
+  readonly VoteKick: boolean;
+  readonly outTime: number;
+  readonly minNum: number;
+  readonly BanTime: number;
+  readonly veto: boolean;
+  readonly voteAdmin: boolean;
+}
+
+export type GroupVoteEditableSetting = Exclude<keyof GroupVoteSettings, "veto" | "voteAdmin">;
 
 export class ManagedBlacklistPermissionError extends Error {}
 
@@ -29,8 +43,29 @@ const groupAddNoticeSection = "groupAddNotice";
 const noticeGroups = "groupAddNotice.openGroup";
 const noticeMessage = "groupAddNotice.msg";
 type ListField = "blackQQ" | "whiteQQ" | typeof noticeGroups;
-type Field = ListField | "noBan";
+type Field = ListField | "noBan" | GroupVoteEditableSetting;
 type ReadField = Field | typeof noticeMessage;
+type FieldValue = boolean | number | readonly number[];
+
+const defaultGroupVote: GroupVoteSettings = { VoteBan: false, VoteKick: false, outTime: 180, minNum: 4, BanTime: 3600, veto: true, voteAdmin: false };
+
+export function groupVoteSetting(field: keyof GroupVoteSettings, value: unknown): boolean | number | undefined {
+  if (typeof defaultGroupVote[field] === "boolean") return typeof value === "boolean" ? value : undefined;
+  const numeric = typeof value === "string" && /^\d+$/u.test(value) ? Number(value) : value;
+  const maximum = field === "outTime" ? 2_147_483 : field === "minNum" ? 10_000 : 2_147_483_647;
+  if (typeof numeric === "number" && Number.isSafeInteger(numeric) && numeric > 0 && numeric <= maximum) return numeric;
+}
+
+function voteSettings(primary?: ReturnType<typeof decode>, previous?: ReturnType<typeof decode>): GroupVoteSettings {
+  function get<K extends keyof GroupVoteSettings>(field: K): GroupVoteSettings[K] {
+    const source = primary?.doc.has(field) ? primary : previous?.doc.has(field) ? previous : undefined;
+    const value = source ? groupVoteSetting(field, source.values.get(field)) : field === "VoteBan" && previous ? true : defaultGroupVote[field];
+    if (value === undefined) throw new Error(`群投票 ${field} 配置无效。`);
+    return value as GroupVoteSettings[K];
+  }
+  return { VoteBan: get("VoteBan"), VoteKick: get("VoteKick"), outTime: get("outTime"), minNum: get("minNum"),
+    BanTime: get("BanTime"), veto: get("veto"), voteAdmin: get("voteAdmin") };
+}
 
 function codeOf(error: unknown) { return (error as NodeJS.ErrnoException | undefined)?.code; }
 
@@ -87,7 +122,9 @@ function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
   return list.map(id);
 }
 
-function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: boolean | readonly number[]): string {
+function isListField(field: Field): field is ListField { return field === "whiteQQ" || field === "blackQQ" || field === noticeGroups; }
+
+function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: FieldValue): string {
   const nested = field === noticeGroups;
   const parent = nested ? doc.get(groupAddNoticeSection, true) : undefined;
   const insertParent = nested && !isMap(parent);
@@ -98,14 +135,14 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
   const keyName = insertParent ? groupAddNoticeSection : nested ? "openGroup" : field;
   const node = insertParent ? parent : doc.getIn(fieldPath(field), true);
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const encoded = typeof next === "boolean" ? String(next) : `[${next.join(", ")}]`;
+  const encoded = typeof next === "object" ? `[${next.join(", ")}]` : String(next);
   const inline = insertParent ? `{openGroup: ${encoded}}` : encoded;
   const splice = (start: number, end: number, value: string) => text.slice(0, start) + value + text.slice(end);
   const unsafe = () => new Error(`无法安全定位 ${field} 的 YAML 源码范围。`);
   const lineStart = (index: number) => text.lastIndexOf("\n", index - 1) + 1;
   if (isNode(node) && node.range) {
     const [start, end, trailing] = node.range;
-    if (isSeq(node) && typeof next !== "boolean" && field !== "noBan") {
+    if (isSeq(node) && typeof next === "object" && isListField(field)) {
       const ids = listOf(values, field);
       const adding = next.length > ids.length;
       if (node.flow) {
@@ -156,7 +193,7 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
       }
       return output;
     }
-    if (field !== "noBan" && listOf(values, field).length) throw unsafe();
+    if (isListField(field) && listOf(values, field).length) throw unsafe();
     if (start !== end) return splice(start, end, inline);
     const before = text[start - 1];
     const after = text[start];
@@ -185,7 +222,7 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
 function paths(root: URL) {
   const primary = fileURLToPath(new URL(canonical, root));
   const previous = fileURLToPath(new URL(legacy, root));
-  return { primary, async read(field: ReadField) {
+  return { primary, previous, async read(field: ReadField) {
     const candidate = await snapshot(primary);
     if (candidate && decode(candidate.bytes).doc.hasIn(fieldPath(field))) return candidate;
     const backup = await snapshot(previous);
@@ -203,10 +240,10 @@ export async function readManagedWhitelist(root: URL): Promise<ReadonlySet<numbe
 }
 
 export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBlacklistStore {
-  const { primary, read } = paths(root);
+  const { primary, previous, read } = paths(root);
   let cached: { bytes: Buffer; ids: ReadonlySet<number> } | undefined;
 
-  async function write(field: Field, change: (current: ReturnType<typeof decode>) => boolean | readonly number[] | undefined,
+  async function write(field: Field, change: (current: ReturnType<typeof decode>) => FieldValue | undefined,
     signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean> {
     signal?.throwIfAborted();
     await mkdir(dirname(primary), { recursive: true, mode: 0o700 });
@@ -221,7 +258,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       const bytes = Buffer.from(yaml);
       if (bytes.length > maxBytes) throw new Error("群管名单超过文件大小上限。");
       const check = decode(bytes);
-      const value = field === "noBan" ? check.values.get(field) : listOf(check.values, field);
+      const value = isListField(field) ? listOf(check.values, field) : check.values.get(field);
       if (field === noticeGroups) {
         const previousSection = noticeSection(current.values);
         const newSection = noticeSection(check.values);
@@ -315,6 +352,18 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       return message;
     },
     setGroupAddNotice: (groupId, enabled, signal, authorize) => updateList(noticeGroups, [groupId], enabled, signal, authorize),
+    async readGroupVoteSettings() {
+      const [current, old] = await Promise.all([snapshot(primary), snapshot(previous)]);
+      return voteSettings(current && decode(current.bytes), old && decode(old.bytes));
+    },
+    setGroupVoteSetting(field, value, signal, authorize) {
+      const next = groupVoteSetting(field, value);
+      if (next === undefined) throw new Error(`群投票 ${field} 配置无效。`);
+      return write(field, ({ doc, values }) => {
+        if (doc.has(field) && groupVoteSetting(field, values.get(field)) === next) return;
+        return next;
+      }, signal, authorize);
+    },
     setAutoUnmute(enabled, signal, authorize) {
       return write("noBan", ({ values }) => {
         const current = values.get("noBan");

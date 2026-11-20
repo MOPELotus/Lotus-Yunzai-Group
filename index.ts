@@ -21,6 +21,7 @@ import { createGroupQuotedReview, groupQuotedReviewFeature, isGroupQuotedReviewC
 import { createGroupAnnouncementDeletion, createGroupAnnouncementPublisher, groupAnnouncementsCommand, groupAnnouncementsFeature,
   isGroupAnnouncementDeleteCommand, isGroupAnnouncementPublishCommand, isGroupAnnouncementsCommand, type GroupAnnouncementDeleteContext,
   type GroupAnnouncementPublishContext } from "./group-announcements.ts";
+import { createGroupVote, groupVoteFeature, isGroupVoteCommand, type GroupVoteContext } from "./group-vote.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -35,6 +36,7 @@ export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, t
 export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
 export { groupAnnouncementsFeature, type GroupAnnouncement, type GroupAnnouncementDeleteContext, type GroupAnnouncementDeleteResult,
   type GroupAnnouncementPublishContext, type GroupAnnouncementPublishResult, type GroupAnnouncementsContext } from "./group-announcements.ts";
+export { groupVoteFeature, type GroupVoteCapability, type GroupVoteResult, type GroupVoteRoles, type GroupVotePart } from "./group-vote.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -97,13 +99,15 @@ export async function createModule({
   const publishAnnouncement = createGroupAnnouncementPublisher(signal);
   const deleteAnnouncement = createGroupAnnouncementDeletion(signal);
   const groupAddNotice = blacklist && createGroupAddNotice(blacklist, signal);
+  const vote = blacklist && createGroupVote(blacklist, signal);
   const stopGroupAddNotice = groupAddNotice && registerGroupAddNotice?.(groupAddNotice.policy);
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
     fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
-      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext) {
+      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext) {
       const normalized = context.normalizedMessage.trim();
+      if (vote && isGroupVoteCommand(normalized)) return vote.command(normalized, context);
       if (isGroupAnnouncementsCommand(normalized)) return groupAnnouncementsCommand(normalized, context, signal);
       if (isGroupAnnouncementPublishCommand(normalized)) return publishAnnouncement(normalized, context);
       if (isGroupAnnouncementDeleteCommand(normalized)) return deleteAnnouncement(normalized, context);
@@ -119,6 +123,7 @@ export async function createModule({
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
+      if (isGroupVoteCommand(message)) return [groupVoteFeature];
       if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message) || isGroupAnnouncementDeleteCommand(message)) return [groupAnnouncementsFeature];
       if (isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
       if (isGroupAddNoticeCommand(message)) return [groupAddNoticeFeature];
@@ -141,7 +146,7 @@ export async function createModule({
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();
-      await Promise.all([stopTask?.(), timedMute?.stop()]);
+      await Promise.all([stopTask?.(), timedMute?.stop(), vote?.stop()]);
     },
   };
 }
