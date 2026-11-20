@@ -73,6 +73,14 @@ test("真实回执分别提示，未知和并发重放同一原消息不重送",
   expect(await failed.handle(command, failed.context)).toContain("结果未确认");
 });
 
+test("OneBot 兼容未标明 adapter 的可信宿主事件，和显式 OneBot 共用去重", async () => {
+  const { calls, context, handle } = fixture();
+  expect(await handle("#解禁77 510", { ...context, adapter: undefined, privateGroupMute: undefined })).toContain("没有群禁言权限");
+  expect(await handle("#解禁77 510", { ...context, adapter: undefined })).toContain("解除禁言");
+  expect(await handle("#解禁77 510", context)).toEqual([]);
+  expect(calls).toEqual([[77, 510, 0]]);
+});
+
 test("私聊命令检测只认实际旧格式，不抢占同名群内入口", () => {
   expect(isPrivateGroupMuteCommand("#禁言77 510 两年")).toBe(true);
   expect(isPrivateGroupMuteCommand("#解禁 77 510")).toBe(true);

@@ -47,10 +47,11 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
     const input = (context.normalizedMessage ?? message).trim();
     const match = mutePattern.exec(input) ?? releasePattern.exec(input);
     if (!match) return;
-    const { adapter, isBotMaster, message: original, message_id, privateGroupMute, self_id, user_id } = context;
+    const { isBotMaster, message: original, message_id, privateGroupMute, self_id, user_id } = context;
+    const nativeAdapter = context.adapter ?? "onebot";
     if (Array.isArray(original) && original.some(part => part.type !== "text")) return;
     if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id) ||
-        (adapter !== "onebot" && adapter !== "milky") || !legalMessageId(message_id) || !privateGroupMute) {
+        (nativeAdapter !== "onebot" && nativeAdapter !== "milky") || !legalMessageId(message_id) || !privateGroupMute) {
       return "当前私聊会话没有群禁言权限。";
     }
     const groupId = Number(match[1]), target = Number(match[2]);
@@ -59,7 +60,7 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
       return "请填写有效的群号、QQ 号和禁言时长。";
     }
     if (target === self_id) return `群 ${groupId} 的 ${target} 受群禁言保护。`;
-    const key = JSON.stringify([adapter, self_id, user_id, String(message_id)]);
+    const key = JSON.stringify([nativeAdapter, self_id, user_id, String(message_id)]);
     if (inFlight.has(key) || seen.has(key)) return [];
     inFlight.add(key);
     const action = seconds === 0 ? "解禁" : "禁言";
