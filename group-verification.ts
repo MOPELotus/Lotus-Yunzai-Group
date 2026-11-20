@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { ManagedBlacklistPermissionError, maxGroupVerificationSeconds, type GroupVerificationSettings, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 import type { GroupVotePart, GroupVoteResult } from "./group-vote.ts";
+import { readGroupActivityRoster, type GroupActivityContext } from "./group-activity.ts";
 
 interface VerificationScope {
   readonly adapter: "onebot" | "milky";
@@ -42,6 +43,8 @@ export interface GroupVerification {
   answer(event: GroupVerificationAnswer): Promise<boolean>;
 }
 
+export interface GroupVerificationExpectedActivity { readonly joinTime: number; readonly lastSentTime: number }
+
 export interface GroupVerificationContext {
   readonly message_type: "group" | "private" | "terminal";
   readonly self_id?: number;
@@ -52,11 +55,13 @@ export interface GroupVerificationContext {
   readonly isDelegated?: boolean;
   readonly message?: string | readonly { readonly type: string; readonly qq?: unknown }[];
   readonly groupManageBlacklist?: () => Promise<boolean>;
+  readonly groupActivityRoster?: GroupActivityContext["groupActivityRoster"];
+  readonly isBotMaster?: (user: number) => boolean;
   readonly groupVerification?: {
     readonly connection: AbortSignal;
     readonly signal: AbortSignal;
     canConfigure(): Promise<boolean>;
-    prepare(target: number): Promise<GroupVerificationJoin | undefined>;
+    prepare(target: number, expected?: GroupVerificationExpectedActivity): Promise<GroupVerificationJoin | undefined>;
   };
 }
 
@@ -64,10 +69,11 @@ export const groupVerificationFeature = "[group] 入群验证";
 const switchPattern = /^#(开启|关闭)验证$/u;
 const bypassPattern = /^#绕过验证(\d+)?$/u;
 const repeatPattern = /^#重新验证(\d+)?$/u;
+const batchCommand = "#重新验证从未发言的人";
 const modeCommand = "#切换验证模式";
 const timeCommand = /^#设置验证超时时间(\d+)(?:s|秒)?$/u;
 export const isGroupVerificationCommand = (message: string) => switchPattern.test(message) || bypassPattern.test(message) ||
-  repeatPattern.test(message) || message === modeCommand || timeCommand.test(message);
+  repeatPattern.test(message) || message === modeCommand || message === batchCommand || timeCommand.test(message);
 
 type Clock = { now(): number; schedule(milliseconds: number, callback: () => void): () => void; random(min: number, max: number): number };
 const nativeClock: Clock = {
@@ -83,6 +89,7 @@ const nativeClock: Clock = {
 interface Challenge {
   readonly event: GroupVerificationJoin;
   readonly noticeTime?: number;
+  readonly protectWhitelist: boolean;
   readonly controller: AbortController;
   readonly cleanups: (() => void)[];
   readonly messages: Set<string>;
@@ -129,6 +136,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
   const challenges = new Map<string, Challenge>();
   const events = new Map<string, number>();
   const commands = new Set<string>();
+  const batches = new Map<number, { readonly scope: VerificationScope; readonly controller: AbortController }>();
   const detached = new Set<Promise<void>>();
   let stopped = false;
 
@@ -154,8 +162,9 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     return event.time === undefined || joined === undefined || event.time >= joined;
   };
 
-  function createChallenge(event: GroupVerificationJoin, noticeTime?: number) {
-    const challenge: Challenge = { event, noticeTime, controller: new AbortController(), messages: new Set(), cleanups: [], remaining: 0,
+  function createChallenge(event: GroupVerificationJoin, noticeTime?: number, expectedActivity?: GroupVerificationExpectedActivity) {
+    const challenge: Challenge = { event, noticeTime, protectWhitelist: noticeTime !== undefined || expectedActivity !== undefined,
+      joined: expectedActivity?.joinTime, controller: new AbortController(), messages: new Set(), cleanups: [], remaining: 0,
       settling: false, kickInFlight: false, queue: Promise.resolve() };
     challenges.set(position(event), challenge);
     const cancel = () => remove(challenge);
@@ -188,7 +197,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     if (!available(challenge)) return false;
     const { event } = challenge;
     const automatic = challenge.noticeTime !== undefined;
-    if ((automatic && await whitelisted(event.userId).catch(() => true)) || !available(challenge)) return false;
+    if ((challenge.protectWhitelist && await whitelisted(event.userId).catch(() => true)) || !available(challenge)) return false;
     let roles: Awaited<ReturnType<GroupVerificationJoin["inspect"]>>;
     try { roles = await event.inspect(); } catch { return false; }
     if (!available(challenge) || !roles || !["admin", "owner"].includes(roles.botRole)) return false;
@@ -274,6 +283,10 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       if (!validIdentity(event) || !live(event)) return;
       if (event.dismissed || event.userId === event.botId) {
         if (id(event.time)) remember(groupScope(event), event.time);
+        const batch = batches.get(event.groupId);
+        if (batch?.scope.botId === event.botId && batch.scope.connection === event.connection && batch.scope.adapter === event.adapter) {
+          batch.controller.abort();
+        }
         for (const challenge of challenges.values()) {
           if (challenge.event.botId === event.botId && challenge.event.groupId === event.groupId && sameConnection(challenge, event) &&
               currentLeave(challenge, event)) remove(challenge);
@@ -300,7 +313,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
         if (!available(challenge) || challenge.settling || !live(event) || challenge.deadline === undefined || clock.now() >= challenge.deadline) return false;
         const config = await settings(event.groupId);
         if (!config?.enabled) { remove(challenge); return false; }
-        if (challenge.noticeTime !== undefined && await whitelisted(event.userId).catch(() => true)) { remove(challenge); return false; }
+        if (challenge.protectWhitelist && await whitelisted(event.userId).catch(() => true)) { remove(challenge); return false; }
         if (!available(challenge) || !live(event) || challenge.settling || clock.now() >= challenge.deadline) return false;
         if (!await event.canAnswer().catch(() => false) || !available(challenge) || !live(event) || challenge.settling || clock.now() >= challenge.deadline) return false;
         const key = String(event.messageId);
@@ -322,6 +335,72 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       return check.catch(() => false);
     },
   };
+
+  type Prepare = NonNullable<GroupVerificationContext["groupVerification"]>["prepare"];
+  async function repeatMember(scope: VerificationScope, prepare: Prepare, expected?: GroupVerificationExpectedActivity): Promise<string | undefined> {
+    const key = position(scope);
+    if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
+    if (challenges.size >= 4096) return "当前待验证成员过多，请稍后再试。";
+    const event = await prepare(scope.userId, expected).catch(() => undefined);
+    if (!event || event.botId !== scope.botId || event.groupId !== scope.groupId || event.userId !== scope.userId || event.adapter !== scope.adapter ||
+        event.connection !== scope.connection || !live(event) || !live(scope) || stopped || signal.aborted) {
+      return "无法确认目标群成员或验证权限。";
+    }
+    if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
+    const prepared = { ...event, signal: AbortSignal.any([event.signal, scope.signal]) };
+    return ask(createChallenge(prepared, undefined, expected));
+  }
+
+  function waitForNextMember(active: AbortSignal): Promise<void> {
+    if (active.aborted) return Promise.resolve();
+    return new Promise(resolve => {
+      const done = () => {
+        cancel();
+        active.removeEventListener("abort", done);
+        resolve();
+      };
+      const cancel = clock.schedule(2000, done);
+      active.addEventListener("abort", done, { once: true });
+    });
+  }
+
+  async function repeatNeverSpoken(context: GroupVerificationContext, scope: VerificationScope, prepare: Prepare, authorize: () => Promise<boolean>) {
+    if (batches.has(scope.groupId)) return "本群已有批量验证正在进行。";
+    const batch = new AbortController();
+    batches.set(scope.groupId, { scope, controller: batch });
+    const active = AbortSignal.any([scope.signal, batch.signal]);
+    const current = () => !active.aborted && !stopped && !signal.aborted;
+    let sent = 0;
+    try {
+      const roster = await readGroupActivityRoster(context, scope.botId);
+      if (!current()) return [] as const;
+      if (!roster) return "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。";
+      const candidates = roster.filter(member => member.userId !== scope.botId && member.role === "member" && member.joinTime === member.lastSentTime);
+      if (!candidates.length) return "✅ 本群暂无从未发言的人";
+      let pace = false;
+      for (const { userId, joinTime, lastSentTime } of candidates) {
+        if (!current()) return [] as const;
+        const member = { ...scope, userId, signal: active };
+        const protectedMember = async () => context.isBotMaster?.(userId) || challenges.has(position(member)) || await whitelisted(userId).catch(() => true);
+        if (await protectedMember()) continue;
+        if (pace) {
+          await waitForNextMember(active);
+          pace = false;
+        }
+        if (!current()) return [] as const;
+        if (!await authorize() || !(await settings(scope.groupId))?.enabled) {
+          return `批量验证已停止，已确认向 ${sent} 人发送题目。`;
+        }
+        if (current() && !await protectedMember() && current()) {
+          pace = true;
+          const result = await repeatMember(member, prepare, { joinTime, lastSentTime });
+          if (result === undefined) sent++;
+        }
+      }
+      if (!current()) return [] as const;
+      return `批量验证结束，已确认向 ${sent} 人发送题目，跳过或未确认 ${candidates.length - sent} 人。`;
+    } finally { batches.delete(scope.groupId); }
+  }
 
   async function command(text: string, context: GroupVerificationContext): Promise<string | readonly [] | undefined> {
     if (context.message_type !== "group" || !isGroupVerificationCommand(text)) return;
@@ -364,30 +443,25 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       if (toggle) {
         const enabled = toggle[1] === "开启";
         const changed = await store.setGroupVerification(group, enabled, commandSignal, authorize);
-        if (!enabled) for (const challenge of challenges.values()) if (challenge.event.groupId === group) remove(challenge);
+        if (!enabled) {
+          batches.get(group)?.controller.abort();
+          for (const challenge of challenges.values()) if (challenge.event.groupId === group) remove(challenge);
+        }
         if (!changed) return enabled ? "❎ 本群验证已处于开启状态" : "❎ 本群暂未开启验证";
         return `✅ 已${toggle[1]}本群验证`;
       }
       const config = await settings(group);
       if (!config?.enabled) return "当前群未开启验证哦~";
       if (!await authorize()) return permission;
+      const adapter = context.adapter ?? "onebot";
+      const scope = { adapter, botId: bot, groupId: group, userId: user, signal: commandSignal, connection: session.connection };
+      const prepare: Prepare = (target, expected) => session.prepare(target, expected);
+      if (text === batchCommand) return await repeatNeverSpoken(context, scope, prepare, authorize);
       const repeat = repeatPattern.exec(text);
       const target = commandTarget(context.message, (repeat ?? bypassPattern.exec(text))?.[1], bot);
       if (!target || target === bot) return "❎ 请输入正确的 QQ 号或艾特一位群成员";
       const key = position({ botId: bot, groupId: group, userId: target });
-      const adapter = context.adapter ?? "onebot";
-      if (repeat) {
-        if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
-        if (challenges.size >= 4096) return "当前待验证成员过多，请稍后再试。";
-        const event = await session.prepare(target).catch(() => undefined);
-        if (!event || event.botId !== bot || event.groupId !== group || event.userId !== target || event.adapter !== adapter ||
-            event.connection !== session.connection || !live(event) || !live(session) || stopped || signal.aborted) {
-          return "无法确认目标群成员或验证权限。";
-        }
-        if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
-        const prepared = { ...event, signal: AbortSignal.any([event.signal, session.signal]) };
-        return (await ask(createChallenge(prepared))) ?? [];
-      }
+      if (repeat) return (await repeatMember({ ...scope, userId: target }, prepare)) ?? [];
       const challenge = challenges.get(key);
       if (!challenge || !available(challenge) || challenge.event.adapter !== adapter || challenge.event.connection !== session.connection || challenge.settling) {
         return "❎ 目标群成员当前无需验证";
@@ -399,7 +473,10 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     }
   }
 
-  function cancelAll() { for (const challenge of challenges.values()) remove(challenge); }
+  function cancelAll() {
+    for (const batch of batches.values()) batch.controller.abort();
+    for (const challenge of challenges.values()) remove(challenge);
+  }
   signal.addEventListener("abort", cancelAll, { once: true });
   return { policy, command, async stop() { stopped = true; signal.removeEventListener("abort", cancelAll); cancelAll(); await Promise.allSettled(detached); } };
 }

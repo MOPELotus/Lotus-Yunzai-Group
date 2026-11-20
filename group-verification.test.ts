@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createGroupVerification, type GroupVerificationAnswer, type GroupVerificationContext, type GroupVerificationJoin } from "./group-verification.ts";
+import { createGroupVerification, type GroupVerificationAnswer, type GroupVerificationContext, type GroupVerificationExpectedActivity,
+  type GroupVerificationJoin } from "./group-verification.ts";
 import { createManagedBlacklist, type GroupVerificationSettings } from "./managed-blacklist.ts";
 import type { GroupVotePart, GroupVoteResult } from "./group-vote.ts";
 
@@ -279,7 +280,7 @@ test("手动重验只准原群原连接，保护管理员、主人和机器人�
   const contexts = (event: GroupVerificationJoin = f.event, extra: Partial<GroupVerificationContext> = {}) =>
     f.command({ ...extra, groupVerification: { ...original, async prepare() { calls++; return event; } } });
   let calls = 0;
-  expect(await f.verify.command("#重新验证从未发言的人", contexts())).toBeUndefined();
+  expect(await f.verify.command("#重新验证从未发言的人", contexts())).toContain("完整的群成员发言数据");
   expect(await f.verify.command("#重新验证99", contexts())).toContain("正确");
   expect(await f.verify.command("#重新验证", contexts(f.event, { message: [{ type: "at", qq: 43 }, { type: "at", qq: 45 }] }))).toContain("正确");
   expect(await f.verify.command("#重新验证43", contexts(f.event, { groupManageBlacklist: async () => false }))).toContain("没有管理");
@@ -313,6 +314,73 @@ test("手动时间不改变入群水位，真实离群清理后，新入群仍�
   await f.verify.policy.join({ ...f.event, time: 106 });
   await f.advance(2_005);
   expect(f.sent).toHaveLength(2);
+});
+
+test("从未发言批量重验仅用完整同群名单、逐人核快照，跳过白名单主人和已有挑战", async () => {
+  const f = fixture({ delay: 0, time: 50 });
+  const text = "#重新验证从未发言的人";
+  const eligible = (userId: number) => ({ userId, joinTime: 99, lastSentTime: 99, role: "member" as const });
+  const original = f.command();
+  const prepared: [number, GroupVerificationExpectedActivity | undefined][] = [];
+  const roster = [eligible(43), eligible(44), eligible(45), { ...eligible(46), role: "admin" as const }, eligible(47), eligible(48), eligible(49),
+    { ...eligible(50), lastSentTime: 100 }, { ...eligible(99), role: "owner" as const }];
+  const context: GroupVerificationContext = { ...original, async groupActivityRoster(visibility) {
+    expect(visibility).toBeUndefined();
+    return roster;
+  }, isBotMaster: id => id === 45,
+  groupVerification: { ...original.groupVerification!, async prepare(target, expected) {
+    prepared.push([target, expected]);
+    return target === 48 ? undefined : { ...f.event, userId: target, time: 2_000_000_000 };
+  } } };
+  await f.verify.policy.join({ ...f.event, userId: 47 });
+  await f.advance(0);
+  f.setWhitelist(44);
+  const running = f.verify.command(text, context);
+  await f.advance(0);
+  expect(prepared).toEqual([[43, { joinTime: 99, lastSentTime: 99 }]]);
+  expect(await f.verify.command(text, { ...context, message_id: -333 })).toContain("已有批量验证");
+  expect(await f.verify.command(text, context)).toEqual([]);
+  expect(await f.verify.policy.answer(f.answer("21"))).toBe(true);
+  await f.advance(1999);
+  expect(prepared).toHaveLength(1);
+  await f.advance(1);
+  expect(prepared.map(([user]) => user)).toEqual([43, 48]);
+  await f.advance(2000);
+  expect(prepared.map(([user]) => user)).toEqual([43, 48, 49]);
+  expect(await running).toBe("批量验证结束，已确认向 2 人发送题目，跳过或未确认 4 人。");
+  expect(f.sent.flatMap(({ parts }) => parts.filter((part) => typeof part !== "string"))).toEqual([
+    { type: "at", qq: 47 }, { type: "at", qq: 43 }, { type: "at", qq: 49 },
+  ]);
+});
+
+test("从未发言批量重验在每人前重新授权，关闭或暂停后没有后续题目", async () => {
+  for (const stop of ["permission", "config", "switch", "pause", "left"] as const) {
+    const f = fixture({ delay: 0, time: 50 });
+    const text = "#重新验证从未发言的人";
+    const original = f.command();
+    let management = true;
+    const prepared: number[] = [];
+    const context: GroupVerificationContext = { ...original, groupManageBlacklist: async () => management,
+      groupActivityRoster: async () => [43, 44, 99].map(userId => ({ userId, joinTime: 99, lastSentTime: 99, role: "member" as const })),
+      groupVerification: { ...original.groupVerification!, async prepare(target) {
+        prepared.push(target);
+        return { ...f.event, userId: target };
+      } },
+    };
+    const run = f.verify.command(text, context);
+    await f.advance(0);
+    expect(prepared).toEqual([43]);
+    if (stop === "permission") management = false;
+    if (stop === "config") f.setConfig({ enabled: false });
+    if (stop === "switch") expect(await f.verify.command("#关闭验证", f.command())).toContain("已关闭");
+    if (stop === "pause") f.session.abort();
+    if (stop === "left") await f.verify.policy.leave({ ...f.event, userId: 99 });
+    await f.advance(10_000);
+    expect(await run).toEqual(stop === "permission" || stop === "config" ? "批量验证已停止，已确认向 1 人发送题目。" : []);
+    expect(prepared).toEqual([43]);
+    expect(f.sent).toHaveLength(1);
+    await f.verify.stop();
+  }
 });
 
 test("模式与时限写入复用 YAML 原范围及锁，兼容新旧路径和同一资源并发翻转", async () => {

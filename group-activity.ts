@@ -83,7 +83,8 @@ function memberLabel({ userId, name }: GroupActivityMember): string {
   return `\nQQ：${userId}\n昵称：${nickname || userId}\n`;
 }
 
-async function readRoster(context: GroupActivityContext, bot: number, visibility?: GroupActivityVisibility): Promise<readonly GroupActivityMember[] | undefined> {
+export async function readGroupActivityRoster(context: Pick<GroupActivityContext, "groupActivityRoster">, bot: number,
+  visibility?: GroupActivityVisibility): Promise<readonly GroupActivityMember[] | undefined> {
   try {
     const roster = await context.groupActivityRoster?.(visibility);
     if (roster && verifiedMembers(roster, bot)) return roster;
@@ -104,7 +105,7 @@ function inactivityWindow(match: RegExpExecArray, epochMillis: number): Inactivi
 }
 
 async function readMembers(context: GroupActivityContext, bot: number, window?: InactivityWindow, forCleanup = false): Promise<GroupActivityMember[] | undefined> {
-  const roster = await readRoster(context, bot);
+  const roster = await readGroupActivityRoster(context, bot);
   return roster?.filter((entry) => {
     if (entry.userId === bot || entry.role !== "member") return false;
     if (!window) return entry.joinTime === entry.lastSentTime;
@@ -163,7 +164,7 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
   if (rank) {
     const count = rank[2] === undefined ? 10 : parseGroupInteger(rank[2]);
     if (!count) return "请输入有效的成员数量。";
-    const roster = await readRoster(context, context.self_id, "member");
+    const roster = await readGroupActivityRoster(context, context.self_id, "member");
     if (signal?.aborted || context.groupActivitySignal?.aborted) return;
     if (!roster) return "当前无法读取完整的群成员发言数据，请核对当前群会话和协议端支持。";
     return activityRanking(roster, rank[1]?.startsWith("最近") === true, count);

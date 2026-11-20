@@ -40,7 +40,7 @@ export { groupAnnouncementsFeature, type GroupAnnouncement, type GroupAnnounceme
   type GroupAnnouncementPublishContext, type GroupAnnouncementPublishResult, type GroupAnnouncementsContext } from "./group-announcements.ts";
 export { groupVoteFeature, type GroupVoteCapability, type GroupVoteResult, type GroupVoteRoles, type GroupVotePart } from "./group-vote.ts";
 export { groupVerificationFeature, type GroupVerification, type GroupVerificationJoin, type GroupVerificationLeave,
-  type GroupVerificationAnswer, type GroupVerificationContext } from "./group-verification.ts";
+  type GroupVerificationAnswer, type GroupVerificationContext, type GroupVerificationExpectedActivity } from "./group-verification.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
