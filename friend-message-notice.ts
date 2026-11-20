@@ -22,7 +22,7 @@ function positiveId(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
 }
 
-function messageText(value: string): string {
+export function formatNoticeBodyText(value: string): string {
   const limit = 4096;
   const text = value.slice(0, limit * 2).replace(/\r\n?|[\u2028\u2029]/gu, "\n")
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "");
@@ -40,7 +40,7 @@ function verifiedParts(original: readonly FriendMessageNoticePart[] | undefined)
   const source: readonly FriendMessageNoticePart[] = original;
   for (const part of source) {
     if (typeof part === "string") {
-      parts.push(messageText(part));
+      parts.push(formatNoticeBodyText(part));
     } else if (part?.type === "image" && part.file instanceof Uint8Array && part.file.byteLength > 0) {
       parts.push({ type: "image", file: part.file });
     } else if (part?.type === "face" && part.data && faceId(part.data.id) &&
@@ -60,7 +60,7 @@ export function createFriendMessageNotice(options: PrivateNoticeOptions): Friend
   const isEnabled = createPrivateNoticeSettings(options, "privateMessage");
   return async ({ botId, userId, nickname, text, readParts, showHint, canQuote }, signal) => {
     if (!positiveId(botId) || !positiveId(userId) || botId === userId) return;
-    const textOnly = !readParts && typeof text === "string" ? messageText(text) : "";
+    const textOnly = !readParts && typeof text === "string" ? formatNoticeBodyText(text) : "";
     if ((!readParts && !textOnly.trim()) || !await isEnabled(botId, signal) || options.signal?.aborted || signal?.aborted) return;
     const content = readParts ? await readVerifiedParts(readParts) : [textOnly];
     if (!content || options.signal?.aborted || signal?.aborted) return;
