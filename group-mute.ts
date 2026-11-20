@@ -106,7 +106,7 @@ export function parseGroupInteger(value: string): number | undefined {
   if (Number.isSafeInteger(amount) && amount >= 0) return amount;
 }
 
-function duration(value: string): number | undefined {
+export function parseGroupMuteDuration(value: string): number | undefined {
   if (!value) return defaultMuteSeconds;
   if (value.length > 64) return;
   const unitOnly = groupTimeUnits.get(value.toUpperCase());
@@ -149,7 +149,7 @@ function targets(message: string, group: GroupMuteContext, botId: number) {
     ids.push(id);
     args = numeric?.[2] ?? "";
   }
-  const seconds = releasing ? (args ? undefined : 0) : duration(args);
+  const seconds = releasing ? (args ? undefined : 0) : parseGroupMuteDuration(args);
   if (seconds !== undefined && ids.every((id) => id !== botId)) return { ids, seconds };
 }
 

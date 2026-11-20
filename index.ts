@@ -8,6 +8,7 @@ import { GroupCard } from "./group-card-v3.js";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
+import { createPrivateGroupMute, isPrivateGroupMuteCommand, privateGroupMuteFeature, type PrivateGroupMuteContext } from "./private-group-mute.ts";
 import { createManagedBlacklist, readManagedWhitelist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
@@ -45,12 +46,27 @@ export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, O
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
   type GroupSetAdminResult, type GroupWholeMuteResult } from "./group-mute.ts";
+export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult } from "./private-group-mute.ts";
+
+type ModerationContext = GroupMuteContext & PrivateGroupMuteContext;
+function privateMuteCommand(context: Pick<ModerationContext, "message_type">, command: string) {
+  return context.message_type === "private" && isPrivateGroupMuteCommand(command);
+}
+
+const defaultModeration = createGroupMute();
+const defaultPrivateMute = createPrivateGroupMute();
+
 export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
   ...group,
   commands: { ...group.commands, ...groupRequestReview.commands },
-  fallback: createGroupMute(),
-  fallbackFeatures: groupModerationFeature,
+  fallback(message: string, context: ModerationContext) {
+    return privateMuteCommand(context, (context.normalizedMessage ?? message).trim())
+      ? defaultPrivateMute(message, context) : defaultModeration(message, context);
+  },
+  fallbackFeatures(context: { readonly normalizedMessage: string; readonly message_type: ModerationContext["message_type"] }) {
+    return privateMuteCommand(context, context.normalizedMessage.trim()) ? [privateGroupMuteFeature] : groupModerationFeature(context);
+  },
 };
 export default manifest;
 
@@ -97,6 +113,7 @@ export async function createModule({
   const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal) : undefined;
   const stopBannedWords = bannedWords && registerGroupBannedWords?.(bannedWords.policy);
   const moderation = createGroupMute(root, blacklist, signal);
+  const privateMute = createPrivateGroupMute(signal);
   const title = bannedWords && createGroupTitle(bannedWords.titleStore, signal);
   const activityCleanup = createGroupActivityCleanup(root, signal);
   const notify = createGroupNotification(signal);
@@ -111,9 +128,10 @@ export async function createModule({
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
-    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
+    fallback(message: string, context: ModerationContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
       GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
       const normalized = context.normalizedMessage.trim();
+      if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (verification && isGroupVerificationCommand(normalized)) return verification.command(normalized, context);
       if (vote && isGroupVoteCommand(normalized)) return vote.command(normalized, context);
       if (isGroupAnnouncementsCommand(normalized)) return groupAnnouncementsCommand(normalized, context, signal);
@@ -129,8 +147,9 @@ export async function createModule({
       return bannedWords && isGroupBannedWordCommand(normalized)
         ? bannedWords.command(message, context) : moderation(message, context);
     },
-    fallbackFeatures(context: { readonly normalizedMessage: string }) {
+    fallbackFeatures(context: Parameters<typeof manifest.fallbackFeatures>[0]) {
       const message = context.normalizedMessage.trim();
+      if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (isGroupVerificationCommand(message)) return [groupVerificationFeature];
       if (isGroupVoteCommand(message)) return [groupVoteFeature];
       if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message) || isGroupAnnouncementDeleteCommand(message)) return [groupAnnouncementsFeature];
