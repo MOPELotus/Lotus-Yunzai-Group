@@ -230,13 +230,13 @@ test("群邀请仅开放旧默认和当前 bot 设置", async () => {
   expect(await readFile(legacy, "utf8")).toContain("addGroupApplication: true");
 });
 
-test("群文本主人通知沿用旧群作用域且说明仅文本", async () => {
+test("群消息主人通知沿用旧群作用域且列明支持的正文类型", async () => {
   const { command, legacy } = await fixture();
   await writeFile(legacy, "default: { groupMessage: false, privateMessage: true }\n");
-  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前仅文本）");
+  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情）");
   expect(await command("#椰奶通知设置群消息bot单独开启", groupOwner)).toContain("不支持此作用域");
-  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前仅文本）");
-  expect(await command("#椰奶通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前仅文本）");
-  expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前仅文本）");
+  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情）");
+  expect(await command("#椰奶通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情）");
+  expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情）");
   expect(await readFile(legacy, "utf8")).toContain("privateMessage: true");
 });

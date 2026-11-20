@@ -83,3 +83,43 @@ test("无效输入不查名，连接或模块在查询中终止时无通知", as
     ...event, describeGroup: async () => { module.abort(); return "原群"; },
   })).toBeUndefined();
 });
+
+test("群通知保留原正文图文和表情顺序，并支持没有文字的纯图", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { groupMessage: true }\n");
+  const notice = createGroupMessageNotice(paths);
+  const image = { type: "image", file: new Uint8Array([1, 2, 3]) } as const;
+  const face = { type: "face", data: { id: "21", is_large: true } } as const;
+  const rich = await notice({
+    ...event, readParts: async () => ["先\r\n", image, "中", face, "末"],
+  });
+  expect(rich?.slice(7)).toEqual(["先\n", image, "中", face, "末"]);
+  const onlyImage = await notice({ ...event, text: undefined, readParts: async () => [image] });
+  expect(onlyImage?.slice(7)).toEqual([image]);
+});
+
+test("富正文仅在启用且会话存续时读；任何未核段中止整条且不查群名", async () => {
+  const paths = await fixture();
+  const notice = createGroupMessageNotice(paths);
+  const connection = new AbortController();
+  let reads = 0;
+  let groupLookups = 0;
+  const input = {
+    ...event,
+    readParts: async () => { reads++; return ["旧首段", { type: "image", file: "https://example.invalid/picture" }] as const; },
+    describeGroup: async () => { groupLookups++; return "原群"; },
+  };
+  expect(await notice(input)).toBeUndefined();
+  expect(reads).toBe(0);
+  await writeFile(paths.config, "default: { groupMessage: true }\n");
+  expect(await notice(input, AbortSignal.abort())).toBeUndefined();
+  expect(reads).toBe(0);
+  expect(await notice(input)).toBeUndefined();
+  expect(reads).toBe(1);
+  expect(await notice({ ...input, readParts: async () => { throw new Error("media unavailable"); } })).toBeUndefined();
+  expect(await notice({ ...input, readParts: async () => [] })).toBeUndefined();
+  expect(await notice({
+    ...input, readParts: async () => { connection.abort(); return ["已经终止"]; },
+  }, connection.signal)).toBeUndefined();
+  expect(groupLookups).toBe(0);
+});

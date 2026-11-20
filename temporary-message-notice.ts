@@ -1,4 +1,4 @@
-import { formatNoticeBodyText } from "./friend-message-notice.ts";
+import { formatNoticeBodyText } from "./message-notice-content.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
 export type TemporaryMessageNoticePart = string | { readonly type: "image"; readonly file: string };

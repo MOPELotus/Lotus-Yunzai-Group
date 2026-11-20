@@ -1,4 +1,4 @@
-import { formatNoticeBodyText } from "./friend-message-notice.ts";
+import { formatNoticeBodyText } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import type { PrivateNoticeOptions } from "./private-notice-config.ts";
 import { createRecallRetention, formatRecallTime, positiveRecallId } from "./recall-notice.ts";

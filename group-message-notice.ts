@@ -1,4 +1,4 @@
-import { formatNoticeBodyText } from "./friend-message-notice.ts";
+import { formatNoticeBodyText, readMessageNoticeParts, type MessageNoticePart, type ReadMessageNoticeParts } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
@@ -6,11 +6,12 @@ export interface GroupMessageNoticeInput {
   readonly botId: number;
   readonly groupId: number;
   readonly userId: number;
-  readonly text: string;
+  readonly text?: string;
+  readonly readParts?: ReadMessageNoticeParts;
   readonly nickname?: string;
   readonly describeGroup?: () => Promise<string | undefined>;
 }
-export type GroupMessageNoticePart = string | { readonly type: "image"; readonly file: string };
+export type GroupMessageNoticePart = MessageNoticePart;
 export type GroupMessageNotice = (message: GroupMessageNoticeInput, signal?: AbortSignal) =>
   Promise<readonly GroupMessageNoticePart[] | undefined>;
 
@@ -22,10 +23,12 @@ function positiveId(value: number): boolean {
 
 export function createGroupMessageNotice(options: PrivateNoticeOptions): GroupMessageNotice {
   const isEnabled = createPrivateNoticeSettings(options, "groupMessage");
-  return async ({ botId, groupId, userId, text, nickname, describeGroup }, signal) => {
-    if (!positiveId(botId) || !positiveId(groupId) || !positiveId(userId) || botId === userId || typeof text !== "string") return;
-    const content = formatNoticeBodyText(text);
-    if (!content.trim() || !await isEnabled(botId, signal, groupId) || options.signal?.aborted || signal?.aborted) return;
+  return async ({ botId, groupId, userId, text, readParts, nickname, describeGroup }, signal) => {
+    if (!positiveId(botId) || !positiveId(groupId) || !positiveId(userId) || botId === userId) return;
+    const textOnly = !readParts && typeof text === "string" ? formatNoticeBodyText(text) : "";
+    if ((!readParts && !textOnly.trim()) || !await isEnabled(botId, signal, groupId) || options.signal?.aborted || signal?.aborted) return;
+    const content = readParts ? await readMessageNoticeParts(readParts) : [textOnly];
+    if (!content || options.signal?.aborted || signal?.aborted) return;
 
     let groupName: string | undefined;
     if (describeGroup) {
@@ -41,7 +44,7 @@ export function createGroupMessageNotice(options: PrivateNoticeOptions): GroupMe
       `发送人账号：${userId}\n`,
       `发送人昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
       "消息内容：",
-      content,
+      ...content,
     ];
   };
 }
