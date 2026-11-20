@@ -14,6 +14,7 @@ import type { GroupMuteContext } from "./group-mute.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
 import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature, groupActivityRankFeature, isGroupActivityCleanupCommand,
   isGroupActivityCommand, isGroupActivityRankCommand, type GroupActivityContext } from "./group-activity.ts";
+import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -22,6 +23,7 @@ export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
 export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch } from "./banned-words.ts";
 export { groupTitleFeature, groupTitleFilterFeature, type GroupTitleContext, type GroupSpecialTitleResult } from "./group-title.ts";
 export { groupActivityFeature, groupActivityRankFeature, type GroupActivityContext, type GroupActivityMember, type GroupActivityVisibility } from "./group-activity.ts";
+export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -37,7 +39,7 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
-  lockFile, registerManagedBlacklist, registerGroupBannedWords,
+  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -49,6 +51,7 @@ export async function createModule({
   readonly lockFile?: Parameters<typeof createManagedBlacklist>[1];
   readonly registerManagedBlacklist?: (policy: GroupManagedBlacklist) => () => void;
   readonly registerGroupBannedWords?: (policy: GroupBannedWords) => () => void;
+  readonly groupTimedMute?: GroupTimedMuteServices;
 }) {
   const updater = createAutoGroupCard({ signal, accounts: ownGroupCardAccounts ?? (() => []) });
   let stopTask: (() => void | Promise<void>) | undefined;
@@ -77,10 +80,12 @@ export async function createModule({
   const moderation = createGroupMute(root, blacklist, signal);
   const title = bannedWords && createGroupTitle(bannedWords.titleStore, signal);
   const activityCleanup = createGroupActivityCleanup(root, signal);
+  const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
     fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext) {
       const normalized = context.normalizedMessage.trim();
+      if (timedMute && isGroupTimedMuteCommand(normalized)) return timedMute.command(context);
       if (isGroupActivityCommand(normalized) || isGroupActivityRankCommand(normalized)) return groupActivityCommand(context, signal);
       if (isGroupActivityCleanupCommand(normalized)) return activityCleanup(context);
       if (title && groupTitleCommandFeature(normalized)) return title(context);
@@ -89,6 +94,7 @@ export async function createModule({
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
+      if (isGroupTimedMuteCommand(message)) return [groupTimedMuteFeature];
       if (isGroupActivityRankCommand(message)) return [groupActivityRankFeature];
       if (isGroupActivityCommand(message) || isGroupActivityCleanupCommand(message)) return [groupActivityFeature];
       const feature = groupTitleCommandFeature(message);
@@ -105,7 +111,7 @@ export async function createModule({
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();
-      await stopTask?.();
+      await Promise.all([stopTask?.(), timedMute?.stop()]);
     },
   };
 }
