@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { groupPendingJoinCommand, isGroupPendingJoinCommand, type GroupPendingJoinContext, type PendingGroupJoins } from "./group-pending-join.ts";
+import { createGroupPendingJoinReview, groupPendingJoinCommand, isGroupPendingJoinCommand, isGroupPendingJoinReviewCommand,
+  type GroupPendingJoinContext, type PendingGroupJoinReviewResult, type PendingGroupJoins } from "./group-pending-join.ts";
 
 const current = { message_type: "group", self_id: 99, group_id: 77, user_id: 42 } satisfies GroupPendingJoinContext;
 const command = "#查看加群申请";
@@ -66,4 +67,67 @@ test("不从私聊、委托、无会话或卸载期间读取和展示同群请�
   expect(await groupPendingJoinCommand(command, { ...scope, groupListPendingJoinRequests: async () => {
     live.abort(); return { complete: true, entries: [{ userId: 510 }] };
   } }, live.signal)).toBeUndefined();
+});
+
+test("旧按 QQ 审核保持同群真消息和单个安全 QQ，清晰回执确认的人", async () => {
+  const handle = createGroupPendingJoinReview();
+  const calls: [number, boolean][] = [];
+  const scope: GroupPendingJoinContext = { ...current, message_id: 1, adapter: "milky",
+    async groupReviewPendingJoin(qq, approve) {
+      calls.push([qq, approve]);
+      return { status: "confirmed", nickname: "花\n\u202e名" };
+    } };
+  for (const input of ["#同意加群申请510", "拒绝入群申请510", "#同意群申请511"]) {
+    expect(isGroupPendingJoinReviewCommand(input)).toBe(true);
+  }
+  for (const input of ["#同意全部加群申请", "#同意", "#拒绝入群 10", "#同意加群申请", "#拒绝好友申请510",
+    "#同意加群申请@510", "#拒绝群申请510 511"]) {
+    expect(isGroupPendingJoinReviewCommand(input)).toBe(false);
+    expect(await handle(input, scope)).toBeUndefined();
+  }
+  expect(await handle("#同意加群申请510", { ...scope, message_type: "private" })).toBeUndefined();
+  expect(await handle("#同意加群申请510", { ...scope, isDelegated: true })).toBeUndefined();
+  expect(await handle("#同意加群申请510", { ...scope, message_id: undefined })).toContain("请引用原加群通知");
+  expect(await handle("#同意加群申请510", { ...scope, group_id: undefined })).toContain("请引用原加群通知");
+  expect(await handle("#同意加群申请0", scope)).toContain("有效的申请人 QQ 号");
+  expect(await handle("#同意加群申请9007199254740993", scope)).toContain("有效的申请人 QQ 号");
+  expect(await handle("#同意加群申请510", scope)).toContain("已同意花 名(510)");
+  expect(await handle("拒绝入群申请511", { ...scope, message_id: 2 })).toContain("已拒绝花 名(511)");
+  expect(calls).toEqual([[510, true], [511, false]]);
+});
+
+test("审核按真实拒绝、未知、身份歧义、风险和过期分别处理", async () => {
+  for (const [status, expected] of [
+    ["rejected", "协议端拒绝"], ["unknown", "结果未确认"], ["unavailable", "请引用原加群通知"],
+    ["not-found", "没找到"], ["ambiguous", "多条待处理"], ["risk", "风险账号"], ["expired", "已过期或已处理"],
+  ] as const) {
+    const handle = createGroupPendingJoinReview();
+    const result = await handle("#拒绝入群申请510", { ...current, message_id: 1,
+      groupReviewPendingJoin: async () => ({ status, nickname: "无需展示" }) });
+    expect(result).toContain(expected);
+    expect(result).not.toContain("已拒绝");
+    expect(result).not.toContain("无需展示");
+  }
+});
+
+test("原消息并发和回执未知不重复提交，同号不同群或协议各自独立", async () => {
+  const handle = createGroupPendingJoinReview();
+  const command = "#同意群申请510";
+  let resolve!: (value: PendingGroupJoinReviewResult) => void;
+  const pending = new Promise<PendingGroupJoinReviewResult>((settle) => { resolve = settle; });
+  let calls = 0;
+  const scope: GroupPendingJoinContext = { ...current, message_id: -10, groupReviewPendingJoin() { calls++; return pending; } };
+  const first = handle(command, scope);
+  expect(await handle(command, { ...scope, adapter: "onebot" })).toEqual([]);
+  resolve({ status: "unknown" });
+  expect(await first).toContain("结果未确认");
+  expect(await handle(command, scope)).toEqual([]);
+  expect(await handle(command, { ...scope, adapter: "milky" })).toContain("结果未确认");
+  expect(await handle(command, { ...scope, group_id: 88 })).toContain("结果未确认");
+  expect(calls).toBe(3);
+
+  const controller = new AbortController();
+  controller.abort();
+  expect(await createGroupPendingJoinReview(controller.signal)(command, scope)).toBeUndefined();
+  expect(calls).toBe(3);
 });
