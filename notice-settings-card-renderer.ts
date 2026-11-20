@@ -165,7 +165,7 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
     ctx.shadowOffsetY = 1;
     ctx.shadowColor = "#000";
     ctx.shadowBlur = 3;
-    text(ctx, "#椰奶通知设置", 35, 47, `16px ${theme.body}`, "#fff");
+    text(ctx, "#通知设置", 35, 47, `16px ${theme.body}`, "#fff");
     text(ctx, "Lotus-Yunzai 管理面板", 35, 80, `36px ${theme.title}`, "#fff", 700);
     ctx.restore();
 

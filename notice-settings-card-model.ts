@@ -85,16 +85,16 @@ export function buildNoticeSettingsCard(config: Record<string, unknown>, botId: 
   const groups: NoticeSettingsCardGroup[] = [];
   for (const { title, rows } of eventGroups) {
     groups.push({ title, rows: rows.map(([field, command, description, label]) => ({
-      label: label ?? command, hint: `#椰奶通知设置${command} + 开启/关闭`, description,
+      label: label ?? command, hint: `#通知设置${command} + 开启/关闭`, description,
       ...booleanValue(configuredPrivateNotice(defaults, botId, field)),
     })) });
   }
   groups.push({
     title: "系统设置", rows: [
-      { label: "通知全部主人", hint: "#椰奶通知设置全部通知 + 开启/关闭",
+      { label: "通知全部主人", hint: "#通知设置全部通知 + 开启/关闭",
         value: recipientValue(configuredOwnerNoticeRecipients(defaults, botId)),
         description: "开启通知全部主人，关闭只通知配置中的首位主人" },
-      { label: "删除缓存时间", hint: "#椰奶通知设置删除缓存时间 + 时间(秒)",
+      { label: "删除缓存时间", hint: "#通知设置删除缓存时间 + 时间(秒)",
         value: retentionValue(privateNoticeSetting(defaults, botId, "msgSaveDeltime")),
         description: "好友和群撤回消息的缓存保留时间" },
     ],
