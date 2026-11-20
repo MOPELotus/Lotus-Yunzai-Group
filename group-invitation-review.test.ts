@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { createGroupInvitationReview, isGroupInvitationReviewCommand, type GroupInvitationReviewContext,
   type PendingGroupInvitationReviewResult } from "./group-invitation-review.ts";
 
+import { createGroupRequestReview, type GroupRequestEvent } from "./request-review.ts";
+
 const owner = {
   message_type: "private", adapter: "milky", self_id: 99, user_id: 42, message_id: 1, isBotMaster: (id: number) => id === 42,
 } satisfies GroupInvitationReviewContext;
@@ -71,4 +73,57 @@ test("同一原消息在途和未知均不重复提交，账号与协议独立",
   expect(await handle(command, { ...scope, adapter: undefined })).toContain("结果未确认");
   expect(await handle(command, { ...scope, self_id: 98 })).toContain("结果未确认");
   expect(calls).toBe(3);
+});
+
+test("按群号审核确认后只摘除当前 Milky 账号的真实邀请，已完成重放不会复活", async () => {
+  const queue = createGroupRequestReview();
+  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const event: GroupRequestEvent = { self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag: "exact-opaque" };
+  const scope = { ...owner, isMaster: true, groupRequestScope: "milky", canReviewGroupRequests: true } as const;
+  const list = () => queue.commands["#入群申请"]("", scope);
+
+  await queue.receive(event);
+  await queue.receive({ ...event, flag: "other-opaque", user_id: 52 });
+  await queue.receive({ ...event, sub_type: "add", user_id: 53 });
+  await queue.receive({ ...event, self_id: 98, user_id: 54 });
+  await queue.receive({ ...event, groupRequestScope: undefined, user_id: 55 });
+  expect(list()).toContain("邀请者 51");
+
+  expect(await handle("#拒绝群邀请77", { ...owner, reviewPendingGroupInvitation: async () => ({
+    status: "confirmed", resolvedFlag: "exact-opaque",
+  }) })).toBe("✅ 已拒绝群 77 的邀请");
+  expect(list()).not.toContain("邀请者 51");
+  expect(list()).not.toContain("exact-opaque");
+  expect(list()).toContain("邀请者 52");
+  expect(list()).toContain("申请人 53");
+  expect(queue.commands["#入群申请"]("", { ...scope, self_id: 98 })).toContain("邀请者 54");
+  expect(queue.commands["#入群申请"]("", { ...scope, groupRequestScope: undefined })).toContain("邀请者 55");
+
+  await queue.receive(event);
+  expect(list()).not.toContain("邀请者 51");
+});
+
+test("已确认的延后邀请不入队，非 Milky 或未知和失败不清现有队列", async () => {
+  const queue = createGroupRequestReview();
+  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const event: GroupRequestEvent = { self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag: "exact-opaque" };
+  const scope = { ...owner, isMaster: true, groupRequestScope: "milky", canReviewGroupRequests: true } as const;
+  const list = () => queue.commands["#入群申请"]("", scope);
+
+  await queue.receive(event);
+  for (const [adapter, status, message_id] of [
+    ["milky", "unknown", 1], ["milky", "rejected", 2], [undefined, "confirmed", 3],
+  ] as const) {
+    await handle(command, { ...owner, adapter, message_id, reviewPendingGroupInvitation: async () => ({
+      status, resolvedFlag: "exact-opaque",
+    }) });
+    expect(list()).toContain("邀请者 51");
+  }
+
+  await handle(command, { ...owner, message_id: 4, reviewPendingGroupInvitation: async () => ({
+    status: "confirmed", resolvedFlag: "late-opaque",
+  }) });
+  await queue.receive({ ...event, flag: "late-opaque", user_id: 52 });
+  expect(list()).not.toContain("邀请者 52");
+  expect(list()).toContain("邀请者 51");
 });

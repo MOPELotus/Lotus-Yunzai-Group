@@ -71,10 +71,32 @@ function belongsTo(request: PendingRequest, context: CommandContext): boolean {
   return request.botId === context.self_id && request.scope === context.groupRequestScope;
 }
 
+function requestKey(scope: GroupRequestScope | undefined, bot: number, kind: GroupRequestKind, flag: string): string {
+  return createHash("sha256").update(JSON.stringify([scope, bot, kind, flag])).digest("hex");
+}
+
 export function createGroupRequestReview() {
   const pending = new Map<string, PendingRequest>();
   const known = new Set<string>();
   const completed = new Set<string>();
+
+  function rememberCompleted(key: string) {
+    known.delete(key);
+    completed.add(key);
+    if (completed.size > maxCompleted) completed.delete(completed.values().next().value!);
+  }
+
+  function completeMilkyInvitation(botId: number, flag: string) {
+    if (!isId(botId) || typeof flag !== "string" || !flag) return;
+    const key = requestKey("milky", botId, "invite", flag);
+    for (const [id, request] of pending) {
+      if (request.eventKey === key) {
+        pending.delete(id);
+        break;
+      }
+    }
+    rememberCompleted(key);
+  }
 
   async function receive(event: GroupRequestEvent): Promise<void> {
     const { self_id, user_id, inviter_id, group_id, groupRequestScope, sub_type, flag } = event;
@@ -82,7 +104,7 @@ export function createGroupRequestReview() {
         (sub_type !== "add" && sub_type !== "invite") || typeof flag !== "string" || !flag ||
         (groupRequestScope !== undefined && groupRequestScope !== "milky") ||
         pending.size >= maxPending) return;
-    const eventKey = createHash("sha256").update(JSON.stringify([groupRequestScope, self_id, sub_type, flag])).digest("hex");
+    const eventKey = requestKey(groupRequestScope, self_id, sub_type, flag);
     if (known.has(eventKey) || completed.has(eventKey)) return;
 
     let id;
@@ -140,9 +162,7 @@ export function createGroupRequestReview() {
         return "协议端没有接受这次操作，群请求仍待审核。";
       }
       pending.delete(id);
-      known.delete(request.eventKey);
-      completed.add(request.eventKey);
-      if (completed.size > maxCompleted) completed.delete(completed.values().next().value!);
+      rememberCompleted(request.eventKey);
       return allow ? "已同意群请求。" : "已拒绝群请求。";
     } catch {
       return "群请求处理结果未确认。请先在 QQ 核对，再决定是否重试。";
@@ -153,6 +173,7 @@ export function createGroupRequestReview() {
 
   return {
     receive,
+    completeMilkyInvitation,
     commands: {
       "#入群申请": list,
       "#同意入群": (argument: string, context: CommandContext) => review(argument, context, true),

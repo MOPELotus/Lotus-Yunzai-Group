@@ -1,7 +1,9 @@
 import type { GroupInvitationListContext } from "./group-invitation-list.ts";
+import { groupRequestReview } from "./request-review.ts";
 
 export interface PendingGroupInvitationReviewResult {
   readonly status: "confirmed" | "rejected" | "unknown" | "unavailable" | "not-found" | "ambiguous";
+  readonly resolvedFlag?: string;
 }
 
 export interface GroupInvitationReviewContext extends Pick<GroupInvitationListContext,
@@ -36,7 +38,7 @@ function receipt(result: PendingGroupInvitationReviewResult, groupId: number, ve
   }
 }
 
-export function createGroupInvitationReview(signal?: AbortSignal) {
+export function createGroupInvitationReview(signal?: AbortSignal, completeInvitation = groupRequestReview.completeMilkyInvitation) {
   const inFlight = new Set<string>();
   const seen = new Set<string>();
 
@@ -57,6 +59,9 @@ export function createGroupInvitationReview(signal?: AbortSignal) {
     const verb = match[1] === "同意" ? "同意" : "拒绝";
     try {
       const result = await reviewPendingGroupInvitation(groupId, verb === "同意");
+      if (adapter === "milky" && result.status === "confirmed" && result.resolvedFlag) {
+        completeInvitation(self_id, result.resolvedFlag);
+      }
       if (!signal?.aborted && isBotMaster(user_id)) return receipt(result, groupId, verb);
     } catch {
       if (!signal?.aborted && isBotMaster(user_id)) return unknown;
