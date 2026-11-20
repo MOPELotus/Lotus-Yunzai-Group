@@ -351,3 +351,41 @@ test("群精华区分错误引用、拒绝、不可用与未知，未知原消�
   expect(await command("#加精", { ...bound, message_id: 57, async groupSetQuotedEssence() { return "rejected"; } })).toContain("协议端拒绝");
   expect(await command("#加精", { ...bound, message_id: 58, async groupSetQuotedEssence() { return "unavailable"; } })).toContain("权限");
 });
+
+test("旧自助禁言支持默认五分钟、中文和旧单位，只针对原发言者回调", async () => {
+  const { command, context, calls } = await fixture();
+  const durations: unknown[][] = [];
+  const scope = { ...context, async groupMuteSelf(...args: [number]) {
+    durations.push(args);
+    return "confirmed" as const;
+  } };
+  for (const [index, message] of ["我要自闭", "#我要禅定三小时", "我要自闭两个小时", "我要禅定day", "我要禅定1000毫秒"].entries()) {
+    expect(await command(message, { ...scope, message_id: 100 + index, message: [at(9999)] }))
+      .toEqual({ type: "quoted", message: "那我就不手下留情了~" });
+  }
+  expect(durations).toEqual([[300], [10800], [7200], [432000], [1]]);
+  expect(await command("我要自闭零秒", { ...scope, message_id: 200 })).toContain("有效的自助禁言时长");
+  expect(await command("我要自闭1毫秒", { ...scope, message_id: 201 })).toContain("有效的自助禁言时长");
+  expect(await command("我要禅定2147483648秒", { ...scope, message_id: 202 })).toContain("有效的自助禁言时长");
+  expect(await command("#我要禅定 -5秒", { ...scope, message_id: 203 })).toBeUndefined();
+  expect(await command("我要禅定", { ...scope, message_id: 204, isDelegated: true })).toContain("无法使用");
+  expect(await command("我要禅定", { ...scope, message_id: 205, message_type: "private" })).toBeUndefined();
+  expect(await command("我要禅定", scope)).toEqual([]);
+  expect(await command("我要禅定", { ...scope, message_id: 206, isBotMaster: () => true })).toEqual({ type: "quoted", message: "别自闭啦~~" });
+  expect(durations).toHaveLength(5);
+  expect(calls).toEqual([]);
+  expect(groupModerationFeature({ normalizedMessage: "我要自闭三分" })).toEqual(["[group] 自助禁言"]);
+});
+
+test("自助禁言只有确认成功可发送原回执，保护、拒绝和未知各自反馈", async () => {
+  const { command, context } = await fixture();
+  let submissions = 0;
+  const scope = { ...context, message_id: 11, async groupMuteSelf() { submissions++; throw new Error("未确认"); } };
+  expect(await command("#我要禅定", scope)).toContain("结果未确认");
+  expect(await command("我要禅定", scope)).toEqual([]);
+  expect(submissions).toBe(1);
+  expect(await command("我要自闭", { ...scope, message_id: 12, async groupMuteSelf() { return "protected"; } }))
+    .toEqual({ type: "quoted", message: "别自闭啦~~" });
+  expect(await command("我要自闭", { ...scope, message_id: 13, async groupMuteSelf() { return "rejected"; } })).toContain("协议端拒绝");
+  expect(await command("我要自闭", { ...scope, message_id: 14, async groupMuteSelf() { return "unavailable"; } })).toContain("无法使用");
+});

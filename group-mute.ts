@@ -12,7 +12,8 @@ export interface GroupMuteRosterEntry {
   readonly until: number;
 }
 type RosterPart = string | { readonly type: "image"; readonly file: string };
-type GroupMuteReply = string | readonly [] | { readonly type: "forward"; readonly nodes: readonly (readonly RosterPart[])[] };
+type GroupMuteReply = string | readonly [] | { readonly type: "quoted"; readonly message: string } |
+  { readonly type: "forward"; readonly nodes: readonly (readonly RosterPart[])[] };
 
 export interface GroupMuteContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -27,6 +28,7 @@ export interface GroupMuteContext {
   readonly normalizedMessage?: string;
   readonly isBotMaster: (userId: number) => boolean;
   readonly groupMute?: (userId: number, seconds: number) => Promise<GroupMuteResult>;
+  readonly groupMuteSelf?: (seconds: number) => Promise<GroupMuteResult>;
   readonly groupMuteRoster?: () => Promise<readonly GroupMuteRosterEntry[] | undefined>;
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
   readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
@@ -37,6 +39,7 @@ export interface GroupMuteContext {
 }
 
 export const groupMuteFeature = "[group] 群禁言";
+export const groupMuteSelfFeature = "[group] 自助禁言";
 export const groupMuteRosterFeature = "[group] 群禁言列表";
 export const groupKickFeature = "[group] 群成员移出";
 export const groupSetAdminFeature = "[group] 群管理员";
@@ -58,6 +61,7 @@ export const groupTimeUnits: ReadonlyMap<string, number> = new Map(Object.entrie
   年: 31536000, Y: 31536000, YEAR: 31536000,
 }));
 const compactMuteUnit = new RegExp(`^#禁言(?=(?:${[...groupTimeUnits.keys()].join("|")})$)`, "iu");
+const selfMutePattern = new RegExp(String.raw`^#?我要(?:自闭|禅定)([零一壹二两三四五六七八九十百千万亿\d]+)?个?(${[...groupTimeUnits.keys()].join("|")})?$`, "iu");
 const commandPattern = /^#(?:禁言|解禁)(?=$|[\s\d零一壹二两三四五六七八九十百千万亿])/u;
 const wholeMutePattern = /^#全[体员](禁言|解禁)$/u;
 const rosterPattern = /^#(?:(?:获取|查看)?禁言列表|解除全部禁言)$/u;
@@ -75,6 +79,7 @@ export function groupModerationFeature({ normalizedMessage }: { readonly normali
   if (rosterPattern.test(message)) return [groupMuteRosterFeature];
   if (adminPattern.test(message)) return [groupSetAdminFeature];
   if (essencePattern.test(message)) return [groupEssenceFeature];
+  if (selfMutePattern.test(message)) return [groupMuteSelfFeature];
   return [kickPattern.test(message) ? groupKickFeature : groupMuteFeature];
 }
 
@@ -223,10 +228,11 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     const kick = kickPattern.exec(command);
     const admin = adminPattern.exec(command);
     const essence = essencePattern.exec(command);
+    const selfMute = selfMutePattern.exec(command);
     const editList = listPattern.exec(command);
     const toggle = autoUnmutePattern.exec(command);
-    if (!whole && !roster && !kick && !admin && !essence && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
-    const { groupMute, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, groupSetQuotedEssence, user_id, self_id, group_id } = context;
+    if (!whole && !roster && !kick && !admin && !essence && !selfMute && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
+    const { groupMute, groupMuteSelf, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, groupSetQuotedEssence, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
     const list = editList?.[2] === "白" || toggle ? "白名单" : "黑名单";
     const listPermission = toggle ? "当前会话没有设置白名单自动解禁的权限。" : `当前会话没有编辑群管${list}的权限。`;
@@ -234,7 +240,26 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
       if (editList || toggle) return listPermission;
       if (admin) return "当前会话没有设置群管理员的权限。";
       if (essence) return "当前会话没有设置群精华的权限。";
+      if (selfMute) return "当前会话无法使用自助禁言。";
       return kick ? "当前会话没有移出群成员的权限。" : "当前会话没有群禁言权限。";
+    }
+    if (selfMute) {
+      if (issuer === bot || context.isBotMaster(issuer)) return { type: "quoted", message: "别自闭啦~~" };
+      const amount = selfMute[1] === undefined ? 5 : parseGroupInteger(selfMute[1]);
+      const multiplier = groupTimeUnits.get((selfMute[2] ?? "分").toUpperCase());
+      const seconds = amount !== undefined && multiplier !== undefined ? amount * multiplier : 0;
+      if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > maxGroupMuteSeconds) return "请输入有效的自助禁言时长（正整数秒）。";
+      if (!groupMuteSelf) return "当前会话无法使用自助禁言。";
+      if (!claim(context, bot, issuer, true)) return [];
+      let result: GroupMuteResult;
+      try { result = await groupMuteSelf(seconds); } catch { result = "unknown"; }
+      switch (result) {
+        case "confirmed": return { type: "quoted", message: "那我就不手下留情了~" };
+        case "protected": return { type: "quoted", message: "别自闭啦~~" };
+        case "rejected": return "协议端拒绝自助禁言。";
+        case "unavailable": return "当前会话无法使用自助禁言。";
+        default: return "自助禁言结果未确认，请在群内核对。";
+      }
     }
     if (essence) {
       const enabled = essence[1] !== "移";
