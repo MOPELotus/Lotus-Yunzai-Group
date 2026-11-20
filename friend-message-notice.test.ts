@@ -89,3 +89,46 @@ test("只有真实可引用且本次允许提示时才展示引用回复与直�
   expect((await notice({ ...message, canQuote: true, showHint: false }))?.join("")).not.toContain("引用该消息");
   expect((await notice({ ...message, canQuote: false, showHint: true }))?.join("")).not.toContain("引用该消息");
 });
+
+test("已认证的正文图文、原 QQ 表情及纯图片按原顺序保留", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { privateMessage: true }\n");
+  const notice = createFriendMessageNotice(paths);
+  const image = { type: "image", file: new Uint8Array([1, 2, 3]) } as const;
+  const face = { type: "face", data: { id: "009", is_large: false } } as const;
+  const body = await notice({ ...message, text: "不能替代结构化正文", showHint: true, canQuote: true,
+    readParts: async () => ["前文\r\n", image, " 图后文字\u0000 ", face, "末尾"] });
+  expect(body?.slice(5, -1)).toEqual(["前文\n", image, " 图后文字 ", face, "末尾"]);
+  expect(body?.at(-1)).toContain("引用该消息");
+  expect(body?.[0]).toEqual({ type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=42" });
+
+  expect((await notice({ botId: 99, userId: 42, readParts: async () => [image] }))?.slice(5)).toEqual([image]);
+  expect((await notice({ ...message, text: "", readParts: async () => [{ type: "face", data: { id: 0 } }] }))?.slice(5))
+    .toEqual([{ type: "face", data: { id: 0 } }]);
+});
+
+test("配置未生效和已中止时不读媒体，无法完整验证时不回退纯文本也不请求提示", async () => {
+  const paths = await fixture();
+  const notice = createFriendMessageNotice(paths);
+  let reads = 0;
+  let hints = 0;
+  const enabledInput = { ...message, async showHint() { hints++; return true; } };
+  const readParts = async () => { reads++; return ["有效正文"]; };
+  expect(await notice({ ...enabledInput, readParts })).toBeUndefined();
+  expect(reads).toBe(0);
+  await writeFile(paths.config, "default: { privateMessage: true }\n");
+  expect(await notice({ ...enabledInput, readParts }, AbortSignal.abort())).toBeUndefined();
+  expect(reads).toBe(0);
+  for (const content of [
+    undefined, [], [" \u0000"], ["正文", { type: "image", file: new Uint8Array() }],
+    ["正文", { type: "image", file: "https://q1.qlogo.cn/example" }], ["正文", { type: "face", data: { id: -1 } }],
+  ] as const) {
+    expect(await notice({ ...enabledInput, readParts: async () => content })).toBeUndefined();
+  }
+  expect(await notice({ ...enabledInput, readParts: async () => { throw new Error("媒体不可读"); } })).toBeUndefined();
+  const controller = new AbortController();
+  expect(await notice({ ...enabledInput, readParts: async () => { controller.abort(); return ["有内容"]; } }, controller.signal)).toBeUndefined();
+  expect(hints).toBe(0);
+  expect(await notice({ ...enabledInput, readParts })).toBeDefined();
+  expect([reads, hints]).toEqual([1, 1]);
+});
