@@ -169,3 +169,26 @@ test("Milky 群邀请优先发可追踪主人通知并保留编号，其他请�
   expect(messages[1]).not.toContain("引用此通知");
   expect(legacyCalls).toBe(1);
 });
+
+test("入群申请主人详情只送一次，沿用同一编号，邀请与原编号内容不变", async () => {
+  const queue = createGroupRequestReview();
+  const joined: [string, string][] = [];
+  const prior: string[] = [];
+  const notifyJoinRequestOwners = async (ordinaryMessage: string, actions: string) => { joined.push([ordinaryMessage, actions]); return 1; };
+  const notifyRequestOwners = async (message: string) => { prior.push(message); return 1; };
+  const application = { ...request, notifyJoinRequestOwners, notifyRequestOwners };
+  await Promise.all([queue.receive(application), queue.receive(application)]);
+  expect(joined).toHaveLength(1);
+  expect(prior).toEqual([]);
+  const [ordinary, actions] = joined[0]!;
+  const id = visibleId(ordinary);
+  expect(actions).toBe(`#同意入群 ${id}\n#拒绝入群 ${id} [原因]`);
+  expect(ordinary).toBe(`【待审核群请求】\n${id} · 成员申请入群 · 群 30 · 申请人 42\n${actions}`);
+  expect(queue.commands["#入群申请"]("", owner)).toContain(id);
+
+  await queue.receive({ ...application, groupRequestScope: "milky", sub_type: "invite", flag: "invite" });
+  expect(joined).toHaveLength(1);
+  expect(prior).toHaveLength(1);
+  const invitationId = visibleId(prior[0]!);
+  expect(prior[0]).toBe(`【待审核群请求】\n${invitationId} · 邀请机器人加入群聊 · 群 30 · 邀请者 42\n#同意入群 ${invitationId}\n#拒绝入群 ${invitationId} [原因]\n也可引用此通知回复「同意」或「拒绝」。`);
+});

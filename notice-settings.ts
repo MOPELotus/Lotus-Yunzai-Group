@@ -25,6 +25,7 @@ const fields = {
   群撤回: { key: "groupRecall", specific: "group", note: "（当前仅文本）" },
   好友撤回: { key: "PrivateRecall", specific: "bot", note: "（当前仅文本）" },
   好友申请: { key: "friendRequest", specific: "bot", note: "" },
+  加群申请: { key: "addGroupApplication", specific: "group", note: "（主人编号通知详情）" },
   好友列表变动: { key: "friendNumberChange", specific: "bot", note: "（当前仅 NapCat 新增）" },
   群管理变动: { key: "groupAdminChange", specific: "group", note: "" },
   群成员变动: { key: "groupMemberNumberChange", specific: "group", note: "" },

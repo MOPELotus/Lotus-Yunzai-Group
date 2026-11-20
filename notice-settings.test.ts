@@ -206,3 +206,14 @@ test("群聊列表变动设置含机器人入退群限定，并沿用旧群覆�
   expect(await command("#椰奶通知设置群聊列表变动bot群单独取消", groupOwner)).toContain("群聊列表变动：开启");
   expect(await readFile(legacy, "utf8")).toContain("groupMemberNumberChange: true");
 });
+
+test("加群申请设置仅管理主人编号通知详情及旧群覆盖", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { addGroupApplication: false, groupInviteRequest: true }\n");
+  expect(await command(overview, groupOwner)).toContain("加群申请：关闭（主人编号通知详情）");
+  expect(await command("#椰奶通知设置加群申请bot单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置加群申请群单独开启", groupOwner)).toContain("加群申请：开启");
+  expect(await command("#椰奶通知设置加群申请bot群单独关闭", groupOwner)).toContain("加群申请：关闭");
+  expect(await command("#椰奶通知设置加群申请bot群单独取消", groupOwner)).toContain("加群申请：开启");
+  expect(await readFile(legacy, "utf8")).toContain("groupInviteRequest: true");
+});
