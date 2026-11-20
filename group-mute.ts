@@ -31,7 +31,7 @@ export interface GroupMuteContext {
   readonly groupMuteSelf?: (seconds: number) => Promise<GroupMuteResult>;
   readonly groupMuteRoster?: () => Promise<readonly GroupMuteRosterEntry[] | undefined>;
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
-  readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
+  readonly groupKick?: (userId: number, block: boolean, onConfirmedName?: (name: string) => void) => Promise<GroupKickResult>;
   readonly groupSetAdmin?: (userId: number, enabled: boolean) => Promise<GroupSetAdminResult>;
   readonly groupSetQuotedEssence?: (enabled: boolean) => Promise<GroupEssenceResult>;
   readonly groupManageBlacklist?: () => Promise<boolean>;
@@ -151,6 +151,18 @@ function targets(message: string, group: GroupMuteContext, botId: number) {
   }
   const seconds = releasing ? (args ? undefined : 0) : parseGroupMuteDuration(args);
   if (seconds !== undefined && ids.every((id) => id !== botId)) return { ids, seconds };
+}
+
+export function groupModerationName(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return;
+  const name = value.slice(0, 256).replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").trim();
+  return name && Array.from(name).slice(0, 80).join("");
+}
+
+export function formatGroupModerationMember(userId: number, value: string | undefined): string {
+  const id = String(userId);
+  const name = groupModerationName(value);
+  return name && name !== id ? `${name}（${id}）` : id;
 }
 
 function kickTargets(context: GroupMuteContext, bot: number, numeric: string | undefined, allowBot = false): number[] | undefined {
@@ -357,6 +369,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     let perform: (id: number) => Promise<GroupMuteResult>;
     let operation: string;
     let checkWhitelist: boolean;
+    const kickNames = kick ? new Map<number, string>() : undefined;
     if (admin) {
       if (!groupSetAdmin || !issuerMaster) return "当前会话没有设置群管理员的权限。";
       const numeric = admin[2];
@@ -373,7 +386,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
       if (!selected) return "请 @ 要移出的群成员，或直接在指令后填写一个 QQ 号。";
       ids = selected;
       const block = kick[1] === "黑";
-      perform = (id) => groupKick(id, block);
+      perform = (id) => groupKick(id, block, (name) => kickNames?.set(id, name));
       operation = block ? "踢出群聊，协议端已确认踢黑请求" : "踢出群聊";
       checkWhitelist = true;
     } else {
@@ -418,8 +431,9 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
         persistence = `协议已确认踢黑，未能将 ${confirmed.join("、")} 保存到跨群群管黑名单。`;
       }
     }
+    const confirmedLabels = confirmed?.map(id => formatGroupModerationMember(id, kickNames?.get(id))).join("、");
     return [
-      confirmed && (admin?.[1] === "取消" ? `已取消 ${confirmed.join("、")} 的群管理员权限。` : `已将 ${confirmed.join("、")} ${operation}。`),
+      confirmedLabels && (admin?.[1] === "取消" ? `已取消 ${confirmedLabels} 的群管理员权限。` : `已将 ${confirmedLabels} ${operation}。`),
       persistence,
       rejected && `协议端拒绝操作 ${rejected.join("、")}。`,
       unknown && `${unknown.join("、")} 的操作结果未确认，请在群内核对。`,

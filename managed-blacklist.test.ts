@@ -146,11 +146,14 @@ test("群管加删黑名单要求本群原会话，提交前复核权限", async
 test("只持久化确认踢黑的成员，已完成的协议动作与写入失败分别回执", async () => {
   const { active, command, primary } = await fixture();
   const scope = { message_type: "group" as const, self_id: 99, user_id: 42, group_id: 77, message_id: 1,
-    isBotMaster: () => false, async groupKick(id: number, block: boolean) {
+    isBotMaster: () => false, async groupKick(id: number, block: boolean, onConfirmedName?: (name: string) => void) {
       expect(block).toBe(true);
-      return id === 44 ? "unknown" as const : "confirmed" as const;
+      if (id === 44) return "unknown" as const;
+      onConfirmedName?.("仅回执展示");
+      return "confirmed" as const;
     } };
   const reply = await command("#踢黑", { ...scope, message: [{ type: "at", qq: 43 }, { type: "at", qq: 44 }] });
+  expect(reply).toContain("已将 仅回执展示（43） 踢出群聊");
   expect(reply).toContain("43 已列入跨群群管黑名单");
   expect(reply).toContain("44 的操作结果未确认");
   expect(await active.blocked(43)).toBe(true);

@@ -1,4 +1,5 @@
-import { groupTimeUnits, parseGroupMuteDuration, type GroupMuteContext, type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
+import { formatGroupModerationMember, groupModerationName, groupTimeUnits, parseGroupMuteDuration,
+  type GroupMuteContext, type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 
 export interface PrivateGroupMuteResult {
   readonly status: GroupMuteResult;
@@ -41,11 +42,6 @@ function legalMessageId(value: unknown): value is number | string {
     typeof value === "string" && value.length > 0 && value.length <= 128;
 }
 
-function displayName(value: string | undefined): string | undefined {
-  const name = value?.slice(0, 256).replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").trim();
-  return name && Array.from(name).slice(0, 80).join("");
-}
-
 export function createPrivateGroupMute(signal?: AbortSignal) {
   const inFlight = new Set<string>();
   const seen = new Set<string>();
@@ -85,7 +81,7 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
         const { status, groupName } = await privateGroupWholeMute(groupId, whole[1] === "禁言");
         switch (status) {
           case "confirmed": {
-            const name = displayName(groupName);
+            const name = groupModerationName(groupName);
             return `✅ 已将群「${name && name !== String(groupId) ? `${name}(${groupId})` : groupId}」${action}`;
           }
           case "rejected": return `协议端拒绝了群 ${groupId} 的${action}操作。`;
@@ -97,9 +93,8 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
       const result = kick ? await privateGroupKick?.(groupId, target) : await privateGroupMute?.(groupId, target, seconds);
       switch (result?.status) {
         case "confirmed": {
-          if (kick) return `✅ 已将「${target}」踢出群聊（群 ${groupId}）`;
-          const name = displayName(result.memberName);
-          const identity = name && name !== String(target) ? `${name}（${target}）` : String(target);
+          const identity = formatGroupModerationMember(target, result.memberName);
+          if (kick) return `✅ 已将「${identity}」踢出群聊（群 ${groupId}）`;
           return seconds === 0 ? `✅ 已将群 ${groupId} 的「${identity}」解除禁言` :
             `✅ 已将群 ${groupId} 的「${identity}」禁言 ${seconds} 秒`;
         }

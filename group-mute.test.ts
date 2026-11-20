@@ -149,14 +149,15 @@ test("全体禁言仅本群且非委托，原消息在结果未确认时也不�
 test("旧踢人与踢黑入口只操作明确本群成员，精确命令控制协议 block", async () => {
   const { command, calls, context } = await fixture();
   const kicks: [number, boolean][] = [];
-  const scope = { ...context, async groupKick(id: number, block: boolean) {
+  const scope = { ...context, async groupKick(id: number, block: boolean, onConfirmedName?: (name: string) => void) {
     kicks.push([id, block]);
+    onConfirmedName?.(id === 43 ? "  真实名片  " : id === 44 ? "44" : " ");
     return "confirmed" as const;
   } };
-  expect(await command("#踢43", { ...scope, message_id: 10, message: [at(99)] })).toBe("已将 43 踢出群聊。");
+  expect(await command("#踢43", { ...scope, message_id: 10, message: [at(99)] })).toBe("已将 真实名片（43） 踢出群聊。");
   expect(await command("#踢黑", { ...scope, message_id: 11, message: [at(43), at("44"), at(43)] }))
-    .toBe("已将 43、44 踢出群聊，协议端已确认踢黑请求。");
-  expect(await command("#踢黑", { ...scope, message_id: 12, normalizedMessage: "#踢黑45" })).toContain("踢黑请求");
+    .toBe("已将 真实名片（43）、44 踢出群聊，协议端已确认踢黑请求。");
+  expect(await command("#踢黑", { ...scope, message_id: 12, normalizedMessage: "#踢黑45" })).toBe("已将 45 踢出群聊，协议端已确认踢黑请求。");
   expect(await command("#踢黑 45", { ...scope, message_id: 13 })).toBeUndefined();
   expect(await command("#踢黑45", { ...scope, message_id: 14, message: [at(46)] })).toContain("请 @ 要移出的群成员");
   expect(await command("#踢", { ...scope, message_id: 15, message: [at("all"), at(43)] })).toContain("请 @ 要移出的群成员");
@@ -171,8 +172,9 @@ test("踢人尊重旧白名单和宿主回执，无原始消息 ID、重放、�
   const { command, context, whitelist } = await fixture();
   await writeFile(whitelist, 'whiteQQ: ["43"]\n');
   const kicks: [number, boolean][] = [];
-  const scope = { ...context, async groupKick(id: number, block: boolean): Promise<GroupMuteResult> {
+  const scope = { ...context, async groupKick(id: number, block: boolean, onConfirmedName?: (name: string) => void): Promise<GroupMuteResult> {
     kicks.push([id, block]);
+    if (id === 44 || id === 45) onConfirmedName?.("仅确认才展示");
     if (id === 44) throw new Error("timeout");
     if (id === 45) return "rejected";
     return "confirmed";
@@ -186,6 +188,7 @@ test("踢人尊重旧白名单和宿主回执，无原始消息 ID、重放、�
   expect(reply).toContain("无法操作 43");
   expect(reply).toContain("44 的操作结果未确认");
   expect(reply).toContain("协议端拒绝操作 45");
+  expect(reply).not.toContain("仅确认才展示");
   expect(await command("#踢黑", targeted)).toEqual([]);
   expect(await command("#踢43", { ...scope, message_id: 21, isBotMaster: () => true })).toBe("已将 43 踢出群聊。");
   expect(kicks).toEqual([[44, true], [45, true], [43, false]]);

@@ -146,9 +146,9 @@ test("私聊原踢人只用明确群号和 QQ，确认才报成功", async () =>
   const calls: [number, number][] = [];
   const kickContext: PrivateGroupMuteContext = { ...context, adapter: undefined, async privateGroupKick(groupId, userId) {
     calls.push([groupId, userId]);
-    return { status: "confirmed", memberName: "保持原 QQ 展示" };
+    return { status: "confirmed", memberName: userId === 510 ? "  裁剪后的名片  " : "  " };
   } };
-  expect(await handle("#踢77 510", kickContext)).toBe("✅ 已将「510」踢出群聊（群 77）");
+  expect(await handle("#踢77 510", kickContext)).toBe("✅ 已将「裁剪后的名片（510）」踢出群聊（群 77）");
   expect(await handle("#踢 88 610", { ...kickContext, adapter: "milky" })).toContain("已将「610」");
   for (const other of ["#踢黑77 510", "#踢 510", "#踢77 @510", "#踢77 510 611", "#踢77 510 拒绝加群"]) {
     expect(await handle(other, kickContext)).toBeUndefined();
