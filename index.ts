@@ -48,7 +48,7 @@ export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, t
 export { createFriendRequestNotice, friendRequestNoticeFeature, type FriendRequestNotice, type FriendRequestNoticeInput, type FriendRequestNoticeOptions, type FriendRequestNoticePart } from "./friend-request-notice.ts";
 export { friendRequestReviewFeature, type FriendRequestReviewContext, type PendingFriendRequestReviewResult } from "./friend-request-review.ts";
 export { friendRequestListFeature, type FriendRequestListContext, type PendingFriendRequest, type PendingFriendRequests } from "./friend-request-list.ts";
-export { ownerFriendReplyFeature, type OwnerFriendReplyContext, type OwnerFriendReplyResult } from "./owner-friend-reply.ts";
+export { ownerFriendReplyFeature, type OwnerFriendReplyContext, type OwnerFriendReplyBody, type OwnerFriendReplyResult } from "./owner-friend-reply.ts";
 export { requestOverviewFeature } from "./request-overview.ts";
 export { groupInvitationReviewFeature, type GroupInvitationReviewContext, type PendingGroupInvitationReviewResult, type QuotedGroupInvitationReviewResult } from "./group-invitation-review.ts";
 export { groupInvitationListFeature, type GroupInvitationListContext, type PendingGroupInvitation, type PendingGroupInvitations } from "./group-invitation-list.ts";
@@ -93,19 +93,19 @@ const manifest = {
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context);
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
     if (privateInvitationReviewCommand(context, normalized)) return defaultGroupInvitationReview(normalized, context);
-    if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id)) return defaultOwnerFriendReply(normalized, context);
+    if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return defaultOwnerFriendReply(normalized, context);
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return defaultFriendRequestReview(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return groupPendingJoinCommand(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinReviewCommand(normalized)) return defaultPendingJoinReview(normalized, context);
     return privateMuteCommand(context, normalized) ? defaultPrivateMute(message, context) : defaultModeration(message, context);
   },
-  fallbackFeatures(context: Pick<ModerationContext, "message_type" | "reply_id" | "adapter"> & { readonly normalizedMessage: string }) {
+  fallbackFeatures(context: Pick<ModerationContext, "message_type" | "reply_id" | "adapter" | "message"> & { readonly normalizedMessage: string }) {
     const normalized = context.normalizedMessage.trim();
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return [requestOverviewFeature];
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
     if (privateInvitationReviewCommand(context, normalized)) return [groupInvitationReviewFeature];
-    if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id)) return [ownerFriendReplyFeature];
+    if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return [ownerFriendReplyFeature];
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return [friendRequestReviewFeature];
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return [groupPendingJoinFeature];
@@ -190,7 +190,7 @@ export async function createModule({
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
       if (privateInvitationReviewCommand(context, normalized)) return groupInvitationReview(normalized, context);
-      if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id)) return ownerFriendReply(normalized, context);
+      if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return ownerFriendReply(normalized, context);
       if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
       if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return friendRequestReview(normalized, context);
       if (verification && isGroupVerificationCommand(normalized)) return verification.command(normalized, context);
@@ -216,7 +216,7 @@ export async function createModule({
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
       if (privateInvitationReviewCommand(context, message)) return [groupInvitationReviewFeature];
-      if (context.message_type === "private" && isOwnerFriendReplyCommand(message, context.reply_id)) return [ownerFriendReplyFeature];
+      if (context.message_type === "private" && isOwnerFriendReplyCommand(message, context.reply_id, context.message)) return [ownerFriendReplyFeature];
       if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
       if (context.message_type === "private" && isFriendRequestReviewCommand(message)) return [friendRequestReviewFeature];
       if (isGroupVerificationCommand(message)) return [groupVerificationFeature];
