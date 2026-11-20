@@ -64,3 +64,37 @@ test("无有效身份证据、戳一戳或已中止时不生成好友增减通�
   controller.abort();
   expect(await notice(event)).toBeUndefined();
 });
+
+test("只在启用后、事件未带可用昵称时查询，失败保留账号并显示未知", async () => {
+  const paths = await fixture();
+  const notice = createFriendRelationshipNotice(paths);
+  let reads = 0;
+  const readNickname = async () => { reads++; return "网\n名"; };
+  const input = { ...event, nickname: undefined, readNickname };
+  expect(await notice(input)).toBeUndefined();
+  expect(reads).toBe(0);
+  await writeFile(paths.config, "default: { friendNumberChange: true }\n");
+  expect(await notice({ ...input, userId: input.botId })).toBeUndefined();
+  expect(await notice(input, AbortSignal.abort())).toBeUndefined();
+  expect(await notice({ ...event, readNickname })).toContain("好友昵称：朋 友");
+  expect(reads).toBe(0);
+  expect(await notice(input)).toContain("好友昵称：网 名");
+  expect(reads).toBe(1);
+  const unavailable = await notice({ ...input, readNickname: async () => { throw new Error("不可查询"); } });
+  expect(unavailable).toContain("好友账号：42\n");
+  expect(unavailable).toContain("好友昵称：未知");
+});
+
+test("查询昵称期间模块或事件中止，不再产生通知", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { friendNumberChange: true }\n");
+  for (const scope of ["module", "event"]) {
+    const controller = new AbortController();
+    const notice = createFriendRelationshipNotice({ ...paths, signal: scope === "module" ? controller.signal : undefined });
+    const result = await notice({ ...event, nickname: undefined, async readNickname() {
+      controller.abort();
+      return "迟到昵称";
+    } }, scope === "event" ? controller.signal : undefined);
+    expect(result).toBeUndefined();
+  }
+});

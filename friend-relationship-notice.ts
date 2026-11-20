@@ -7,6 +7,7 @@ export interface FriendRelationshipNoticeInput {
   readonly userId: number;
   readonly kind: "increase" | "decrease";
   readonly nickname?: string;
+  readonly readNickname?: () => Promise<string | undefined>;
 }
 export type FriendRelationshipNotice = (event: FriendRelationshipNoticeInput, signal?: AbortSignal) =>
   Promise<readonly FriendRelationshipNoticePart[] | undefined>;
@@ -20,15 +21,21 @@ function positiveId(value: number): boolean {
 
 export function createFriendRelationshipNotice(options: PrivateNoticeOptions): FriendRelationshipNotice {
   const isEnabled = createPrivateNoticeSettings(options, "friendNumberChange");
-  return async ({ botId, userId, kind, nickname }, signal) => {
+  return async ({ botId, userId, kind, nickname, readNickname }, signal) => {
     if (!positiveId(botId) || !positiveId(userId) || botId === userId || !Object.hasOwn(titles, kind) ||
         !await isEnabled(botId, signal) || options.signal?.aborted || signal?.aborted) return;
+
+    let name = displayRequestField(nickname, 128);
+    if (!name && readNickname) {
+      try { name = displayRequestField(await readNickname(), 128); } catch { /* The account number is still known. */ }
+    }
+    if (options.signal?.aborted || signal?.aborted) return;
 
     return [
       { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
       `[通知(${botId}) - ${titles[kind]}]\n`,
       `好友账号：${userId}\n`,
-      `好友昵称：${displayRequestField(nickname, 128) || "未知"}`,
+      `好友昵称：${name || "未知"}`,
     ];
   };
 }
