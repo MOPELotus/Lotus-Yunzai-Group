@@ -17,6 +17,7 @@ import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature,
 import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
+import { createGroupQuotedReview, groupQuotedReviewFeature, isGroupQuotedReviewCommand, type GroupQuotedReviewContext } from "./group-quoted-review.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -28,6 +29,7 @@ export { groupActivityFeature, groupActivityRankFeature, type GroupActivityConte
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 export { groupNotificationFeature, type GroupNotificationContext, type GroupNotificationPart } from "./group-notify.ts";
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
+export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -86,13 +88,15 @@ export async function createModule({
   const title = bannedWords && createGroupTitle(bannedWords.titleStore, signal);
   const activityCleanup = createGroupActivityCleanup(root, signal);
   const notify = createGroupNotification(signal);
+  const quotedReview = createGroupQuotedReview(signal);
   const groupAddNotice = blacklist && createGroupAddNotice(blacklist, signal);
   const stopGroupAddNotice = groupAddNotice && registerGroupAddNotice?.(groupAddNotice.policy);
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
-    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext) {
+    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext & GroupQuotedReviewContext) {
       const normalized = context.normalizedMessage.trim();
+      if (isGroupQuotedReviewCommand(normalized)) return quotedReview(normalized, context);
       if (groupAddNotice && isGroupAddNoticeCommand(normalized)) return groupAddNotice.command(normalized, context);
       if (isGroupNotificationCommand(normalized)) return notify(context);
       if (timedMute && isGroupTimedMuteCommand(normalized)) return timedMute.command(context);
@@ -104,6 +108,7 @@ export async function createModule({
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
+      if (isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
       if (isGroupAddNoticeCommand(message)) return [groupAddNoticeFeature];
       if (isGroupNotificationCommand(message)) return [groupNotificationFeature];
       if (isGroupTimedMuteCommand(message)) return [groupTimedMuteFeature];
