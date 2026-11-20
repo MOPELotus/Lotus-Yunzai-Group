@@ -15,6 +15,8 @@ export interface ManagedBlacklistStore extends GroupManagedBlacklist {
   update(ids: readonly number[], add: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
   updateWhitelist(ids: readonly number[], add: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
   setAutoUnmute(enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
+  readGroupAddNotice(groupId: number): Promise<string | undefined>;
+  setGroupAddNotice(groupId: number, enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
 }
 
 export class ManagedBlacklistPermissionError extends Error {}
@@ -22,8 +24,13 @@ export class ManagedBlacklistPermissionError extends Error {}
 const legacy = "plugins/yenai-plugin/config/config/groupAdmin.yaml";
 const canonical = "config/groupAdmin.yaml";
 const maxBytes = 256 * 1024;
-type ListField = "blackQQ" | "whiteQQ";
+const groupAddNoticeDefault = "有一个加群通知，管理员快去看看吧~";
+const groupAddNoticeSection = "groupAddNotice";
+const noticeGroups = "groupAddNotice.openGroup";
+const noticeMessage = "groupAddNotice.msg";
+type ListField = "blackQQ" | "whiteQQ" | typeof noticeGroups;
 type Field = ListField | "noBan";
+type ReadField = Field | typeof noticeMessage;
 
 function codeOf(error: unknown) { return (error as NodeJS.ErrnoException | undefined)?.code; }
 
@@ -64,18 +71,35 @@ function decode(bytes?: Buffer) {
   return { text, doc, values };
 }
 
+function fieldPath(field: ReadField): readonly string[] { return field.split("."); }
+
+function noticeSection(values: Map<unknown, unknown>): Map<unknown, unknown> | undefined {
+  const section: unknown = values.get(groupAddNoticeSection);
+  if (section == null) return;
+  if (!(section instanceof Map)) throw new Error("groupAddNotice 须为映射。");
+  return section;
+}
+
 function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
-  const list = values.get(field);
+  const list = field === noticeGroups ? noticeSection(values)?.get("openGroup") : values.get(field);
   if (list == null) return [];
   if (!Array.isArray(list)) throw new Error(`${field} 须为 QQ 号列表。`);
   return list.map(id);
 }
 
 function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: boolean | readonly number[]): string {
-  const contents = doc.contents;
-  const node = doc.get(field, true);
+  const nested = field === noticeGroups;
+  const parent = nested ? doc.get(groupAddNoticeSection, true) : undefined;
+  const insertParent = nested && !isMap(parent);
+  if (insertParent && parent !== undefined && parent !== null && !(isScalar(parent) && parent.value === null)) {
+    throw new Error("无法安全定位 groupAddNotice 的 YAML 源码范围。");
+  }
+  const contents = nested && !insertParent ? parent : doc.contents;
+  const keyName = insertParent ? groupAddNoticeSection : nested ? "openGroup" : field;
+  const node = insertParent ? parent : doc.getIn(fieldPath(field), true);
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const inline = typeof next === "boolean" ? String(next) : `[${next.join(", ")}]`;
+  const encoded = typeof next === "boolean" ? String(next) : `[${next.join(", ")}]`;
+  const inline = insertParent ? `{openGroup: ${encoded}}` : encoded;
   const splice = (start: number, end: number, value: string) => text.slice(0, start) + value + text.slice(end);
   const unsafe = () => new Error(`无法安全定位 ${field} 的 YAML 源码范围。`);
   const lineStart = (index: number) => text.lastIndexOf("\n", index - 1) + 1;
@@ -107,7 +131,7 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
         const items = next.slice(ids.length).map((id) => `${indent}- ${id}`).join(eol);
         return splice(trailing, trailing, newline ? items + eol : eol + items);
       }
-      const edits: { start: number; end: number }[] = [];
+      const edits: { start: number; end: number; retainedComment: string }[] = [];
       for (const [index, item] of node.items.entries()) {
         if (next.includes(ids[index]!)) continue;
         if (!isNode(item) || !item.range) throw unsafe();
@@ -115,17 +139,20 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
         const newline = text.indexOf("\n", start);
         const end = newline >= 0 ? newline + 1 : text.length;
         if (item.range[1] > end || !/^ *-(?:[ \t]|$)/u.test(text.slice(start, item.range[0]))) throw unsafe();
-        edits.push({ start, end });
+        const follow = text.slice(item.range[1], end);
+        const comment = nested ? /^[ \t]*(#.*)(?:\r?\n)?$/u.exec(follow)?.[1] : undefined;
+        const retainedComment = comment ? indent + comment + (text[end - 1] === "\n" ? eol : "") : "";
+        edits.push({ start, end, retainedComment });
       }
       let output = text;
       for (const edit of edits.reverse()) {
         const allRemoved = !next.length && edit === edits.at(-1);
-        const pair = isMap(contents) ? contents.items.find(({ key }) => isScalar(key) && key.value === field) : undefined;
+        const pair = isMap(contents) ? contents.items.find(({ key }) => isScalar(key) && key.value === keyName) : undefined;
         const keyStart = isScalar(pair?.key) ? pair.key.range?.[0] : undefined;
         if (allRemoved && keyStart === undefined) throw unsafe();
         const emptyIndent = allRemoved ? Math.max(indent.length, keyStart! - lineStart(keyStart!) + 2) : 0;
-        const replacement = allRemoved ? " ".repeat(emptyIndent) + "[]" + (text[edit.end - 1] === "\n" ? eol : "") : "";
-        output = output.slice(0, edit.start) + replacement + output.slice(edit.end);
+        const replacement = allRemoved ? " ".repeat(emptyIndent) + "[]" + (edit.retainedComment || text[edit.end - 1] === "\n" ? eol : "") : "";
+        output = output.slice(0, edit.start) + replacement + edit.retainedComment + output.slice(edit.end);
       }
       return output;
     }
@@ -140,10 +167,10 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
   if (isMap(contents) && contents.flow && contents.range) {
     const start = contents.range[0];
     if (text[start] !== "{") throw unsafe();
-    return splice(start + 1, start + 1, `${field}: ${inline}${contents.items.length ? ", " : ""}`);
+    return splice(start + 1, start + 1, `${keyName}: ${inline}${contents.items.length ? ", " : ""}`);
   }
   if (isScalar(contents) && contents.value === null && contents.range && contents.range[0] !== contents.range[1]) {
-    return splice(contents.range[0], contents.range[1], `{${field}: ${inline}}`);
+    return splice(contents.range[0], contents.range[1], `{${keyName}: ${inline}}`);
   }
   const point = isMap(contents) ? contents.range?.[1] : doc.range?.[1];
   if (point === undefined || contents && !isMap(contents) && !isScalar(contents)) throw unsafe();
@@ -152,16 +179,21 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
   const keyStart = isScalar(key) ? key.range?.[0] : undefined;
   const indent = keyStart === undefined ? "" : text.slice(lineStart(keyStart), keyStart).replace(/^\uFEFF/u, "");
   if (!/^ *$/u.test(indent)) throw unsafe();
-  return splice(point, point, (beforeField && !beforeField.endsWith("\n") ? eol : "") + `${indent}${field}: ${inline}${eol}`);
+  return splice(point, point, (beforeField && !beforeField.endsWith("\n") ? eol : "") + `${indent}${keyName}: ${inline}${eol}`);
 }
 
 function paths(root: URL) {
   const primary = fileURLToPath(new URL(canonical, root));
   const previous = fileURLToPath(new URL(legacy, root));
-  return { primary, async read(field: Field) {
+  return { primary, async read(field: ReadField) {
     const candidate = await snapshot(primary);
-    if (candidate && decode(candidate.bytes).doc.has(field)) return candidate;
-    return await snapshot(previous) ?? candidate;
+    if (candidate && decode(candidate.bytes).doc.hasIn(fieldPath(field))) return candidate;
+    const backup = await snapshot(previous);
+    if (field === noticeGroups || field === noticeMessage) {
+      if (backup && decode(backup.bytes).doc.hasIn(fieldPath(field))) return backup;
+      return candidate ?? backup;
+    }
+    return backup ?? candidate;
   } };
 }
 
@@ -190,8 +222,26 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       if (bytes.length > maxBytes) throw new Error("群管名单超过文件大小上限。");
       const check = decode(bytes);
       const value = field === "noBan" ? check.values.get(field) : listOf(check.values, field);
-      check.values.delete(field);
-      current.values.delete(field);
+      if (field === noticeGroups) {
+        const previousSection = noticeSection(current.values);
+        const newSection = noticeSection(check.values);
+        // Copy only the edited map so references from other fields retain their actual values for comparison.
+        if (previousSection) {
+          const retained = new Map(previousSection);
+          retained.delete("openGroup");
+          current.values.set(groupAddNoticeSection, retained);
+        }
+        if (newSection) {
+          const retained = new Map(newSection);
+          retained.delete("openGroup");
+          if (previousSection || retained.size) check.values.set(groupAddNoticeSection, retained);
+          else if (current.values.has(groupAddNoticeSection)) check.values.set(groupAddNoticeSection, current.values.get(groupAddNoticeSection));
+          else check.values.delete(groupAddNoticeSection);
+        }
+      } else {
+        check.values.delete(field);
+        current.values.delete(field);
+      }
       if (!isDeepStrictEqual(check.values, current.values) || !isDeepStrictEqual(value, next)) {
         throw new Error("保存将改变其他 YAML 字段，请检查配置引用。");
       }
@@ -255,6 +305,16 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
     },
     update: (users, add, signal, authorize) => updateList("blackQQ", users, add, signal, authorize),
     updateWhitelist: (users, add, signal, authorize) => updateList("whiteQQ", users, add, signal, authorize),
+    async readGroupAddNotice(groupId) {
+      const groups = await read(noticeGroups);
+      if (!groups || !listOf(decode(groups.bytes).values, noticeGroups).includes(id(groupId))) return;
+      const template = await read(noticeMessage);
+      const message: unknown = noticeSection(decode(template?.bytes).values)?.get("msg");
+      if (message == null) return groupAddNoticeDefault;
+      if (typeof message !== "string" || message.length > 2048) throw new Error("groupAddNotice.msg 无效。");
+      return message;
+    },
+    setGroupAddNotice: (groupId, enabled, signal, authorize) => updateList(noticeGroups, [groupId], enabled, signal, authorize),
     setAutoUnmute(enabled, signal, authorize) {
       return write("noBan", ({ values }) => {
         const current = values.get("noBan");
