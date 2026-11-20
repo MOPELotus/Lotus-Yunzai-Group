@@ -239,11 +239,11 @@ test("群邀请仅开放旧默认和当前 bot 设置", async () => {
 test("群消息主人通知沿用旧群作用域且列明支持的正文类型", async () => {
   const { command, legacy } = await fixture();
   await writeFile(legacy, "default: { groupMessage: false, privateMessage: true }\n");
-  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情）");
+  expect(await command(overview, groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
   expect(await command("#椰奶通知设置群消息bot单独开启", groupOwner)).toContain("不支持此作用域");
-  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情）");
-  expect(await command("#椰奶通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情）");
-  expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情）");
+  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
+  expect(await command("#椰奶通知设置群消息bot群单独关闭", groupOwner)).toContain("群消息：关闭（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
+  expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）");
   expect(await readFile(legacy, "utf8")).toContain("privateMessage: true");
 });
 
@@ -384,7 +384,9 @@ test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群�
     "消息相关", "申请通知", "列表变动", "其他通知", "系统设置",
     "Bot:99 单独配置", "群:77 单独配置", "Bot:99 & 群:77 单独配置",
   ]);
-  expect(models[0]?.groups[0]?.rows.find(row => row.label === "群消息")?.value).toBe("已开启");
+  const groupMessage = models[0]?.groups[0]?.rows.find(row => row.label === "群消息");
+  expect(groupMessage?.value).toBe("已开启");
+  expect(groupMessage?.description).toBe("转发文本、图片和表情，语音原音限已核验的 QQ SILK");
   expect(models[0]?.groups[6]).toEqual({
     title: "群:77 单独配置", override: true, rows: [{ label: "群消息", value: "已关闭", off: true }],
   });
