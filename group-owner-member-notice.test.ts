@@ -17,25 +17,24 @@ async function fixture(run: (paths: { config: URL; legacyConfig: URL }) => Promi
   }
 }
 
-test("主人收到旧成员加入标题、原群头像和字段顺序，离开只报告成员变动", () => fixture(async paths => {
+test("主人收到原成员文字、字段顺序和可信邀请人，离开只报告成员变动", () => fixture(async paths => {
   await writeFile(paths.config, "default: { groupMemberNumberChange: true }\n");
   const notice = createGroupOwnerMemberNotice(paths);
-  expect(await notice({ ...event, action: "invite", groupName: "测\u202e试群", nickname: "原\n昵称", card: "群名片" })).toEqual([
-    { type: "image", file: "https://p.qlogo.cn/gh/77/77/100" },
-    ["🟢 新成员加入", "────────────", "群聊：测试群", "群号：77", "成员：原 昵称（42）", "名片：群名片",
-      "方式：邀请入群", "", "时间：2024-01-01 00:00:05", "机器人：99"].join("\n"),
-  ]);
-  expect(await notice({ ...event, direction: "decrease", action: "kick", nickname: "同名", card: "同名" })).toEqual([
-    { type: "image", file: "https://p.qlogo.cn/gh/77/77/100" },
-    ["⚪ 成员离开", "────────────", "群聊：群名称暂不可用", "群号：77", "成员：同名（42）",
-      "", "时间：2024-01-01 00:00:05", "机器人：99"].join("\n"),
-  ]);
-  expect((await notice({ ...event, action: "approve" }))?.[1]).toContain("方式：申请通过");
+  expect(await notice({ ...event, action: "invite", inviterId: 43,
+    describe: async () => ({ groupName: "测\u202e试群", nickname: "原\n昵称", card: "群名片" }) })).toBe([
+    "🟢 新成员加入", "────────────", "群聊：测试群", "群号：77", "成员：原 昵称（42）", "名片：群名片",
+    "方式：邀请入群", "邀请人：43", "", "时间：2024-01-01 00:00:05", "机器人：99",
+  ].join("\n"));
+  expect(await notice({ ...event, direction: "decrease", action: "kick", nickname: "同名", card: "同名", inviterId: 43 })).toBe([
+    "⚪ 成员离开", "────────────", "群聊：群名称暂不可用", "群号：77", "成员：同名（42）",
+    "", "时间：2024-01-01 00:00:05", "机器人：99",
+  ].join("\n"));
+  expect(await notice({ ...event, action: "approve" })).toContain("方式：申请通过");
 }));
 
 test("默认关闭并按默认、群、机器人、机器人群四层覆盖，现配置优先于旧配置", () => fixture(async paths => {
   const notice = createGroupOwnerMemberNotice(paths);
-  expect(await notice(event)).toBeUndefined();
+  expect(await notice({ ...event, describe: async () => { throw new Error("关闭时读取了群资料"); } })).toBeUndefined();
   await writeFile(paths.legacyConfig, [
     "default: { groupMemberNumberChange: true }",
     "77: { groupMemberNumberChange: false }",

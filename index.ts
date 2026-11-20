@@ -19,6 +19,7 @@ import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, t
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
 import { createNoticeSettings, isNoticeSettingsCommand, noticeSettingsFeature, type NoticeSettingsContext } from "./notice-settings.ts";
+import { createGroupOwnerMemberNotice, type GroupOwnerMemberNotice } from "./group-owner-member-notice.ts";
 import { createTemporaryMessageNotice, type TemporaryMessageNotice } from "./temporary-message-notice.ts";
 import { createFriendRelationshipNotice, type FriendRelationshipNotice } from "./friend-relationship-notice.ts";
 import { createGroupRecallNotice, type GroupRecallNotice } from "./group-recall-notice.ts";
@@ -131,7 +132,9 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
-  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification, registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice, registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice,
+  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
+  registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice,
+  registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -146,6 +149,7 @@ export async function createModule({
   readonly groupTimedMute?: GroupTimedMuteServices;
   readonly registerGroupAddNotice?: (policy: GroupAddNotice) => () => void;
   readonly registerGroupRecallNotice?: (policy: GroupRecallNotice) => () => void;
+  readonly registerGroupOwnerMemberNotice?: (policy: GroupOwnerMemberNotice) => () => void;
   readonly registerFriendRecallNotice?: (policy: FriendRecallNotice) => () => void;
   readonly registerFriendPokeNotice?: (policy: FriendPokeNotice) => () => void;
   readonly registerFriendRelationshipNotice?: (policy: FriendRelationshipNotice) => () => void;
@@ -182,6 +186,7 @@ export async function createModule({
   const stopFriendPokeNotice = !signal.aborted && registerFriendPokeNotice?.(createFriendPokeNotice(noticeOptions));
   const stopFriendRecallNotice = !signal.aborted && registerFriendRecallNotice?.(createFriendRecallNotice(noticeOptions));
   const stopGroupRecallNotice = !signal.aborted && registerGroupRecallNotice?.(createGroupRecallNotice(noticeOptions));
+  const stopGroupOwnerMemberNotice = !signal.aborted && registerGroupOwnerMemberNotice?.(createGroupOwnerMemberNotice(noticeOptions));
   if (groupLeaveBlacklist && !signal.aborted) {
     const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
@@ -280,6 +285,7 @@ export async function createModule({
       if (stopFriendPokeNotice) stopFriendPokeNotice();
       if (stopFriendRecallNotice) stopFriendRecallNotice();
       if (stopGroupRecallNotice) stopGroupRecallNotice();
+      if (stopGroupOwnerMemberNotice) stopGroupOwnerMemberNotice();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();
