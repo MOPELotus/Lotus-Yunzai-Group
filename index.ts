@@ -20,6 +20,7 @@ import { createGroupNotification, groupNotificationFeature, isGroupNotificationC
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
 import { createFriendRequestNotice, type FriendRequestNotice } from "./friend-request-notice.ts";
 import { friendRequestListCommand, friendRequestListFeature, isFriendRequestListCommand, type FriendRequestListContext } from "./friend-request-list.ts";
+import { isRequestOverviewCommand, requestOverviewCommand, requestOverviewFeature } from "./request-overview.ts";
 import { groupInvitationListCommand, groupInvitationListFeature, isGroupInvitationListCommand, type GroupInvitationListContext } from "./group-invitation-list.ts";
 import { createGroupPendingJoinReview, groupPendingJoinCommand, groupPendingJoinFeature, groupPendingJoinReviewFeature,
   isGroupPendingJoinCommand, isGroupPendingJoinReviewCommand, type GroupPendingJoinContext } from "./group-pending-join.ts";
@@ -43,6 +44,7 @@ export { groupNotificationFeature, type GroupNotificationContext, type GroupNoti
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
 export { createFriendRequestNotice, friendRequestNoticeFeature, type FriendRequestNotice, type FriendRequestNoticeInput, type FriendRequestNoticeOptions, type FriendRequestNoticePart } from "./friend-request-notice.ts";
 export { friendRequestListFeature, type FriendRequestListContext, type PendingFriendRequest, type PendingFriendRequests } from "./friend-request-list.ts";
+export { requestOverviewFeature } from "./request-overview.ts";
 export { groupInvitationListFeature, type GroupInvitationListContext, type PendingGroupInvitation, type PendingGroupInvitations } from "./group-invitation-list.ts";
 export { groupPendingJoinFeature, groupPendingJoinReviewFeature, type PendingGroupJoin, type PendingGroupJoins, type PendingGroupJoinReviewResult, type PendingGroupJoinBatchResult, type GroupPendingJoinContext } from "./group-pending-join.ts";
 export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
@@ -72,6 +74,7 @@ const manifest = {
   commands: { ...group.commands, ...groupRequestReview.commands },
   fallback(message: string, context: ModerationContext) {
     const normalized = (context.normalizedMessage ?? message).trim();
+    if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context);
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return groupPendingJoinCommand(normalized, context);
@@ -80,6 +83,7 @@ const manifest = {
   },
   fallbackFeatures(context: { readonly normalizedMessage: string; readonly message_type: ModerationContext["message_type"] }) {
     const normalized = context.normalizedMessage.trim();
+    if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return [requestOverviewFeature];
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "group" && isGroupPendingJoinCommand(normalized)) return [groupPendingJoinFeature];
@@ -157,6 +161,7 @@ export async function createModule({
     fallback(message: string, context: ModerationContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
       GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
       const normalized = context.normalizedMessage.trim();
+      if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context, signal);
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
       if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
@@ -179,6 +184,7 @@ export async function createModule({
     },
     fallbackFeatures(context: Parameters<typeof manifest.fallbackFeatures>[0]) {
       const message = context.normalizedMessage.trim();
+      if (context.message_type !== "terminal" && isRequestOverviewCommand(message)) return [requestOverviewFeature];
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
       if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
