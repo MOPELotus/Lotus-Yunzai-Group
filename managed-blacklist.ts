@@ -19,6 +19,8 @@ export interface ManagedBlacklistStore extends GroupManagedBlacklist {
   setGroupAddNotice(groupId: number, enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
   readGroupVoteSettings(): Promise<GroupVoteSettings>;
   setGroupVoteSetting(field: GroupVoteEditableSetting, value: boolean | number, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
+  readGroupVerificationSettings(groupId: number): Promise<GroupVerificationSettings>;
+  setGroupVerification(groupId: number, enabled: boolean, signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean>;
 }
 
 export interface GroupVoteSettings {
@@ -33,6 +35,18 @@ export interface GroupVoteSettings {
 
 export type GroupVoteEditableSetting = Exclude<keyof GroupVoteSettings, "veto" | "voteAdmin">;
 
+export interface GroupVerificationSettings {
+  readonly enabled: boolean;
+  readonly mode: "精确" | "模糊";
+  readonly times: number;
+  readonly time: number;
+  readonly delay: number;
+  readonly min: number;
+  readonly max: number;
+  readonly remind: boolean;
+  readonly success: string;
+}
+
 export class ManagedBlacklistPermissionError extends Error {}
 
 const legacy = "plugins/yenai-plugin/config/config/groupAdmin.yaml";
@@ -42,7 +56,9 @@ const groupAddNoticeDefault = "有一个加群通知，管理员快去看看吧~
 const groupAddNoticeSection = "groupAddNotice";
 const noticeGroups = "groupAddNotice.openGroup";
 const noticeMessage = "groupAddNotice.msg";
-type ListField = "blackQQ" | "whiteQQ" | typeof noticeGroups;
+const verifySection = "groupVerify";
+const verifyGroups = "groupVerify.openGroup";
+type ListField = "blackQQ" | "whiteQQ" | typeof noticeGroups | typeof verifyGroups;
 type Field = ListField | "noBan" | GroupVoteEditableSetting;
 type ReadField = Field | typeof noticeMessage;
 type FieldValue = boolean | number | readonly number[];
@@ -108,31 +124,71 @@ function decode(bytes?: Buffer) {
 
 function fieldPath(field: ReadField): readonly string[] { return field.split("."); }
 
-function noticeSection(values: Map<unknown, unknown>): Map<unknown, unknown> | undefined {
-  const section: unknown = values.get(groupAddNoticeSection);
+function yamlSection(values: Map<unknown, unknown>, key: string): Map<unknown, unknown> | undefined {
+  const section: unknown = values.get(key);
   if (section == null) return;
-  if (!(section instanceof Map)) throw new Error("groupAddNotice 须为映射。");
+  if (!(section instanceof Map)) throw new Error(`${key} 须为映射。`);
   return section;
 }
 
+function nestedGroupField(field: ReadField) {
+  return field === noticeGroups ? groupAddNoticeSection : field === verifyGroups ? verifySection : undefined;
+}
+
 function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
-  const list = field === noticeGroups ? noticeSection(values)?.get("openGroup") : values.get(field);
+  const key = nestedGroupField(field);
+  const list = key ? yamlSection(values, key)?.get("openGroup") : values.get(field);
   if (list == null) return [];
   if (!Array.isArray(list)) throw new Error(`${field} 须为 QQ 号列表。`);
   return list.map(id);
 }
 
-function isListField(field: Field): field is ListField { return field === "whiteQQ" || field === "blackQQ" || field === noticeGroups; }
+function isListField(field: Field): field is ListField { return field === "whiteQQ" || field === "blackQQ" || field === noticeGroups || field === verifyGroups; }
+
+function verificationSettings(group: number, primary?: ReturnType<typeof decode>, previous?: ReturnType<typeof decode>): GroupVerificationSettings {
+  const current = primary && yamlSection(primary.values, verifySection);
+  const legacy = previous && yamlSection(previous.values, verifySection);
+  const configured = (field: string) => current?.has(field) ? current.get(field) : legacy?.get(field);
+  const groups = primary?.doc.hasIn(fieldPath(verifyGroups)) ? primary : previous;
+  const enabled = !!groups && listOf(groups.values, verifyGroups).includes(group);
+  const defaults: GroupVerificationSettings = { enabled, mode: "精确", times: 7, time: 300, delay: 2, min: 10, max: 100,
+    remind: true, success: "✅ 验证成功，欢迎入群" };
+  if (!enabled) return defaults;
+
+  const number = (value: unknown, fallback: number, min: number, max: number): number => {
+    if (value === undefined) return fallback;
+    const normalized = typeof value === "string" && /^-?\d+$/u.test(value) ? Number(value) : value;
+    if (typeof normalized !== "number" || !Number.isSafeInteger(normalized) || normalized < min || normalized > max) {
+      throw new Error("入群验证时间或运算范围无效。");
+    }
+    return normalized;
+  };
+  const mode = configured("mode") ?? defaults.mode;
+  const remind = configured("remindAtLastMinute") ?? defaults.remind;
+  if ((mode !== "精确" && mode !== "模糊") || typeof remind !== "boolean") throw new Error("入群验证模式无效。");
+  const currentRange = current && yamlSection(current, "range");
+  const oldRange = legacy && yamlSection(legacy, "range");
+  const min = number(currentRange?.get("min") ?? oldRange?.get("min"), defaults.min, -1_000_000, 1_000_000);
+  const max = number(currentRange?.get("max") ?? oldRange?.get("max"), defaults.max, -1_000_000, 1_000_000);
+  if (min >= max) throw new Error("入群验证需要两个不同的可用整数。");
+  const currentMessages = current && yamlSection(current, "SuccessMsgs");
+  const oldMessages = legacy && yamlSection(legacy, "SuccessMsgs");
+  const messageFor = (id: number) => currentMessages?.get(id) ?? currentMessages?.get(String(id)) ?? oldMessages?.get(id) ?? oldMessages?.get(String(id));
+  const success = messageFor(group) || messageFor(0) || defaults.success;
+  if (typeof success !== "string" || success.length > 2048) throw new Error("入群验证成功消息无效。");
+  return { enabled, mode, remind, min, max, success, times: number(configured("times"), defaults.times, 1, 100),
+    time: number(configured("time"), defaults.time, 1, 2_147_483), delay: number(configured("DelayTime"), defaults.delay, 0, 2_147_483) };
+}
 
 function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: FieldValue): string {
-  const nested = field === noticeGroups;
-  const parent = nested ? doc.get(groupAddNoticeSection, true) : undefined;
-  const insertParent = nested && !isMap(parent);
+  const nested = nestedGroupField(field);
+  const parent = nested ? doc.get(nested, true) : undefined;
+  const insertParent = nested !== undefined && !isMap(parent);
   if (insertParent && parent !== undefined && parent !== null && !(isScalar(parent) && parent.value === null)) {
-    throw new Error("无法安全定位 groupAddNotice 的 YAML 源码范围。");
+    throw new Error(`无法安全定位 ${nested} 的 YAML 源码范围。`);
   }
   const contents = nested && !insertParent ? parent : doc.contents;
-  const keyName = insertParent ? groupAddNoticeSection : nested ? "openGroup" : field;
+  const keyName = nested ? (insertParent ? nested : "openGroup") : field;
   const node = insertParent ? parent : doc.getIn(fieldPath(field), true);
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
   const encoded = typeof next === "object" ? `[${next.join(", ")}]` : String(next);
@@ -226,7 +282,7 @@ function paths(root: URL) {
     const candidate = await snapshot(primary);
     if (candidate && decode(candidate.bytes).doc.hasIn(fieldPath(field))) return candidate;
     const backup = await snapshot(previous);
-    if (field === noticeGroups || field === noticeMessage) {
+    if (nestedGroupField(field) || field === noticeMessage) {
       if (backup && decode(backup.bytes).doc.hasIn(fieldPath(field))) return backup;
       return candidate ?? backup;
     }
@@ -259,21 +315,22 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       if (bytes.length > maxBytes) throw new Error("群管名单超过文件大小上限。");
       const check = decode(bytes);
       const value = isListField(field) ? listOf(check.values, field) : check.values.get(field);
-      if (field === noticeGroups) {
-        const previousSection = noticeSection(current.values);
-        const newSection = noticeSection(check.values);
+      const nested = nestedGroupField(field);
+      if (nested) {
+        const previousSection = yamlSection(current.values, nested);
+        const newSection = yamlSection(check.values, nested);
         // Copy only the edited map so references from other fields retain their actual values for comparison.
         if (previousSection) {
           const retained = new Map(previousSection);
           retained.delete("openGroup");
-          current.values.set(groupAddNoticeSection, retained);
+          current.values.set(nested, retained);
         }
         if (newSection) {
           const retained = new Map(newSection);
           retained.delete("openGroup");
-          if (previousSection || retained.size) check.values.set(groupAddNoticeSection, retained);
-          else if (current.values.has(groupAddNoticeSection)) check.values.set(groupAddNoticeSection, current.values.get(groupAddNoticeSection));
-          else check.values.delete(groupAddNoticeSection);
+          if (previousSection || retained.size) check.values.set(nested, retained);
+          else if (current.values.has(nested)) check.values.set(nested, current.values.get(nested));
+          else check.values.delete(nested);
         }
       } else {
         check.values.delete(field);
@@ -346,12 +403,17 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       const groups = await read(noticeGroups);
       if (!groups || !listOf(decode(groups.bytes).values, noticeGroups).includes(id(groupId))) return;
       const template = await read(noticeMessage);
-      const message: unknown = noticeSection(decode(template?.bytes).values)?.get("msg");
+      const message: unknown = yamlSection(decode(template?.bytes).values, groupAddNoticeSection)?.get("msg");
       if (message == null) return groupAddNoticeDefault;
       if (typeof message !== "string" || message.length > 2048) throw new Error("groupAddNotice.msg 无效。");
       return message;
     },
     setGroupAddNotice: (groupId, enabled, signal, authorize) => updateList(noticeGroups, [groupId], enabled, signal, authorize),
+    async readGroupVerificationSettings(groupId) {
+      const [community, old] = await Promise.all([snapshot(primary), snapshot(previous)]);
+      return verificationSettings(id(groupId), community && decode(community.bytes), old && decode(old.bytes));
+    },
+    setGroupVerification: (groupId, enabled, signal, authorize) => updateList(verifyGroups, [groupId], enabled, signal, authorize),
     async readGroupVoteSettings() {
       const [current, old] = await Promise.all([snapshot(primary), snapshot(previous)]);
       return voteSettings(current && decode(current.bytes), old && decode(old.bytes));

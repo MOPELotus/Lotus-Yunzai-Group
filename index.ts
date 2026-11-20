@@ -8,7 +8,7 @@ import { GroupCard } from "./group-card-v3.js";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
-import { createManagedBlacklist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
+import { createManagedBlacklist, readManagedWhitelist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
@@ -22,6 +22,8 @@ import { createGroupAnnouncementDeletion, createGroupAnnouncementPublisher, grou
   isGroupAnnouncementDeleteCommand, isGroupAnnouncementPublishCommand, isGroupAnnouncementsCommand, type GroupAnnouncementDeleteContext,
   type GroupAnnouncementPublishContext } from "./group-announcements.ts";
 import { createGroupVote, groupVoteFeature, isGroupVoteCommand, type GroupVoteContext } from "./group-vote.ts";
+import { createGroupVerification, groupVerificationFeature, isGroupVerificationCommand,
+  type GroupVerificationContext, type GroupVerification } from "./group-verification.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -37,6 +39,8 @@ export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuot
 export { groupAnnouncementsFeature, type GroupAnnouncement, type GroupAnnouncementDeleteContext, type GroupAnnouncementDeleteResult,
   type GroupAnnouncementPublishContext, type GroupAnnouncementPublishResult, type GroupAnnouncementsContext } from "./group-announcements.ts";
 export { groupVoteFeature, type GroupVoteCapability, type GroupVoteResult, type GroupVoteRoles, type GroupVotePart } from "./group-vote.ts";
+export { groupVerificationFeature, type GroupVerification, type GroupVerificationJoin, type GroupVerificationLeave,
+  type GroupVerificationAnswer, type GroupVerificationContext } from "./group-verification.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -52,7 +56,7 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
-  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice,
+  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -66,6 +70,7 @@ export async function createModule({
   readonly registerGroupBannedWords?: (policy: GroupBannedWords) => () => void;
   readonly groupTimedMute?: GroupTimedMuteServices;
   readonly registerGroupAddNotice?: (policy: GroupAddNotice) => () => void;
+  readonly registerGroupVerification?: (policy: GroupVerification) => () => void;
 }) {
   const updater = createAutoGroupCard({ signal, accounts: ownGroupCardAccounts ?? (() => []) });
   let stopTask: (() => void | Promise<void>) | undefined;
@@ -100,13 +105,16 @@ export async function createModule({
   const deleteAnnouncement = createGroupAnnouncementDeletion(signal);
   const groupAddNotice = blacklist && createGroupAddNotice(blacklist, signal);
   const vote = blacklist && createGroupVote(blacklist, signal);
+  const verification = blacklist && createGroupVerification(blacklist, async user => (await readManagedWhitelist(root)).has(user), signal);
+  const stopVerification = verification && registerGroupVerification?.(verification.policy);
   const stopGroupAddNotice = groupAddNotice && registerGroupAddNotice?.(groupAddNotice.policy);
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
     fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
-      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext) {
+      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
       const normalized = context.normalizedMessage.trim();
+      if (verification && isGroupVerificationCommand(normalized)) return verification.command(normalized, context);
       if (vote && isGroupVoteCommand(normalized)) return vote.command(normalized, context);
       if (isGroupAnnouncementsCommand(normalized)) return groupAnnouncementsCommand(normalized, context, signal);
       if (isGroupAnnouncementPublishCommand(normalized)) return publishAnnouncement(normalized, context);
@@ -123,6 +131,7 @@ export async function createModule({
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
+      if (isGroupVerificationCommand(message)) return [groupVerificationFeature];
       if (isGroupVoteCommand(message)) return [groupVoteFeature];
       if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message) || isGroupAnnouncementDeleteCommand(message)) return [groupAnnouncementsFeature];
       if (isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
@@ -142,11 +151,12 @@ export async function createModule({
     },
     async dispose() {
       stopBannedWords?.();
+      stopVerification?.();
       stopGroupAddNotice?.();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();
-      await Promise.all([stopTask?.(), timedMute?.stop(), vote?.stop()]);
+      await Promise.all([stopTask?.(), timedMute?.stop(), vote?.stop(), verification?.stop()]);
     },
   };
 }
