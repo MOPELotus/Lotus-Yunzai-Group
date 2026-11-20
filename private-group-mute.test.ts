@@ -32,7 +32,7 @@ test("私聊旧格式解析群号、QQ、中文时长、默认单位和零时长
 test("私聊禁言不接群命令、非主人、委托、跨上下文、无来源消息或无效目标", async () => {
   const { calls, context, handle } = fixture();
   const command = "#禁言77 510 1秒";
-  for (const invalid of ["#禁言77 510", "#禁言77 @510 10秒", "#解禁77 510 5", "#全体禁言", "#踢77 510"]) {
+  for (const invalid of ["#禁言77 510", "#禁言77 @510 10秒", "#解禁77 510 5", "#全体禁言", "#踢黑77 510"]) {
     expect(await handle(invalid, context)).toBeUndefined();
   }
   for (const invalid of [{ message_type: "group" }, { message_type: "terminal" }, { isDelegated: true },
@@ -85,7 +85,8 @@ test("私聊命令检测只认实际旧格式，不抢占同名群内入口", ()
   expect(isPrivateGroupMuteCommand("#禁言77 510 两年")).toBe(true);
   expect(isPrivateGroupMuteCommand("#解禁 77 510")).toBe(true);
   expect(isPrivateGroupMuteCommand("#全体解禁77")).toBe(true);
-  for (const other of ["#禁言", "#解禁510", "#全体解禁", "#全员解禁77", "#踢77 510", "#禁言77 510"]) {
+  expect(isPrivateGroupMuteCommand("#踢77 510")).toBe(true);
+  for (const other of ["#禁言", "#解禁510", "#全体解禁", "#全员解禁77", "#踢黑77 510", "#禁言77 510"]) {
     expect(isPrivateGroupMuteCommand(other)).toBe(false);
   }
 });
@@ -138,4 +139,42 @@ test("全体禁言区分明确拒绝、无法执行和回执异常", async () =>
   }
   const { handle, context } = fixture();
   expect(await handle("#全体禁言77", { ...context, privateGroupWholeMute: async () => { throw new Error("protocol"); } })).toContain("结果未确认");
+});
+
+test("私聊原踢人只用明确群号和 QQ，确认才报成功", async () => {
+  const { context, handle, calls: muteCalls } = fixture();
+  const calls: [number, number][] = [];
+  const kickContext: PrivateGroupMuteContext = { ...context, adapter: undefined, async privateGroupKick(groupId, userId) {
+    calls.push([groupId, userId]);
+    return { status: "confirmed", memberName: "保持原 QQ 展示" };
+  } };
+  expect(await handle("#踢77 510", kickContext)).toBe("✅ 已将「510」踢出群聊（群 77）");
+  expect(await handle("#踢 88 610", { ...kickContext, adapter: "milky" })).toContain("已将「610」");
+  for (const other of ["#踢黑77 510", "#踢 510", "#踢77 @510", "#踢77 510 611", "#踢77 510 拒绝加群"]) {
+    expect(await handle(other, kickContext)).toBeUndefined();
+  }
+  expect(await handle("#踢0 510", kickContext)).toContain("有效的群号和 QQ 号");
+  expect(await handle("#踢77 9007199254740993", kickContext)).toContain("有效的群号和 QQ 号");
+  expect(await handle("#踢77 99", kickContext)).toContain("受群管保护");
+  expect(await handle("#踢77 42", kickContext)).toContain("受群管保护");
+  expect(await handle("#踢77 510", { ...kickContext, adapter: "onebot" })).toEqual([]);
+  expect(await handle("#解禁77 510", kickContext)).toEqual([]);
+  expect(await handle("#踢77 510", { ...kickContext, isDelegated: true })).toBeUndefined();
+  expect(await handle("#踢77 510", { ...kickContext, message: [{ type: "at", qq: 510 }] })).toBeUndefined();
+  expect(await handle("#踢77 510", { ...kickContext, isBotMaster: () => false })).toContain("没有移出群成员的权限");
+  expect(await handle("#踢77 510", context)).toContain("没有移出群成员的权限");
+  expect(calls).toEqual([[77, 510], [88, 610]]);
+  expect(muteCalls).toEqual([]);
+});
+
+test("私聊踢人保护与失败按会话回执，未知只提交原消息一次", async () => {
+  for (const [status, notice] of [["rejected", "协议端拒绝"], ["protected", "受群管保护"],
+    ["unavailable", "请核对成员身份与权限"], ["unknown", "结果未确认，请核对当前群成员状态"]] as const) {
+    const { context, handle } = fixture();
+    let calls = 0;
+    const kickContext: PrivateGroupMuteContext = { ...context, async privateGroupKick() { calls++; return { status }; } };
+    expect(await handle("#踢77 510", kickContext)).toContain(notice);
+    expect(await handle("#踢77 510", kickContext)).toEqual([]);
+    expect(calls).toBe(1);
+  }
 });
