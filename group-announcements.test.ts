@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { createGroupAnnouncementPublisher, groupAnnouncementsCommand, isGroupAnnouncementsCommand,
-  type GroupAnnouncementPublishContext, type GroupAnnouncementsContext } from "./group-announcements.ts";
+import { createGroupAnnouncementDeletion, createGroupAnnouncementPublisher, groupAnnouncementsCommand, isGroupAnnouncementsCommand,
+  type GroupAnnouncementDeleteContext, type GroupAnnouncementDeleteResult, type GroupAnnouncementPublishContext, type GroupAnnouncementsContext } from "./group-announcements.ts";
 
 test("旧群公告简称和全称只读取当前群，保持原顺序与 20 项编号", async () => {
   let reads = 0;
@@ -96,4 +96,59 @@ test("原消息并发和未知重放只调用一次，图片无法确认时不�
   expect(images).toBe(1);
   expect(await publish(message, { ...context, message_id: 3, groupPublishAnnouncement: async () => "rejected" })).toContain("协议端拒绝");
   expect(await publish(message, { ...context, message_id: 4, groupPublishAnnouncement: async () => "unavailable" })).toContain("无法发布");
+});
+
+function announcementDeletion() {
+  const signal = new AbortController();
+  const remove = createGroupAnnouncementDeletion(signal.signal);
+  const indices: number[] = [];
+  const context: GroupAnnouncementDeleteContext = {
+    message_type: "group", adapter: "onebot", group_id: 77, self_id: 99, user_id: 42, message_id: -7,
+    async groupDeleteAnnouncement(index) { indices.push(index); return { status: "confirmed", text: "第一行\n第二行" }; },
+  };
+  return { remove, indices, context, signal };
+}
+
+test("旧删公告别名接同群实时序号，允许前导零和列表显示上限之后的正序号", async () => {
+  const { remove, context, indices } = announcementDeletion();
+  expect(await remove("#删群公告001", context)).toBe("✅ 已删除「第一行 第二行」");
+  expect(await remove("#删公告21", { ...context, message_id: -8 })).toBe("✅ 已删除「第一行 第二行」");
+  expect(await remove(`#删公告${Number.MAX_SAFE_INTEGER}`, { ...context, message_id: -9 })).toContain("已删除");
+  expect(await remove(`#删公告${Number.MAX_SAFE_INTEGER + 1}`, context)).toContain("序号须为正整数");
+  expect(await remove("#删公告0", context)).toContain("序号须为正整数");
+  for (const input of ["删群公告1", "#删公告 1", "#删群公告-1", "#删公告1.5", "#撤回已发公告1"]) {
+    expect(await remove(input, context)).toBeUndefined();
+  }
+  expect(indices).toEqual([1, 21, Number.MAX_SAFE_INTEGER]);
+});
+
+test("群删除缺可信会话、命令 ID 或已退出时不操作", async () => {
+  const { remove, context, indices, signal } = announcementDeletion();
+  const message = "#删公告2";
+  expect(await remove(message, { ...context, message_type: "private" })).toBeUndefined();
+  expect(await remove(message, { ...context, isDelegated: true })).toContain("无法删除");
+  expect(await remove(message, { ...context, message_id: undefined })).toContain("无法删除");
+  expect(await remove(message, { ...context, groupDeleteAnnouncement: undefined })).toContain("无法删除");
+  signal.abort();
+  expect(await remove(message, context)).toContain("无法删除");
+  expect(indices).toEqual([]);
+});
+
+test("已确认、找不到、明确拒绝和未知回执分开，同一原消息不重复删除", async () => {
+  const { remove, context } = announcementDeletion();
+  const pending = Promise.withResolvers<GroupAnnouncementDeleteResult>();
+  let attempts = 0;
+  const waiting = { ...context, groupDeleteAnnouncement(index: number) { expect(index).toBe(9); attempts++; return pending.promise; } };
+  const message = "#删公告9";
+  const first = remove(message, waiting);
+  expect(await remove(message, waiting)).toEqual([]);
+  pending.reject(new Error("response lost"));
+  expect(await first).toContain("结果未确认");
+  expect(await remove(message, waiting)).toEqual([]);
+  expect(await remove(message, { ...waiting, adapter: "milky" })).toContain("结果未确认");
+  expect(attempts).toBe(2);
+  const responses = { "not-found": "找不到该序号", rejected: "协议端拒绝删除", unavailable: "无法删除", confirmed: "已删除第 9 条" } as const;
+  for (const [i, status] of (Object.keys(responses) as (keyof typeof responses)[]).entries()) {
+    expect(await remove(message, { ...context, message_id: i, groupDeleteAnnouncement: async () => ({ status }) })).toContain(responses[status]);
+  }
 });
