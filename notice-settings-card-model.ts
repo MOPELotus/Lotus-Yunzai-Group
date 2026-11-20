@@ -22,7 +22,7 @@ export type NoticeSettingsCardRenderer = (model: NoticeSettingsCardModel, signal
 
 const eventGroups = [
   { title: "消息相关", rows: [
-    ["privateMessage", "好友消息", "已核验的好友消息与戳一戳转发给主人"],
+    ["privateMessage", "好友消息", "已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK"],
     ["groupMessage", "群消息", "转发文本、图片和表情，语音原音限已核验的 QQ SILK"],
     ["grouptemporaryMessage", "群临时消息", "转发已核验的群临时文本消息"],
     ["groupRecall", "群撤回", "群撤回与好友撤回均支持已核验的文本和表情"],

@@ -62,7 +62,7 @@ test("旧状态列当前生效值和已支持范围，普通群员可读，未�
   ].join("\n"));
   const result = await command(overview, { ...groupOwner, user_id: 43 });
   expect(result).toContain("【通知设置】");
-  expect(result).toContain("好友消息：开启");
+  expect(result).toContain("好友消息：开启（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK）");
   expect(result).toContain("群撤回：开启（当前支持文本和表情）");
   expect(result).toContain("好友撤回：关闭（当前支持文本和表情）");
   expect(result).toContain("删除缓存时间：150 秒");
@@ -384,6 +384,8 @@ test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群�
     "消息相关", "申请通知", "列表变动", "其他通知", "系统设置",
     "Bot:99 单独配置", "群:77 单独配置", "Bot:99 & 群:77 单独配置",
   ]);
+  expect(models[0]?.groups[0]?.rows.find(row => row.label === "好友消息")?.description)
+    .toBe("已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK");
   const groupMessage = models[0]?.groups[0]?.rows.find(row => row.label === "群消息");
   expect(groupMessage?.value).toBe("已开启");
   expect(groupMessage?.description).toBe("转发文本、图片和表情，语音原音限已核验的 QQ SILK");
