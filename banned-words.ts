@@ -12,9 +12,12 @@ export interface GroupBannedWordMatch {
   readonly preview: string;
 }
 
+type WordTextOrFace = { readonly type: "text"; readonly text: string } | { readonly type: "face"; readonly id: number };
+export type GroupBannedWordPart = WordTextOrFace | { readonly type: "image"; readonly readMd5: (signal: AbortSignal) => Promise<string | undefined> };
+
 export interface GroupBannedWords {
   match(groupId: number, userId: number, text: string, signal?: AbortSignal,
-    readImageMd5?: (signal: AbortSignal) => Promise<string | undefined>): Promise<GroupBannedWordMatch | undefined>;
+    readImageMd5?: (signal: AbortSignal) => Promise<string | undefined>, mixed?: readonly GroupBannedWordPart[]): Promise<GroupBannedWordMatch | undefined>;
   recordConfirmedKick(userId: number, signal: AbortSignal, authorize: () => Promise<boolean>): Promise<void>;
 }
 
@@ -53,7 +56,10 @@ const listRules = /^#?违禁词列表(原始|raw)?$/u;
 const setTime = /^#?设置违禁词禁言时间(\d+)$/u;
 const helpCommand = /^#?违禁词帮助$/u;
 const imageRule = /^\{image[:_]([a-fA-F0-9]{32})\}$/u;
+const imageToken = /\{image[:_][a-fA-F0-9]{32}\}/u;
 const md5 = /^[a-fA-F0-9]{32}$/u;
+const legacyPart = /\{(?:image[:_]([a-fA-F0-9]{32})|face[:_](\d{1,16}))\}/gu;
+const maxMixedImages = 3;
 export const groupBannedWordsFeature = "[group] 违禁词";
 
 const help = "违禁词帮助\n新增：#新增违禁词 内容（默认精确匹配、禁言）\n" +
@@ -128,6 +134,93 @@ function findImageRule(rules: Data, digest: string) {
   return Object.entries(rules).slice(0, maxRules).find(([raw, entry]) => imageRuleMd5(raw, entry) === digest);
 }
 
+function appendPart(parts: GroupBannedWordPart[], part: GroupBannedWordPart) {
+  if (part.type === "text") {
+    if (!part.text) return;
+    const previous = parts.at(-1);
+    if (previous?.type === "text") {
+      parts[parts.length - 1] = { type: "text", text: previous.text + part.text };
+      return;
+    }
+  }
+  parts.push(part);
+}
+
+function prepareMixed(input: readonly GroupBannedWordPart[] | undefined): readonly GroupBannedWordPart[] | undefined {
+  if (!input || input.length < 2 || input.length > 64) return;
+  const parts: GroupBannedWordPart[] = [];
+  let images = 0, length = 0;
+  for (const part of input) {
+    if (part.type === "image" && ++images > maxMixedImages) return;
+    if (part.type === "text" && (length += part.text.length) > maxTextLength) return;
+    if (part.type === "face" && (!Number.isSafeInteger(part.id) || part.id < 0)) return;
+    appendPart(parts, part);
+  }
+  const first = parts[0];
+  if (first?.type === "text") {
+    const text = first.text.trimStart();
+    if (text) parts[0] = { type: "text", text };
+    else parts.shift();
+  }
+  const last = parts.at(-1);
+  if (last?.type === "text") {
+    const text = last.text.trimEnd();
+    if (text) parts[parts.length - 1] = { type: "text", text };
+    else parts.pop();
+  }
+  if (images && parts.length > 1) return parts;
+}
+
+type LegacyMixedPart = WordTextOrFace | { readonly type: "image"; readonly digest: string };
+
+function legacyMixedParts(raw: string): readonly LegacyMixedPart[] | undefined {
+  if (!imageToken.test(raw) || raw.length > maxWordLength) return;
+  const parts: LegacyMixedPart[] = [];
+  let end = 0;
+  for (const token of raw.matchAll(legacyPart)) {
+    if (end < token.index) parts.push({ type: "text", text: raw.slice(end, token.index) });
+    const [, digest, faceId] = token;
+    if (digest) parts.push({ type: "image", digest: digest.toUpperCase() });
+    else {
+      const id = Number(faceId);
+      if (!Number.isSafeInteger(id)) return;
+      parts.push({ type: "face", id });
+    }
+    end = token.index + token[0].length;
+  }
+  if (end < raw.length) parts.push({ type: "text", text: raw.slice(end) });
+  return parts;
+}
+
+function findMixedRule(rules: readonly [string, unknown][], parts: readonly GroupBannedWordPart[], digests?: readonly string[]) {
+  return rules.findIndex(([raw, entry]) => {
+    if (matchType(entry) !== 1 || !penalty(entry)) return false;
+    const expected = legacyMixedParts(raw);
+    if (expected?.length !== parts.length) return false;
+    let image = 0;
+    return expected.every((part, index) => {
+      const actual = parts[index];
+      if (part.type !== actual?.type) return false;
+      if (part.type === "image") return !digests || part.digest === digests[image++];
+      if (part.type === "text") return actual.type === "text" && part.text === actual.text;
+      return actual.type === "face" && part.id === actual.id;
+    });
+  });
+}
+
+async function readMixedDigests(parts: readonly GroupBannedWordPart[], signal: AbortSignal): Promise<readonly string[] | undefined> {
+  const digests: string[] = [];
+  for (const part of parts) {
+    if (part.type !== "image") continue;
+    if (signal.aborted) return;
+    let value: string | undefined;
+    try { value = await part.readMd5(signal); } catch { return; }
+    if (signal.aborted || typeof value !== "string" || !md5.test(value)) return;
+    digests.push(value.toUpperCase());
+  }
+  return digests;
+}
+
 function wordMatch(data: Data, matched: readonly [string, unknown], image = false): GroupBannedWordMatch | undefined {
   let action = penalty(matched[1]);
   if (!action) return;
@@ -166,14 +259,14 @@ function forwardRules(rules: Data, rawMode: boolean): WordReply {
   return { type: "forward", nodes };
 }
 
-async function regexMatch(text: string, rules: readonly RegexCandidate[], signal: AbortSignal): Promise<number> {
-  if (signal.aborted) return -1;
+async function regexMatch(text: string, rules: readonly RegexCandidate[], signal: AbortSignal): Promise<number | undefined> {
+  if (signal.aborted) return;
   const worker = new Worker(new URL("./banned-rule-worker.ts", import.meta.url), { smol: true });
-  const result = Promise.withResolvers<number>();
-  const stop = () => result.resolve(-1);
+  const result = Promise.withResolvers<number | undefined>();
+  const stop = () => result.resolve(undefined);
   const deadline = setTimeout(stop, 200);
   signal.addEventListener("abort", stop, { once: true });
-  worker.onmessage = ({ data }) => result.resolve(typeof data === "number" && Number.isSafeInteger(data) ? data : -1);
+  worker.onmessage = ({ data }) => result.resolve(typeof data === "number" && Number.isSafeInteger(data) ? data : undefined);
   worker.onerror = (error) => { error.preventDefault(); stop(); };
   try {
     worker.postMessage({ text, rules });
@@ -229,10 +322,33 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
     } finally { lock.close(); }
   }
 
+  async function findTextRule(rules: readonly [string, unknown][], text: string, active: AbortSignal): Promise<number | undefined> {
+    if (!text) return -1;
+    const candidates: RegexCandidate[] = [];
+    for (const [index, [raw, entry]] of rules.entries()) {
+      if (!penalty(entry) || !raw || raw.length > maxWordLength || imageToken.test(raw)) continue;
+      const mode = matchType(entry);
+      if (mode === 3) {
+        const regex = regexRule(raw);
+        if (regex) candidates.push({ index, ...regex });
+      } else if (mode === 1 && text === raw || mode === 2 && text.includes(raw)) {
+        candidates.push({ index });
+        break;
+      }
+    }
+    const first = candidates[0];
+    if (!first) return -1;
+    if (first.source === undefined) return first.index;
+    if (regexActive >= 2) return;
+    regexActive++;
+    try { return await regexMatch(text, candidates, active); } finally { regexActive--; }
+  }
+
   const policy: GroupBannedWords = {
-    async match(groupId, userId, text, eventSignal, readImageMd5) {
+    async match(groupId, userId, text, eventSignal, readImageMd5, mixed) {
       const active = eventSignal ? AbortSignal.any([signal, eventSignal]) : signal;
-      if (!positive(groupId) || !positive(userId) || active.aborted || (!text && !readImageMd5) || text.length > maxTextLength) return;
+      const parts = prepareMixed(mixed);
+      if (!positive(groupId) || !positive(userId) || active.aborted || (!text && !readImageMd5 && !parts) || text.length > maxTextLength) return;
       const data = (await read(groupId)).data;
       const rules = Object.entries(data.bannedWords ?? {}).slice(0, maxRules);
       if (!rules.length || active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
@@ -246,29 +362,24 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
         if (!matched || active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
         return wordMatch(current, matched, true);
       }
-      const candidates: RegexCandidate[] = [];
-      for (const [index, [raw, entry]] of rules.entries()) {
-        if (!penalty(entry) || !raw || raw.length > maxWordLength || imageRule.test(raw)) continue;
-        const mode = matchType(entry);
-        if (mode === 3) {
-          const regex = regexRule(raw);
-          if (regex) candidates.push({ index, ...regex });
-        } else if (mode === 1 && text === raw || mode === 2 && text.includes(raw)) {
-          candidates.push({ index });
-          break;
-        }
+      const textIndex = await findTextRule(rules, text, active);
+      if (textIndex === undefined || active.aborted) return;
+      const mixedIndex = parts ? findMixedRule(rules, parts) : -1;
+      if (!parts || mixedIndex < 0 || (textIndex >= 0 && textIndex < mixedIndex)) {
+        const matched = rules[textIndex];
+        return matched && wordMatch(data, matched);
       }
-      const first = candidates[0];
-      if (!first || active.aborted) return;
-      let index = first.index;
-      if (first.source !== undefined) {
-        if (regexActive >= 2) return;
-        regexActive++;
-        try { index = await regexMatch(text, candidates, active); } finally { regexActive--; }
-      }
-      const matched = rules[index];
-      if (active.aborted || !matched) return;
-      return wordMatch(data, matched);
+      const digests = await readMixedDigests(parts, active);
+      if (active.aborted) return;
+      const current = (await read(groupId)).data;
+      const latest = Object.entries(current.bannedWords ?? {}).slice(0, maxRules);
+      if (active.aborted || (await readManagedWhitelist(root)).has(userId) || active.aborted) return;
+      const latestText = await findTextRule(latest, text, active);
+      if (latestText === undefined || active.aborted) return;
+      const latestMixed = digests ? findMixedRule(latest, parts, digests) : -1;
+      const useMixed = latestMixed >= 0 && (latestText < 0 || latestMixed < latestText);
+      const matched = latest[useMixed ? latestMixed : latestText];
+      return matched && wordMatch(current, matched, useMixed);
     },
     async recordConfirmedKick(userId, eventSignal, authorize) {
       await blacklist.update([userId], true, AbortSignal.any([signal, eventSignal]), authorize);

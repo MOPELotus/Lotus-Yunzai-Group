@@ -26,7 +26,7 @@ export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
-export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch } from "./banned-words.ts";
+export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch, type GroupBannedWordPart } from "./banned-words.ts";
 export { groupTitleFeature, groupTitleFilterFeature, type GroupTitleContext, type GroupSpecialTitleResult } from "./group-title.ts";
 export { groupActivityFeature, groupActivityRankFeature, type GroupActivityContext, type GroupActivityMember, type GroupActivityVisibility } from "./group-activity.ts";
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";

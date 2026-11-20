@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createGroupBannedWords, isGroupBannedWordCommand } from "./banned-words.ts";
+import { createGroupBannedWords, isGroupBannedWordCommand, type GroupBannedWordPart } from "./banned-words.ts";
 import { createManagedBlacklist } from "./managed-blacklist.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
 
@@ -120,6 +120,52 @@ test("图指纹惰性读取只用于精确规则，配置更新、连接结束�
     expect(active.aborted).toBe(true);
     return digest;
   })).toBeUndefined();
+});
+
+test("旧精确图文词保留两张原图、普通表情、标记顺序与内部空格", async () => {
+  const { policy, legacy } = await fixture();
+  const first = "a".repeat(32), second = "b".repeat(32);
+  const rule = `前文  {image:${first.toUpperCase()}}{face:14}  附件{image_${second}}结束`;
+  await writeFile(legacy, JSON.stringify({ bannedWords: { [rule]: { matchType: 1, penaltyType: 3 } } }));
+  let reads = 0;
+  const image = (digest: string): GroupBannedWordPart => ({ type: "image", readMd5: async () => { reads++; return digest; } });
+  const text = (text: string): GroupBannedWordPart => ({ type: "text", text });
+  const face: GroupBannedWordPart = { type: "face", id: 14 };
+  const parts = [text("   前"), text("文  "), image(first), face, text("  附件"), image(second.toUpperCase()), text("结束\n")];
+  const flattened = "前文    附件结束";
+  const match = (parts: readonly GroupBannedWordPart[], text = flattened) => policy.match(77, 43, text, undefined, undefined, parts);
+  expect(await match([text(rule)], rule)).toBeUndefined();
+  expect(await match([text("前文  "), face, image(first), text("  附件"), image(second), text("结束")])).toBeUndefined();
+  expect(await match([text("前文 "), image(first), face, text("  附件"), image(second), text("结束")])).toBeUndefined();
+  expect(await match([text(`前文  {image:${first.toUpperCase()}}`), face, text("  附件"), image(second), text("结束")])).toBeUndefined();
+  expect(reads).toBe(0);
+  expect(await match(parts)).toEqual({ action: "recall", seconds: 300, preview: "[图片]" });
+  expect(reads).toBe(2);
+  expect(await match([text("前文  "), image(second), face, text("  附件"), image(first), text("结束")])).toBeUndefined();
+  expect(reads).toBe(4);
+});
+
+test("图文惰性读取尊重首条文字规则，迟到结果重新核对且不启用模糊或正则图文", async () => {
+  const { policy, legacy, whitelist } = await fixture();
+  const digest = "a".repeat(32);
+  const rule = `开会{image:${digest}}`;
+  const literals = { [rule]: { matchType: 1, penaltyType: 3 }, 开会: { matchType: 1, penaltyType: 1 } };
+  const write = (bannedWords: Record<string, { matchType: number; penaltyType: number }>) => writeFile(legacy, JSON.stringify({ bannedWords }));
+  let reads = 0;
+  const match = (readMd5 = async () => { reads++; return digest; }) => policy.match(77, 43, "开会", undefined, undefined,
+    [{ type: "text", text: "开会" }, { type: "image", readMd5 }]);
+  await write({ 开会: literals.开会, [rule]: literals[rule]! });
+  expect(await match()).toMatchObject({ action: "kick" });
+  expect(reads).toBe(0);
+  await write({ [rule]: { matchType: 2, penaltyType: 3 }, [`/${rule}/`]: { matchType: 3, penaltyType: 6 } });
+  expect(await match()).toBeUndefined();
+  expect(reads).toBe(0);
+  await write(literals);
+  expect(await match()).toMatchObject({ action: "recall" });
+  expect(reads).toBe(1);
+  expect(await match(async () => { await write({ 开会: literals.开会 }); return digest; })).toMatchObject({ action: "kick" });
+  await write(literals);
+  expect(await match(async () => { await writeFile(whitelist, "whiteQQ: [43]\n"); return digest; })).toBeUndefined();
 });
 
 test("单图增查删重用旧 JSON 键和权限，兼容冒号与下划线的同一摘要", async () => {
