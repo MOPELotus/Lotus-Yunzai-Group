@@ -18,7 +18,8 @@ import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, t
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
 import { createGroupQuotedReview, groupQuotedReviewFeature, isGroupQuotedReviewCommand, type GroupQuotedReviewContext } from "./group-quoted-review.ts";
-import { groupAnnouncementsCommand, groupAnnouncementsFeature, isGroupAnnouncementsCommand, type GroupAnnouncementsContext } from "./group-announcements.ts";
+import { createGroupAnnouncementPublisher, groupAnnouncementsCommand, groupAnnouncementsFeature, isGroupAnnouncementPublishCommand,
+  isGroupAnnouncementsCommand, type GroupAnnouncementPublishContext } from "./group-announcements.ts";
 
 export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
@@ -31,7 +32,8 @@ export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteS
 export { groupNotificationFeature, type GroupNotificationContext, type GroupNotificationPart } from "./group-notify.ts";
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
 export { groupQuotedReviewFeature, type GroupQuotedReviewContext, type GroupQuotedReviewResult } from "./group-quoted-review.ts";
-export { groupAnnouncementsFeature, type GroupAnnouncement, type GroupAnnouncementsContext } from "./group-announcements.ts";
+export { groupAnnouncementsFeature, type GroupAnnouncement, type GroupAnnouncementPublishContext,
+  type GroupAnnouncementPublishResult, type GroupAnnouncementsContext } from "./group-announcements.ts";
 export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, OwnGroupCardResult } from "./auto-group-card.ts";
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
@@ -91,14 +93,16 @@ export async function createModule({
   const activityCleanup = createGroupActivityCleanup(root, signal);
   const notify = createGroupNotification(signal);
   const quotedReview = createGroupQuotedReview(signal);
+  const publishAnnouncement = createGroupAnnouncementPublisher(signal);
   const groupAddNotice = blacklist && createGroupAddNotice(blacklist, signal);
   const stopGroupAddNotice = groupAddNotice && registerGroupAddNotice?.(groupAddNotice.policy);
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
-    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext & GroupQuotedReviewContext & GroupAnnouncementsContext) {
+    fallback(message: string, context: GroupMuteContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext & GroupQuotedReviewContext & GroupAnnouncementPublishContext) {
       const normalized = context.normalizedMessage.trim();
       if (isGroupAnnouncementsCommand(normalized)) return groupAnnouncementsCommand(normalized, context, signal);
+      if (isGroupAnnouncementPublishCommand(normalized)) return publishAnnouncement(normalized, context);
       if (isGroupQuotedReviewCommand(normalized)) return quotedReview(normalized, context);
       if (groupAddNotice && isGroupAddNoticeCommand(normalized)) return groupAddNotice.command(normalized, context);
       if (isGroupNotificationCommand(normalized)) return notify(context);
@@ -111,7 +115,7 @@ export async function createModule({
     },
     fallbackFeatures(context: { readonly normalizedMessage: string }) {
       const message = context.normalizedMessage.trim();
-      if (isGroupAnnouncementsCommand(message)) return [groupAnnouncementsFeature];
+      if (isGroupAnnouncementsCommand(message) || isGroupAnnouncementPublishCommand(message)) return [groupAnnouncementsFeature];
       if (isGroupQuotedReviewCommand(message)) return [groupQuotedReviewFeature];
       if (isGroupAddNoticeCommand(message)) return [groupAddNoticeFeature];
       if (isGroupNotificationCommand(message)) return [groupNotificationFeature];
