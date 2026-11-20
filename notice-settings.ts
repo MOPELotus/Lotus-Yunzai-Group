@@ -16,9 +16,8 @@ export interface NoticeSettingsContext {
 
 export const noticeSettingsFeature = "[group] 通知设置";
 const title = "#椰奶通知设置";
-const bulk = /^#椰奶(?:启用|禁用)全部通知$/u;
+const bulk = /^#椰奶(启用|禁用)全部通知$/u;
 const change = /^#椰奶通知设置(好友消息|群消息|群临时消息|群撤回|好友撤回|好友申请|群邀请|加群申请|群管理变动|好友列表变动|群聊列表变动|群成员变动|禁言|删除缓存时间|全部通知)(群单独|bot单独|bot群单独|单独)?(开启|关闭|取消|(\d+)秒?)$/u;
-const unsupported = "当前版本尚不支持此通知设置。";
 const denied = "当前会话没有修改此通知设置的权限。";
 const fields = {
   好友消息: { key: "privateMessage", specific: "bot", note: "（已核验的好友消息与戳一戳）" },
@@ -36,6 +35,7 @@ const fields = {
   禁言: { key: "botBeenBanned", specific: "group", note: "（仅机器人本人）" },
   全部通知: { key: "notificationsAll", specific: "default", note: "" },
 } as const;
+const eventFields = Object.values(fields).flatMap(({ key, specific }) => specific === "default" ? [] : [key]);
 
 export function isNoticeSettingsCommand(message: string): boolean {
   return message === title || bulk.test(message) || change.test(message);
@@ -88,12 +88,12 @@ export function createNoticeSettings(root: URL, lockFile: Parameters<typeof crea
       return;
     }
     if (context.isDelegated || !positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id) || !configureNoticeSettings) return denied;
-    if (bulk.test(message)) return unsupported;
+    const batch = bulk.exec(message);
     const match = change.exec(message);
     const label = match?.[1] ?? "";
-    if (!match || (label !== "删除缓存时间" && !Object.hasOwn(fields, label))) return unsupported;
+    if (!batch && (!match || (label !== "删除缓存时间" && !Object.hasOwn(fields, label)))) return;
 
-    const scope = resolvedScope(match[2], group !== undefined);
+    const scope = resolvedScope(match?.[2], group !== undefined);
     const scoped = scope === "group" || scope === "bot-group";
     if (scoped && group === undefined) return denied;
     const section = scope === "default" ? "default" : scope === "group" ? String(group) :
@@ -103,29 +103,36 @@ export function createNoticeSettings(root: URL, lockFile: Parameters<typeof crea
       catch { return false; }
     };
 
-    let key: NoticeSettingsField;
-    let value: boolean | number | undefined;
-    if (label === "删除缓存时间") {
-      if (scope !== "default") return "❎ 删除缓存时间仅支持默认设置。";
-      key = "msgSaveDeltime";
-      value = match[4] === undefined ? undefined : recallRetentionSeconds(match[4]);
-      if (value === undefined) return "❎ 请填写有效的正整数秒数。";
+    let save: () => Promise<boolean>;
+    if (batch) {
+      save = () => store.writeDefaults(eventFields, batch[1] === "启用", authorize);
     } else {
-      const field = fields[label as keyof typeof fields];
-      if (scope !== "default" && field.specific !== (scoped ? "group" : "bot")) return "❎ 该设置项不支持此作用域。";
-      key = field.key;
-      if (match[3] === "开启") value = true;
-      else if (match[3] === "关闭") value = false;
-      else if (match[3] !== "取消") return "❎ 请使用开启、关闭或取消。";
+      let key: NoticeSettingsField;
+      let value: boolean | number | undefined;
+      if (label === "删除缓存时间") {
+        if (scope !== "default") return "❎ 删除缓存时间仅支持默认设置。";
+        key = "msgSaveDeltime";
+        value = match?.[4] === undefined ? undefined : recallRetentionSeconds(match[4]);
+        if (value === undefined) return "❎ 请填写有效的正整数秒数。";
+      } else {
+        const field = fields[label as keyof typeof fields];
+        if (scope !== "default" && field.specific !== (scoped ? "group" : "bot")) return "❎ 该设置项不支持此作用域。";
+        key = field.key;
+        if (match?.[3] === "开启") value = true;
+        else if (match?.[3] === "关闭") value = false;
+        else if (match?.[3] !== "取消") return "❎ 请使用开启、关闭或取消。";
+      }
+      save = () => store.write(section, key, value, authorize);
     }
 
     let written: boolean;
-    try { written = await store.write(section, key, value, authorize); }
+    try { written = await save(); }
     catch (error) {
       return error instanceof NoticeSettingsPermissionError ? denied : "暂无法保存通知设置，配置未被本次操作覆盖。";
     }
     if (signal?.aborted) return;
-    const result = written ? "✅ 已保存通知设置。" : "通知设置无变化。";
+    const result = !written ? "通知设置无变化。" :
+      batch ? `✅ 已${batch[1]}全部 ${eventFields.length} 项默认事件通知。` : "✅ 已保存通知设置。";
     try {
       const config = await store.read();
       if (!signal?.aborted) return result + "\n" + status(config, self_id, group);

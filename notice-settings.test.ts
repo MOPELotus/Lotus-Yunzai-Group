@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import { parse } from "yaml";
 import { createNoticeSettings, isNoticeSettingsCommand, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
 
 const temporary: string[] = [];
@@ -113,7 +114,6 @@ test("权限按四种作用域传入，撤权、非法及未实现操作不写",
   expect(await command("#椰奶通知设置群撤回群单独开启", privateOwner)).toContain("权限");
   expect(await command("#椰奶通知设置好友消息群单独开启", groupOwner)).toContain("不支持此作用域");
   expect(await command("#椰奶通知设置删除缓存时间0", privateOwner)).toContain("正整数");
-  expect(await command("#椰奶启用全部通知", privateOwner)).toContain("尚不支持");
   expect(await readFile(legacy, "utf8")).toBe(raw);
   expect(isNoticeSettingsCommand("#椰奶通知设置群邀请开启")).toBe(true);
   expect(isNoticeSettingsCommand("椰奶通知设置群邀请开启")).toBe(false);
@@ -252,7 +252,6 @@ test("全部通知只改默认收件人策略，取消还原 Lotus 缺省行为"
     expect(await command(`#椰奶通知设置全部通知${suffix}开启`, owner)).toContain("不支持此作用域");
   }
   expect(await command("#椰奶通知设置全部通知关闭", { ...owner, isDelegated: true })).toContain("权限");
-  expect(await command("#椰奶禁用全部通知", owner)).toContain("尚不支持");
   expect(await command("#椰奶通知设置全部通知10秒", owner)).toContain("请使用开启、关闭或取消");
   expect(scopes).toEqual([]);
   expect(await readFile(legacy, "utf8")).toBe(before);
@@ -266,4 +265,96 @@ test("全部通知只改默认收件人策略，取消还原 Lotus 缺省行为"
   expect(after).toContain("friendRequest: true");
   expect(after).toContain("groupMessage: false");
   expect(after).toContain("'bot:100': { notificationsAll: false }");
+});
+
+const eventKeys = [
+  "privateMessage", "groupMessage", "grouptemporaryMessage", "groupRecall", "PrivateRecall",
+  "friendRequest", "groupInviteRequest", "addGroupApplication", "friendNumberChange",
+  "groupAdminChange", "groupMemberNumberChange", "groupNumberChange", "botBeenBanned",
+] as const;
+
+test("旧两条批量命令只改全部 13 个默认事件开关，保留收件配置、覆盖与原注释", async () => {
+  const { command, legacy } = await fixture();
+  const before = [
+    "# 原注释   ",
+    "default:",
+    "  notificationsAll: false # 说明",
+    "  msgSaveDeltime: 450  ",
+    "  privateMessage: false # 事件说明",
+    "  unrelated: [1,2]",
+    "  friendRequest:",
+    "77: {groupMessage: false} # 群覆盖",
+    "'bot:99': { privateMessage: true }",
+    "'bot:99:77': { groupRecall: false }",
+    "",
+  ].join("\r\n");
+  await writeFile(legacy, before);
+  expect(await command("#椰奶启用全部通知", groupOwner)).toContain("已启用全部 13 项默认事件通知");
+  const enabled = await readFile(legacy, "utf8");
+  const config = parse(enabled);
+  for (const key of eventKeys) expect(config.default[key]).toBe(true);
+  expect(config.default.notificationsAll).toBe(false);
+  expect(config.default.msgSaveDeltime).toBe(450);
+  expect(enabled).toContain("  privateMessage: true # 事件说明\r\n");
+  expect(enabled).toContain("  friendRequest: true\r\n");
+  expect(enabled).toContain("  unrelated: [1,2]\r\n");
+  expect(enabled).toContain(before.slice(before.indexOf("77: {groupMessage")));
+  expect(enabled).toStartWith("# 原注释   \r\ndefault:\r\n  notificationsAll: false # 说明\r\n  msgSaveDeltime: 450  \r\n");
+
+  const firstInode = (await stat(legacy)).ino;
+  expect(await command("#椰奶启用全部通知", groupOwner)).toContain("无变化");
+  expect((await stat(legacy)).ino).toBe(firstInode);
+  expect(await readFile(legacy, "utf8")).toBe(enabled);
+
+  expect(await command("#椰奶禁用全部通知", groupOwner)).toContain("已禁用全部 13 项默认事件通知");
+  const disabled = parse(await readFile(legacy, "utf8"));
+  for (const key of eventKeys) expect(disabled.default[key]).toBe(false);
+  expect(disabled["bot:99"].privateMessage).toBe(true);
+  expect(disabled.default.notificationsAll).toBe(false);
+  expect(disabled.default.msgSaveDeltime).toBe(450);
+});
+
+test("批量与单项并发各自存储，且批量复核只要求默认作用域", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { msgSaveDeltime: 600, notificationsAll: false, extra: [1,2] }\n");
+  const scopes: NoticeSettingsScope[] = [];
+  const owner = { ...groupOwner, configureNoticeSettings: async (scope: NoticeSettingsScope) => {
+    scopes.push(scope);
+    return scope === "default";
+  } };
+  const [batch, single] = await Promise.all([
+    command("#椰奶启用全部通知", owner),
+    command("#椰奶通知设置删除缓存时间90秒", privateOwner),
+  ]);
+  expect(batch).toContain("已启用全部 13 项");
+  expect(single).toContain("已保存");
+  expect(scopes).toEqual(["default", "default", "default"]);
+  const after = await readFile(legacy, "utf8");
+  const config = parse(after);
+  for (const key of eventKeys) expect(config.default[key]).toBe(true);
+  expect(config.default.msgSaveDeltime).toBe(90);
+  expect(after).toContain("extra: [1,2]");
+});
+
+test("批量在无权限、最终权限撤销和任一字段不安全时整体保留原文件", async () => {
+  const { command, legacy } = await fixture();
+  const baseline = "default: { privateMessage: false, unrelated: [1,2] }\n";
+  await writeFile(legacy, baseline);
+  const denied = { ...groupOwner, configureNoticeSettings: async () => false };
+  expect(await command("#椰奶启用全部通知", denied)).toContain("权限");
+  let checks = 0;
+  expect(await command("#椰奶启用全部通知", {
+    ...groupOwner, configureNoticeSettings: async () => ++checks < 3,
+  })).toContain("权限");
+  expect(await readFile(legacy, "utf8")).toBe(baseline);
+  for (const unsafe of [
+    "default: { privateMessage: false, botBeenBanned: [false] }\n",
+    "default: { privateMessage: false, botBeenBanned: &enabled false }\n77: { other: *enabled }\n",
+  ]) {
+    await writeFile(legacy, unsafe);
+    const before = await stat(legacy);
+    expect(await command("#椰奶启用全部通知", groupOwner)).toContain("暂无法保存");
+    expect(await readFile(legacy, "utf8")).toBe(unsafe);
+    expect((await stat(legacy)).ino).toBe(before.ino);
+  }
 });

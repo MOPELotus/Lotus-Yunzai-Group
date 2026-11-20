@@ -9,6 +9,8 @@ export type NoticeSettingsField = "privateMessage" | "grouptemporaryMessage" | "
   "friendRequest" | "friendNumberChange" | "groupMemberNumberChange" | "groupAdminChange" | "botBeenBanned" | "groupNumberChange" | "addGroupApplication" | "groupInviteRequest" | "groupMessage" | "notificationsAll" | "msgSaveDeltime";
 export type NoticeSettingsScope = "default" | "group" | "bot" | "bot-group";
 type Value = boolean | number;
+type Update = readonly [field: NoticeSettingsField, value: Value | undefined];
+type Authorize = () => Promise<boolean>;
 type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;
 
 const maxBytes = 1_048_576;
@@ -50,18 +52,19 @@ function decode(bytes?: Buffer) {
 
 function eol(text: string) { return /\r?\n/u.exec(text)?.[0] ?? "\n"; }
 
-function insert(text: string, map: YAMLMap | undefined, entry: string): Edit {
+function insert(text: string, map: YAMLMap | undefined, entries: readonly string[]): Edit {
   const token = map?.srcToken;
   if (token?.type === "flow-collection") {
     const offset = token.start.offset + token.start.source.length;
-    return { start: offset, end: offset, value: entry + (map?.items.length ? ", " : "") };
+    return { start: offset, end: offset, value: entries.join(", ") + (map?.items.length ? ", " : "") };
   }
   if (map && (!map.range || token?.type !== "block-map")) throw unsafe();
   const offset = map?.range?.[1] ?? [...new Parser().parse(text)].find(part => part.type === "doc-end")?.offset ?? text.length;
   const newline = eol(text);
   const before = text.slice(0, offset).replace(/^\uFEFF/u, "");
   const prefix = before && !before.endsWith("\n") ? newline : "";
-  return { start: offset, end: offset, value: prefix + " ".repeat(token?.type === "block-map" ? token.indent : 0) + entry + newline };
+  const indent = " ".repeat(token?.type === "block-map" ? token.indent : 0);
+  return { start: offset, end: offset, value: prefix + entries.map(entry => indent + entry + newline).join("") };
 }
 
 function erase(text: string, map: YAMLMap, index: number): Edit[] {
@@ -87,7 +90,7 @@ function erase(text: string, map: YAMLMap, index: number): Edit[] {
   return [{ start: lineStart, end: lineEnd, value: replacement }];
 }
 
-function applyPatch(current: ReturnType<typeof decode>, sectionKey: string, field: NoticeSettingsField, value: Value | undefined) {
+function applyPatch(current: ReturnType<typeof decode>, sectionKey: string, updates: readonly Update[]) {
   const { text, root, values } = current;
   const keys = [...values.keys()].filter(key => (typeof key === "string" || typeof key === "number") && String(key) === sectionKey);
   if (keys.length > 1) throw unsafe();
@@ -95,47 +98,61 @@ function applyPatch(current: ReturnType<typeof decode>, sectionKey: string, fiel
   const scope = root?.items.find(pair => isScalar(pair.key) && pair.key.value === key);
   const map = scope?.value;
   if (map != null && !isMap(map) && !(isScalar(map) && map.value === null)) throw unsafe();
-  const existing = isMap(map) ? map.items.findIndex(pair => isScalar(pair.key) && pair.key.value === field) : -1;
   const currentValue = values.get(key);
   if (currentValue != null && !(currentValue instanceof Map)) throw unsafe();
-  if (value === undefined && existing === -1) return;
-  if (value !== undefined && existing !== -1 && currentValue?.get(field) === value) return;
+  const edits: Edit[] = [];
+  const additions: string[] = [];
 
-  let edits: Edit[];
-  if (value === undefined) {
+  for (const [field, value] of updates) {
+    const existing = isMap(map) ? map.items.findIndex(pair => isScalar(pair.key) && pair.key.value === field) : -1;
+    if (existing < 0) {
+      if (value !== undefined) additions.push(`${field}: ${value}`);
+      continue;
+    }
     if (!isMap(map)) throw unsafe();
-    edits = erase(text, map, existing);
-  } else if (!scope) {
-    const entryKey = typeof key === "number" ? String(key) : JSON.stringify(key);
-    edits = [insert(text, root, `${entryKey}: {${field}: ${value}}`)];
-  } else if (!isMap(map)) {
-    if (!isScalar(map) || !map.range) throw unsafe();
-    const [start, end] = map.range;
-    const gap = start === end && text[start - 1] === ":" ? " " : "";
-    const after = start === end && text[start] === "#" ? " " : "";
-    edits = [{ start, end, value: `${gap}{${field}: ${value}}${after}` }];
-  } else if (existing < 0) {
-    edits = [insert(text, map, `${field}: ${value}`)];
-  } else {
+    if (value === undefined) {
+      edits.push(...erase(text, map, existing));
+      continue;
+    }
+    if (currentValue?.get(field) === value) continue;
     const node = map.items[existing]?.value;
     if ((!isScalar(node) && !isAlias(node)) || !node.range || node.srcToken?.type === "block-scalar") throw unsafe();
     const [start, end] = node.range;
     const gap = start === end && text[start - 1] === ":" ? " " : "";
     const after = start === end && text[start] === "#" ? " " : "";
-    edits = [{ start, end, value: `${gap}${value}${after}` }];
+    edits.push({ start, end, value: `${gap}${value}${after}` });
   }
+
+  if (additions.length) {
+    if (!scope) {
+      const entryKey = typeof key === "number" ? String(key) : JSON.stringify(key);
+      edits.push(insert(text, root, [`${entryKey}: {${additions.join(", ")}}`]));
+    } else if (isMap(map)) {
+      // An empty last value can end at the same offset as a new block entry.
+      edits.unshift(insert(text, map, additions));
+    } else {
+      if (!isScalar(map) || !map.range) throw unsafe();
+      const [start, end] = map.range;
+      const gap = start === end && text[start - 1] === ":" ? " " : "";
+      const after = start === end && text[start] === "#" ? " " : "";
+      edits.push({ start, end, value: `${gap}{${additions.join(", ")}}${after}` });
+    }
+  }
+  if (!edits.length) return;
   const updated = edits.sort((left, right) => right.start - left.start).reduce((source, edit) =>
     source.slice(0, edit.start) + edit.value + source.slice(edit.end), text);
   const output = Buffer.from(updated);
   if (output.length > maxBytes) throw unsafe();
   const next = decode(output);
   const nextValue = next.values.get(key);
-  if (!(nextValue instanceof Map) || (value !== undefined && nextValue.get(field) !== value)) throw unsafe();
+  if (!(nextValue instanceof Map) || updates.some(([field, value]) => value !== undefined && nextValue.get(field) !== value)) {
+    throw unsafe();
+  }
 
   function otherFields(all: Map<unknown, unknown>, selected: Map<unknown, unknown> | undefined) {
     const root = new Map(all);
     const sibling = new Map(selected);
-    sibling.delete(field);
+    for (const [field] of updates) sibling.delete(field);
     if (sibling.size) root.set(key, sibling);
     else root.delete(key);
     return root;
@@ -149,6 +166,48 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
   const previous = fileURLToPath(new URL(legacy, root));
   const read = async () => await snapshot(primary) ?? await snapshot(previous);
 
+  async function write(section: string, updates: readonly Update[], authorize: Authorize): Promise<boolean> {
+    function active() { moduleSignal?.throwIfAborted(); }
+    async function assertPermission() {
+      active();
+      if (!await authorize()) throw new NoticeSettingsPermissionError();
+      active();
+    }
+    await assertPermission();
+    await mkdir(dirname(primary), { recursive: true, mode: 0o700 });
+    const lock = await lockFile(join(dirname(primary), ".lotus-group-notice.sqlite"), "通知设置");
+    try {
+      active();
+      const before = await read();
+      const output = applyPatch(decode(before?.bytes), section, updates);
+      if (!output) return false;
+      const file = before?.file ?? primary;
+      const stage = await mkdtemp(join(dirname(file), ".lotus-group-notice-"));
+      try {
+        const staged = join(stage, basename(file));
+        const handle = await open(staged, "wx", 0o600);
+        try {
+          await handle.writeFile(output);
+          if (before) {
+            const stat = await handle.stat();
+            if (stat.uid !== before.stat.uid || stat.gid !== before.stat.gid) await handle.chown(before.stat.uid, before.stat.gid);
+            await handle.chmod(before.stat.mode & 0o777);
+          }
+          await handle.sync();
+        } finally { await handle.close(); }
+        await assertPermission();
+        const latest = await read();
+        if (before ? !latest || latest.file !== file || latest.stat.ino !== before.stat.ino ||
+            latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) throw unsafe();
+        // Authorization may change while the asynchronous snapshot is being read.
+        await assertPermission();
+        if (before) await rename(staged, file);
+        else await link(staged, file);
+        return true;
+      } finally { await rm(stage, { recursive: true, force: true }).catch(() => undefined); }
+    } finally { lock.close(); }
+  }
+
   return {
     async read(): Promise<Record<string, unknown>> {
       const location = await read();
@@ -157,46 +216,12 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
       return doc.toJS({ maxAliasCount: 50 }) as Record<string, unknown>;
     },
 
-    async write(section: string, field: NoticeSettingsField, value: Value | undefined, authorize: () => Promise<boolean>): Promise<boolean> {
-      function active() { moduleSignal?.throwIfAborted(); }
-      async function assertPermission() {
-        active();
-        if (!await authorize()) throw new NoticeSettingsPermissionError();
-        active();
-      }
-      await assertPermission();
-      await mkdir(dirname(primary), { recursive: true, mode: 0o700 });
-      const lock = await lockFile(join(dirname(primary), ".lotus-group-notice.sqlite"), "通知设置");
-      try {
-        active();
-        const before = await read();
-        const output = applyPatch(decode(before?.bytes), section, field, value);
-        if (!output) return false;
-        const file = before?.file ?? primary;
-        const stage = await mkdtemp(join(dirname(file), ".lotus-group-notice-"));
-        try {
-          const staged = join(stage, basename(file));
-          const handle = await open(staged, "wx", 0o600);
-          try {
-            await handle.writeFile(output);
-            if (before) {
-              const stat = await handle.stat();
-              if (stat.uid !== before.stat.uid || stat.gid !== before.stat.gid) await handle.chown(before.stat.uid, before.stat.gid);
-              await handle.chmod(before.stat.mode & 0o777);
-            }
-            await handle.sync();
-          } finally { await handle.close(); }
-          await assertPermission();
-          const latest = await read();
-          if (before ? !latest || latest.file !== file || latest.stat.ino !== before.stat.ino ||
-              latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) throw unsafe();
-          // Authorization may change while the asynchronous snapshot is being read.
-          await assertPermission();
-          if (before) await rename(staged, file);
-          else await link(staged, file);
-          return true;
-        } finally { await rm(stage, { recursive: true, force: true }).catch(() => undefined); }
-      } finally { lock.close(); }
+    write(section: string, field: NoticeSettingsField, value: Value | undefined, authorize: Authorize): Promise<boolean> {
+      return write(section, [[field, value]], authorize);
+    },
+
+    writeDefaults(fields: readonly NoticeSettingsField[], value: boolean, authorize: Authorize): Promise<boolean> {
+      return write("default", fields.map(field => [field, value]), authorize);
     },
   };
 }
