@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { link, lstat, mkdir, mkdtemp, open, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
@@ -19,6 +20,12 @@ const legacy = "plugins/yenai-plugin/config/config/notice.yaml";
 const unsafe = () => new Error("无法安全定位通知设置的 YAML 字段。");
 
 interface Edit { start: number; end: number; value: string }
+interface ConfigBytes { readonly source: string; readonly file: string; readonly bytes: Buffer }
+interface VersionedDefaults {
+  readonly values: ReadonlyMap<unknown, unknown>;
+  readonly revision: string;
+  readonly writable: boolean;
+}
 
 async function snapshot(path: string) {
   try { await lstat(path); }
@@ -36,7 +43,7 @@ async function snapshot(path: string) {
       size += bytesRead;
     }
     if (size !== stat.size) throw unsafe();
-    return { file, bytes: block.subarray(0, size), stat };
+    return { source: path, file, bytes: block.subarray(0, size), stat };
   } finally { await handle.close(); }
 }
 
@@ -166,7 +173,35 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
   const previous = fileURLToPath(new URL(legacy, root));
   const read = async () => await snapshot(primary) ?? await snapshot(previous);
 
-  async function write(section: string, updates: readonly Update[], authorize: Authorize): Promise<boolean> {
+  function revision(location: ConfigBytes | undefined, missing = "missing"): string {
+    const hash = createHash("sha256");
+    if (location) hash.update("present\0").update(location.source).update("\0").update(location.file).update("\0").update(location.bytes);
+    else hash.update(missing).update("\0").update(primary);
+    return hash.digest("hex");
+  }
+
+  function versionedDefaults(location: ConfigBytes | undefined, fields: readonly NoticeSettingsField[]): VersionedDefaults {
+    const current = revision(location);
+    const values = new Map<unknown, unknown>();
+    try {
+      const { root, values: config } = decode(location?.bytes);
+      const scope = root?.items.find(pair => isScalar(pair.key) && pair.key.value === "default")?.value;
+      const defaults = config.get("default");
+      if (defaults instanceof Map) {
+        for (const field of fields) if (defaults.has(field)) values.set(field, defaults.get(field));
+      }
+      const supported = [...values.values()].every(value => value === null || typeof value === "boolean");
+      const writable = supported && (defaults == null || defaults instanceof Map) &&
+        (scope == null || isMap(scope) || (isScalar(scope) && scope.value === null));
+      return { values, revision: current, writable };
+    } catch {
+      return { values, revision: current, writable: false };
+    }
+  }
+
+  async function write(section: string, updates: readonly Update[], authorize: Authorize,
+    expected?: { readonly revision: string; readonly fields: readonly NoticeSettingsField[] },
+  ): Promise<{ readonly changed: boolean; readonly location?: ConfigBytes }> {
     function active() { moduleSignal?.throwIfAborted(); }
     async function assertPermission() {
       active();
@@ -179,9 +214,11 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
     try {
       active();
       const before = await read();
+      if (expected && revision(before) !== expected.revision) throw new NoticeSettingsConflictError();
+      if (expected && !versionedDefaults(before, expected.fields).writable) throw unsafe();
       const output = applyPatch(decode(before?.bytes), section, updates);
-      if (!output) return false;
-      const file = before?.file ?? primary;
+      if (!output) return { changed: false, location: before };
+      const file = before?.file ?? join(await realpath(dirname(primary)), basename(primary));
       const stage = await mkdtemp(join(dirname(file), ".lotus-group-notice-"));
       try {
         const staged = join(stage, basename(file));
@@ -197,13 +234,22 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
         } finally { await handle.close(); }
         await assertPermission();
         const latest = await read();
-        if (before ? !latest || latest.file !== file || latest.stat.ino !== before.stat.ino ||
-            latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) throw unsafe();
+        if (before ? !latest || latest.source !== before.source || latest.file !== file || latest.stat.ino !== before.stat.ino ||
+            latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) {
+          if (expected) throw new NoticeSettingsConflictError();
+          throw unsafe();
+        }
         // Authorization may change while the asynchronous snapshot is being read.
         await assertPermission();
         if (before) await rename(staged, file);
-        else await link(staged, file);
-        return true;
+        else {
+          try { await link(staged, file); }
+          catch (error) {
+            if (expected && (error as NodeJS.ErrnoException).code === "EEXIST") throw new NoticeSettingsConflictError();
+            throw error;
+          }
+        }
+        return { changed: true, location: { source: before?.source ?? primary, file, bytes: output } };
       } finally { await rm(stage, { recursive: true, force: true }).catch(() => undefined); }
     } finally { lock.close(); }
   }
@@ -216,14 +262,27 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
       return doc.toJS({ maxAliasCount: 50 }) as Record<string, unknown>;
     },
 
-    write(section: string, field: NoticeSettingsField, value: Value | undefined, authorize: Authorize): Promise<boolean> {
-      return write(section, [[field, value]], authorize);
+    async write(section: string, field: NoticeSettingsField, value: Value | undefined, authorize: Authorize): Promise<boolean> {
+      return (await write(section, [[field, value]], authorize)).changed;
     },
 
-    writeDefaults(fields: readonly NoticeSettingsField[], value: boolean, authorize: Authorize): Promise<boolean> {
-      return write("default", fields.map(field => [field, value]), authorize);
+    async writeDefaults(fields: readonly NoticeSettingsField[], value: boolean, authorize: Authorize): Promise<boolean> {
+      return (await write("default", fields.map(field => [field, value]), authorize)).changed;
+    },
+
+    async readVersionedDefaults(fields: readonly NoticeSettingsField[]): Promise<VersionedDefaults> {
+      try { return versionedDefaults(await read(), fields); }
+      catch { return { values: new Map(), revision: revision(undefined, "unreadable"), writable: false }; }
+    },
+
+    async writeVersionedDefaults(revision: string, fields: readonly NoticeSettingsField[],
+      updates: readonly (readonly [field: NoticeSettingsField, value: boolean])[],
+    ): Promise<VersionedDefaults> {
+      const { location } = await write("default", updates, async () => true, { revision, fields });
+      return versionedDefaults(location, fields);
     },
   };
 }
 
 export class NoticeSettingsPermissionError extends Error {}
+export class NoticeSettingsConflictError extends Error {}

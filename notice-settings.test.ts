@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
+import { createGroupNoticePanelSettings } from "./group-notice-panel-settings.ts";
 import type { NoticeSettingsCardModel, NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 import { createNoticeSettings, isNoticeSettingsCommand, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
 
@@ -47,6 +48,7 @@ async function fixture() {
   await mkdir(join(path, "plugins/yenai-plugin/config/config"), { recursive: true });
   return {
     command: createNoticeSettings(root, lock),
+    panel: createGroupNoticePanelSettings(root, lock),
     withRenderer: (render: NoticeSettingsCardRenderer, signal?: AbortSignal) => createNoticeSettings(root, lock, signal, render),
     legacy, primary: join(path, "config/group-notice.yaml"),
   };
@@ -444,4 +446,103 @@ test("通知设置三条规范化入口接管，旧品牌指令不读取或修�
   expect(authorizations).toBe(0);
   expect(renders).toBe(0);
   expect(await readFile(legacy, "utf8")).toBe(before);
+});
+
+test("面板只读写八个默认群通知开关并保留旧文件字节、覆盖和值", async () => {
+  const { panel, command, legacy } = await fixture();
+  const before = "# 原文件\r\ndefault: {groupMessage: false, privateMessage: true, misc: [1,2]}\r\n77: {groupRecall: true} # 原覆盖\r\n";
+  await writeFile(legacy, before);
+  const initial = await panel.read();
+  expect(initial).toEqual({ settings: {
+    groupMessage: false, grouptemporaryMessage: false, groupRecall: false, addGroupApplication: false,
+    groupNumberChange: false, groupMemberNumberChange: false, groupAdminChange: false, botBeenBanned: false,
+  }, revision: expect.stringMatching(/^[a-f0-9]{64}$/u), writable: true });
+  expect(JSON.stringify(initial)).not.toContain(legacy);
+  const after = await panel.write(initial.revision, { groupMessage: true, groupAdminChange: true });
+  expect(after.settings).toEqual({ ...initial.settings, groupMessage: true, groupAdminChange: true });
+  expect(after.revision).not.toBe(initial.revision);
+  expect(await panel.read()).toEqual(after);
+  expect(await command(overview, groupOwner)).toContain("群管理变动：开启");
+  expect(await readFile(legacy, "utf8")).toBe(before.replace("{groupMessage: false", "{groupAdminChange: true, groupMessage: true"));
+  const inode = (await stat(legacy)).ino;
+  expect(await panel.write(after.revision, { groupMessage: true })).toEqual(after);
+  expect((await stat(legacy)).ino).toBe(inode);
+});
+
+test("面板比较有效来源、真实符号链接目标和原字节，保护新来源及聊天修改", async () => {
+  const { panel, command, legacy, primary } = await fixture();
+  const original = "default: {groupRecall: false}\n";
+  await writeFile(legacy, original);
+  const old = await panel.read();
+  await mkdir(join(primary, ".."), { recursive: true });
+  await symlink(legacy, primary);
+  const linked = await panel.read();
+  expect(linked.revision).not.toBe(old.revision);
+  await expect(panel.write(old.revision, { groupRecall: true })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+  await writeFile(legacy, original + "# 外部备注\n");
+  const changed = await panel.read();
+  await expect(panel.write(linked.revision, { groupRecall: true })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+  expect(changed.revision).not.toBe(linked.revision);
+
+  const clock = await panel.write(changed.revision, { groupRecall: true });
+  expect((await lstat(primary)).isSymbolicLink()).toBe(true);
+  expect(await readFile(legacy, "utf8")).toBe("default: {groupRecall: true}\n# 外部备注\n");
+  expect(await command("#通知设置群消息开启", groupOwner)).toContain("已保存");
+  await expect(panel.write(clock.revision, { groupRecall: false })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+  expect((await panel.read()).settings).toMatchObject({ groupRecall: true, groupMessage: true });
+});
+
+test("同一旧版本的并发面板补丁只成功一次且共享聊天写锁", async () => {
+  const { panel, command, legacy } = await fixture();
+  const original = await panel.read();
+  expect(original.writable).toBe(true);
+  expect(await panel.write(original.revision, {})).toEqual(original);
+  const results = await Promise.allSettled([
+    panel.write(original.revision, { groupRecall: true }),
+    panel.write(original.revision, { groupMessage: true }),
+  ]);
+  const conflicts = results.filter(result => result.status === "rejected");
+  expect(conflicts).toHaveLength(1);
+  expect(conflicts[0]?.reason).toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+  const updated = await panel.read();
+  expect(Number(updated.settings.groupRecall) + Number(updated.settings.groupMessage)).toBe(1);
+  expect(await command("#通知设置好友消息开启", privateOwner)).toContain("已保存");
+  await expect(panel.write(updated.revision, { groupAdminChange: true })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+  const final = await panel.write((await panel.read()).revision, { groupAdminChange: true });
+  expect(final.settings.groupAdminChange).toBe(true);
+  const [panelWrite, chatWrite] = await Promise.allSettled([
+    panel.write(final.revision, { groupNumberChange: true }),
+    command("#通知设置好友申请开启", groupOwner),
+  ]);
+  expect(chatWrite.status === "fulfilled" && chatWrite.value).toContain("已保存");
+  if (panelWrite.status === "rejected") {
+    expect(panelWrite.reason).toMatchObject({ code: "GROUP_NOTICE_SETTINGS_CONFLICT" });
+    await panel.write((await panel.read()).revision, { groupNumberChange: true });
+  }
+  expect((await panel.read()).settings.groupNumberChange).toBe(true);
+  expect(await command(overview, groupOwner)).toContain("好友申请：开启");
+  await expect(readFile(legacy, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("面板拒绝其它字段和非法配置，异常来源原样保留", async () => {
+  const { panel, legacy } = await fixture();
+  const good = "default: {groupMessage: false, privateMessage: true}\n";
+  await writeFile(legacy, good);
+  const { revision } = await panel.read();
+  for (const patch of [
+    { groupMessage: "true" }, { botId: 99 }, { 77: false }, { path: "/tmp/notice.yaml" },
+    { notificationsAll: false }, { privateMessage: true }, { msgSaveDeltime: 600 },
+    ["groupMessage"], JSON.parse('{"__proto__":true}'), { get groupMessage() { throw new Error("不得调用"); } },
+  ]) await expect(panel.write(revision, patch)).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_INPUT" });
+  await expect(panel.write(revision + "\n", {})).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_INPUT" });
+  expect(await readFile(legacy, "utf8")).toBe(good);
+
+  for (const invalid of ["default: [\n", "default: false\n", "default: {groupMessage: []}\n"]) {
+    await writeFile(legacy, invalid);
+    const broken = await panel.read();
+    expect(broken.writable).toBe(false);
+    expect(broken.revision).not.toBe(revision);
+    await expect(panel.write(broken.revision, { groupRecall: true })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_UNAVAILABLE" });
+    expect(await readFile(legacy, "utf8")).toBe(invalid);
+  }
 });
