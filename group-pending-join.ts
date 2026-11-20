@@ -16,6 +16,13 @@ export interface PendingGroupJoinReviewResult {
   readonly nickname?: string;
 }
 
+type BatchReviewStatus = "confirmed" | "rejected" | "unknown" | "unavailable" | "risk" | "expired";
+
+export interface PendingGroupJoinBatchResult {
+  readonly status: "processed" | "unavailable" | "not-found";
+  readonly entries?: readonly { readonly userId: number; readonly status: BatchReviewStatus }[];
+}
+
 export interface GroupPendingJoinContext {
   readonly message_type: "group" | "private" | "terminal";
   readonly self_id?: number;
@@ -25,6 +32,7 @@ export interface GroupPendingJoinContext {
   readonly adapter?: "onebot" | "milky";
   readonly message_id?: number | string;
   readonly groupReviewPendingJoin?: (userId: number, approve: boolean) => Promise<PendingGroupJoinReviewResult>;
+  readonly groupReviewAllPendingJoins?: (approve: boolean) => Promise<PendingGroupJoinBatchResult>;
   readonly groupListPendingJoinRequests?: () => Promise<PendingGroupJoins | undefined>;
 }
 
@@ -34,6 +42,7 @@ type Reply = string | { readonly type: "forward"; readonly nodes: readonly (read
 export const groupPendingJoinFeature = "[group] 加群申请列表";
 export const groupPendingJoinReviewFeature = "[group] 加群申请审核";
 const review = /^#?(同意|拒绝)(?:加|入)?群申请(\d+)$/u;
+const reviewAll = /^#?(同意|拒绝)全部(?:加|入)群申请$/u;
 const lookup = /^#?查看(?:全部)?(?:加|入)?群申请$/u;
 const maxShown = 50;
 const unavailable = "当前无法核验本群的加群申请，请在 QQ 中查看。";
@@ -43,7 +52,7 @@ export function isGroupPendingJoinCommand(message: string): boolean {
 }
 
 export function isGroupPendingJoinReviewCommand(message: string): boolean {
-  return review.test(message);
+  return review.test(message) || reviewAll.test(message);
 }
 
 function positiveId(id: number | undefined): boolean {
@@ -98,6 +107,7 @@ export async function groupPendingJoinCommand(message: string, context: GroupPen
 }
 
 const reviewUnavailable = "当前无法按 QQ 核实并审核这条加群申请，请引用原加群通知或在 QQ 中处理。";
+const batchUnavailable = "当前无法核验本群的完整待审列表，不能批量审核。请引用原加群通知或在 QQ 中处理。";
 const reviewUnknown = "加群申请处理结果未确认，请先在 QQ 核对。";
 
 function reviewReply(result: PendingGroupJoinReviewResult, verb: string, applicant: number): string {
@@ -116,27 +126,65 @@ function reviewReply(result: PendingGroupJoinReviewResult, verb: string, applica
   }
 }
 
+function batchReviewReply(result: PendingGroupJoinBatchResult, verb: string): Reply {
+  if (result.status === "unavailable") return batchUnavailable;
+  if (result.status === "not-found") return "暂无加群申请(。-ω-)zzz";
+  if (result.status !== "processed" || !Array.isArray(result.entries) || !result.entries.length) return reviewUnknown;
+
+  const labels = {
+    confirmed: `已${verb}`,
+    rejected: "失败",
+    risk: "风险",
+    unknown: "结果未知",
+    unavailable: "未处理",
+    expired: "未处理",
+  } satisfies Record<BatchReviewStatus, string>;
+  const rows = new Map([...new Set(Object.values(labels))].map(label => [label, [] as string[]]));
+  for (const entry of result.entries) {
+    if (!entry || !positiveId(entry.userId) || !Object.hasOwn(labels, entry.status)) return reviewUnknown;
+    const status = entry.status as BatchReviewStatus;
+    const id = String(entry.userId);
+    rows.get(labels[status])?.push(status === "expired" ? `${id}（已过期或已处理）` : id);
+  }
+
+  const summary = [`本次共核对 ${result.entries.length} 条加群申请`,
+    ...[...rows].map(([label, items]) => `${label}：${items.length} 条`)].join("\n");
+  const nodes = [...rows].filter(([, items]) => items.length).map(([label, items]) => {
+    const shown = items.slice(0, maxShown).map((item, index) => `${index + 1}、${item}`);
+    if (items.length > shown.length) shown.push(`另有 ${items.length - shown.length} 条，详见 QQ。`);
+    return [`${label}名单\n${shown.join("\n")}`];
+  });
+  return { type: "forward", nodes: [[summary], ...nodes] };
+}
+
 export function createGroupPendingJoinReview(signal?: AbortSignal) {
   const inFlight = new Set<string>();
   const seen = new Set<string>();
-  return async (message: string, context: GroupPendingJoinContext): Promise<string | readonly [] | undefined> => {
-    const match = review.exec(message);
+  return async (message: string, context: GroupPendingJoinContext): Promise<Reply | readonly [] | undefined> => {
+    const batch = reviewAll.exec(message);
+    const match = batch ?? review.exec(message);
     if (!match || context.message_type !== "group" || context.isDelegated || signal?.aborted) return;
-    const { adapter, self_id, group_id, user_id, message_id, groupReviewPendingJoin } = context;
+    const { adapter, self_id, group_id, user_id, message_id, groupReviewPendingJoin, groupReviewAllPendingJoins } = context;
     const nativeId = typeof message_id === "number" ? Number.isSafeInteger(message_id) :
       typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128;
-    if (!nativeId || !positiveId(self_id) || !positiveId(group_id) || !positiveId(user_id) || !groupReviewPendingJoin) {
-      return reviewUnavailable;
+    if (!nativeId || !positiveId(self_id) || !positiveId(group_id) || !positiveId(user_id) ||
+        (batch ? !groupReviewAllPendingJoins : !groupReviewPendingJoin)) {
+      return batch ? batchUnavailable : reviewUnavailable;
     }
     const applicant = Number(match[2]);
-    if (!positiveId(applicant)) return "请填写有效的申请人 QQ 号。";
+    if (!batch && !positiveId(applicant)) return "请填写有效的申请人 QQ 号。";
 
     const key = JSON.stringify([adapter ?? "onebot", self_id, group_id, user_id, String(message_id)]);
     if (inFlight.has(key) || seen.has(key)) return [];
     inFlight.add(key);
     const verb = match[1] === "同意" ? "同意" : "拒绝";
     try {
-      return reviewReply(await groupReviewPendingJoin(applicant, verb === "同意"), verb, applicant);
+      if (batch) {
+        const result = await groupReviewAllPendingJoins?.(verb === "同意");
+        return result ? batchReviewReply(result, verb) : reviewUnknown;
+      }
+      const result = await groupReviewPendingJoin?.(applicant, verb === "同意");
+      return result ? reviewReply(result, verb, applicant) : reviewUnknown;
     } catch {
       return reviewUnknown;
     } finally {

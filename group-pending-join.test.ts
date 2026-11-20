@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createGroupPendingJoinReview, groupPendingJoinCommand, isGroupPendingJoinCommand, isGroupPendingJoinReviewCommand,
-  type GroupPendingJoinContext, type PendingGroupJoinReviewResult, type PendingGroupJoins } from "./group-pending-join.ts";
+  type GroupPendingJoinContext, type PendingGroupJoinBatchResult, type PendingGroupJoinReviewResult, type PendingGroupJoins } from "./group-pending-join.ts";
 
 const current = { message_type: "group", self_id: 99, group_id: 77, user_id: 42 } satisfies GroupPendingJoinContext;
 const command = "#查看加群申请";
@@ -80,7 +80,7 @@ test("旧按 QQ 审核保持同群真消息和单个安全 QQ，清晰回执确�
   for (const input of ["#同意加群申请510", "拒绝入群申请510", "#同意群申请511"]) {
     expect(isGroupPendingJoinReviewCommand(input)).toBe(true);
   }
-  for (const input of ["#同意全部加群申请", "#同意", "#拒绝入群 10", "#同意加群申请", "#拒绝好友申请510",
+  for (const input of ["#同意全部群申请", "#同意", "#拒绝入群 10", "#同意加群申请", "#拒绝好友申请510",
     "#同意加群申请@510", "#拒绝群申请510 511"]) {
     expect(isGroupPendingJoinReviewCommand(input)).toBe(false);
     expect(await handle(input, scope)).toBeUndefined();
@@ -130,4 +130,68 @@ test("原消息并发和回执未知不重复提交，同号不同群或协议�
   controller.abort();
   expect(await createGroupPendingJoinReview(controller.signal)(command, scope)).toBeUndefined();
   expect(calls).toBe(3);
+});
+
+test("原批量审核汇总逐条回执，同 QQ 两条分别计数", async () => {
+  const handle = createGroupPendingJoinReview();
+  const calls: boolean[] = [];
+  const context: GroupPendingJoinContext = { ...current, message_id: 1, adapter: "milky",
+    async groupReviewAllPendingJoins(approve) {
+      calls.push(approve);
+      return { status: "processed", entries: [
+        { userId: 510, status: "confirmed" }, { userId: 510, status: "rejected" }, { userId: 511, status: "confirmed" },
+        { userId: 512, status: "risk" }, { userId: 513, status: "unknown" }, { userId: 514, status: "unavailable" },
+        { userId: 515, status: "expired" },
+      ] };
+    },
+  };
+  expect(await handle("#同意全部加群申请", context)).toEqual({
+    type: "forward", nodes: [
+      ["本次共核对 7 条加群申请\n已同意：2 条\n失败：1 条\n风险：1 条\n结果未知：1 条\n未处理：2 条"],
+      ["已同意名单\n1、510\n2、511"], ["失败名单\n1、510"], ["风险名单\n1、512"],
+      ["结果未知名单\n1、513"], ["未处理名单\n1、514\n2、515（已过期或已处理）"],
+    ],
+  });
+  expect(await handle("拒绝全部入群申请", { ...context, message_id: 2 })).toMatchObject({ type: "forward" });
+  expect(calls).toEqual([true, false]);
+  for (const input of ["#拒绝全部群申请", "#同意全部加群申请510", "#同意全部好友申请"]) {
+    expect(isGroupPendingJoinReviewCommand(input)).toBe(false);
+    expect(await handle(input, context)).toBeUndefined();
+  }
+});
+
+test("批量审核同单条共享原消息屏障，不越群且未知永不重复提交", async () => {
+  const handle = createGroupPendingJoinReview();
+  let resolve!: (value: PendingGroupJoinBatchResult) => void;
+  const pending = new Promise<PendingGroupJoinBatchResult>((settle) => { resolve = settle; });
+  let batchCalls = 0;
+  let singleCalls = 0;
+  const context: GroupPendingJoinContext = { ...current, message_id: 1, adapter: "milky",
+    groupReviewAllPendingJoins() { batchCalls++; return pending; },
+    async groupReviewPendingJoin() { singleCalls++; return { status: "confirmed" }; },
+  };
+  const command = "#同意全部加群申请";
+  expect(await handle(command, { ...context, message_type: "private" })).toBeUndefined();
+  expect(await handle(command, { ...context, isDelegated: true })).toBeUndefined();
+  expect(await handle(command, { ...context, group_id: undefined })).toContain("无法核验本群的完整待审列表");
+  expect(await handle(command, { ...context, groupReviewAllPendingJoins: undefined })).toContain("请引用原加群通知");
+  expect(batchCalls).toBe(0);
+  const first = handle(command, context);
+  expect(await handle(command, context)).toEqual([]);
+  expect(await handle("#同意加群申请510", context)).toEqual([]);
+  resolve({ status: "processed", entries: [] });
+  expect(await first).toContain("结果未确认");
+  expect(await handle(command, context)).toEqual([]);
+  expect(batchCalls).toBe(1);
+  expect(singleCalls).toBe(0);
+});
+
+test("批量审核仅在宿主明确确认真空时报告暂无申请", async () => {
+  const handle = createGroupPendingJoinReview();
+  const run = (result: PendingGroupJoinBatchResult, message_id: number) => handle("#拒绝全部入群申请", {
+    ...current, message_id, groupReviewAllPendingJoins: async () => result,
+  });
+  expect(await run({ status: "not-found" }, 1)).toContain("暂无加群申请");
+  expect(await run({ status: "unavailable" }, 2)).toContain("请引用原加群通知或在 QQ 中处理");
+  expect(await run({ status: "processed", entries: [{ userId: 0, status: "confirmed" }] }, 3)).toContain("结果未确认");
 });
