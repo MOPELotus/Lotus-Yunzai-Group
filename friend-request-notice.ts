@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { parse } from "yaml";
+import { configuredPrivateNotice, createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 
 export type FriendRequestNoticePart = string | { readonly type: "image"; readonly file: string };
@@ -11,37 +10,14 @@ export interface FriendRequestNoticeInput {
   readonly comment?: string;
   readonly autoResult?: "confirmed" | "rejected" | "unknown";
 }
-export interface FriendRequestNoticeOptions {
-  readonly config?: URL;
-  readonly legacyConfig?: URL;
-  readonly signal?: AbortSignal;
-}
+export type FriendRequestNoticeOptions = PrivateNoticeOptions;
 
 export type FriendRequestNotice = (request: FriendRequestNoticeInput, signal?: AbortSignal) => Promise<readonly FriendRequestNoticePart[] | undefined>;
 
 export const friendRequestNoticeFeature = "[group] 好友申请通知";
 
-function record(value: unknown): Record<string, unknown> | undefined {
-  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-}
-
-async function fileText(path: URL | undefined): Promise<string | undefined> {
-  if (!path) return;
-  try { return await readFile(path, "utf8"); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-}
-
 export function configuredFriendRequestNotice(value: unknown, botId: number): boolean {
-  const config = record(value);
-  if (!config) return false;
-  let enabled = false;
-  for (const key of ["default", "", `bot:${botId}`, `bot:${botId}:`]) {
-    const section = Object.hasOwn(config, key) ? record(config[key]) : undefined;
-    if (section && Object.hasOwn(section, "friendRequest")) enabled = section.friendRequest === true;
-  }
-  return enabled;
+  return configuredPrivateNotice(value, botId, "friendRequest");
 }
 
 function positiveId(value: number): boolean {
@@ -56,14 +32,12 @@ function status(result: FriendRequestNoticeInput["autoResult"]): string | undefi
   }
 }
 
-export function createFriendRequestNotice({ config, legacyConfig, signal: moduleSignal }: FriendRequestNoticeOptions): FriendRequestNotice {
+export function createFriendRequestNotice(options: FriendRequestNoticeOptions): FriendRequestNotice {
+  const isEnabled = createPrivateNoticeSettings(options, "friendRequest");
   return async (request, signal) => {
     const { botId, userId, nickname, source, comment, autoResult } = request;
-    if (moduleSignal?.aborted || signal?.aborted || !positiveId(botId) || !positiveId(userId) || botId === userId) return;
-    try {
-      const text = await fileText(config) ?? await fileText(legacyConfig);
-      if (text === undefined || moduleSignal?.aborted || signal?.aborted || !configuredFriendRequestNotice(parse(text, { merge: true, maxAliasCount: 50 }), botId)) return;
-    } catch { return; }
+    if (!positiveId(botId) || !positiveId(userId) || botId === userId || !await isEnabled(botId, signal) ||
+        options.signal?.aborted || signal?.aborted) return;
 
     const result = status(autoResult);
     return [
