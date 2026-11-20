@@ -18,6 +18,7 @@ import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature,
 import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
+import { createNoticeSettings, isNoticeSettingsCommand, noticeSettingsFeature, type NoticeSettingsContext } from "./notice-settings.ts";
 import { createTemporaryMessageNotice, type TemporaryMessageNotice } from "./temporary-message-notice.ts";
 import { createFriendRelationshipNotice, type FriendRelationshipNotice } from "./friend-relationship-notice.ts";
 import { createGroupRecallNotice, type GroupRecallNotice } from "./group-recall-notice.ts";
@@ -51,6 +52,7 @@ export { groupActivityFeature, groupActivityRankFeature, type GroupActivityConte
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 export { groupNotificationFeature, type GroupNotificationContext, type GroupNotificationPart } from "./group-notify.ts";
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
+export { noticeSettingsFeature, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
 export { createTemporaryMessageNotice, temporaryMessageNoticeFeature, type TemporaryMessageNotice, type TemporaryMessageNoticeInput, type TemporaryMessageNoticePart } from "./temporary-message-notice.ts";
 export { createFriendRelationshipNotice, friendRelationshipNoticeFeature, type FriendRelationshipNotice, type FriendRelationshipNoticeInput, type FriendRelationshipNoticePart } from "./friend-relationship-notice.ts";
 export { createGroupRecallNotice, groupRecallNoticeFeature, type GroupRecallNotice, type GroupRecallNoticeInput, type GroupRecallNoticeOutput, type GroupRecallPart } from "./group-recall-notice.ts";
@@ -184,6 +186,7 @@ export async function createModule({
     const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
   }
+  const noticeSettings = lockFile && createNoticeSettings(root, lockFile, signal);
   const blacklist = lockFile && !signal.aborted ? createManagedBlacklist(root, lockFile) : undefined;
   const stopManagedBlacklist = blacklist && registerManagedBlacklist?.(blacklist);
   const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal) : undefined;
@@ -208,9 +211,10 @@ export async function createModule({
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
-    fallback(message: string, context: ModerationContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
+    fallback(message: string, context: ModerationContext & NoticeSettingsContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
       GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
       const normalized = context.normalizedMessage.trim();
+      if (noticeSettings && isNoticeSettingsCommand(normalized)) return noticeSettings(normalized, context);
       if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context, signal);
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
@@ -237,6 +241,7 @@ export async function createModule({
     },
     fallbackFeatures(context: Parameters<typeof manifest.fallbackFeatures>[0]) {
       const message = context.normalizedMessage.trim();
+      if (isNoticeSettingsCommand(message)) return [noticeSettingsFeature];
       if (context.message_type !== "terminal" && isRequestOverviewCommand(message)) return [requestOverviewFeature];
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];

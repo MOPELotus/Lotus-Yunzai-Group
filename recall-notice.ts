@@ -11,7 +11,7 @@ export function positiveRecallId(value: number | undefined): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function retentionSeconds(value: unknown): number | undefined {
+export function recallRetentionSeconds(value: unknown): number | undefined {
   if (value === undefined) return defaultRetention;
   const seconds = typeof value === "string" && /^\d+$/u.test(value.trim()) ? Number(value.trim()) : value;
   if (typeof seconds === "number" && positiveRecallId(seconds) && seconds <= maxRetention) return seconds;
@@ -29,7 +29,7 @@ export function createRecallRetention(options: PrivateNoticeOptions, field: "Pri
     if (!positiveRecallId(botId) || (field === "groupRecall" && !positiveRecallId(groupId))) return;
     const settings = await read(signal);
     if (!options.signal?.aborted && !signal?.aborted && configuredPrivateNotice(settings, botId, field, groupId)) {
-      return retentionSeconds(privateNoticeSetting(settings, botId, "msgSaveDeltime", groupId));
+      return recallRetentionSeconds(privateNoticeSetting(settings, botId, "msgSaveDeltime", groupId));
     }
   };
 }
