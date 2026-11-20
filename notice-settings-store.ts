@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import { isAlias, isMap, isScalar, parseDocument, Parser, type YAMLMap } from "yaml";
 
 export type NoticeSettingsField = "privateMessage" | "grouptemporaryMessage" | "groupRecall" | "PrivateRecall" |
-  "friendRequest" | "friendNumberChange" | "groupMemberNumberChange" | "groupAdminChange" | "botBeenBanned" | "groupNumberChange" | "addGroupApplication" | "msgSaveDeltime";
+  "friendRequest" | "friendNumberChange" | "groupMemberNumberChange" | "groupAdminChange" | "botBeenBanned" | "groupNumberChange" | "addGroupApplication" | "groupInviteRequest" | "msgSaveDeltime";
 export type NoticeSettingsScope = "default" | "group" | "bot" | "bot-group";
 type Value = boolean | number;
 type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;

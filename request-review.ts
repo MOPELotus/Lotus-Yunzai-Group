@@ -12,6 +12,7 @@ export interface GroupRequestEvent {
   readonly sub_type: GroupRequestKind;
   readonly flag: string;
   readonly comment?: string;
+  readonly notifyInvitationRequestOwners?: (ordinaryMessage: string, actions: string) => Promise<number>;
   readonly notifyJoinRequestOwners?: (ordinaryMessage: string, actions: string) => Promise<number>;
   readonly notifyRequestOwners?: (message: string) => Promise<number>;
   readonly notifyMasters?: (message: string) => Promise<number>;
@@ -122,14 +123,16 @@ export function createGroupRequestReview() {
     pending.set(id, request);
 
     try {
-      const actions = `#同意入群 ${id}\n#拒绝入群 ${id} [原因]`;
+      const quoted = event.notifyRequestOwners && groupRequestScope === "milky" && sub_type === "invite";
+      const actions = `#同意入群 ${id}\n#拒绝入群 ${id} [原因]` +
+        (quoted ? "\n也可引用此通知回复「同意」或「拒绝」。" : "");
       const ordinaryMessage = `【待审核群请求】\n${describe(id, request)}\n${actions}`;
-      if (sub_type === "add" && event.notifyJoinRequestOwners) {
-        await event.notifyJoinRequestOwners(ordinaryMessage, actions);
+      const notifyOwners = sub_type === "add" ? event.notifyJoinRequestOwners : event.notifyInvitationRequestOwners;
+      if (notifyOwners) {
+        await notifyOwners(ordinaryMessage, actions);
       } else {
         const notify = event.notifyRequestOwners ?? event.notifyMasters;
-        const quoted = event.notifyRequestOwners && groupRequestScope === "milky" && sub_type === "invite";
-        await notify?.(ordinaryMessage + (quoted ? "\n也可引用此通知回复「同意」或「拒绝」。" : ""));
+        await notify?.(ordinaryMessage);
       }
     } catch {
       // The owner can still review a request whose notification was not delivered.

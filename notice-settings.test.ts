@@ -59,7 +59,8 @@ test("旧状态列当前生效值和已支持范围，普通群员可读，未�
   expect(result).toContain("好友消息：开启");
   expect(result).toContain("群撤回：开启（当前仅文本）");
   expect(result).toContain("删除缓存时间：150 秒");
-  for (const privateDetails of ["群邀请", "bot:100", "notice.yaml"]) expect(result).not.toContain(privateDetails);
+  expect(result).toContain("群邀请：开启（主人编号通知详情）");
+  for (const privateDetails of ["群消息", "bot:100", "notice.yaml"]) expect(result).not.toContain(privateDetails);
   expect(await command(overview, privateOwner)).toContain("群撤回：关闭");
   expect(await command(overview, { ...groupOwner, isDelegated: true })).toBeUndefined();
 });
@@ -112,7 +113,7 @@ test("权限按四种作用域传入，撤权、非法及未实现操作不写",
   expect(await command("#椰奶通知设置群撤回群单独开启", privateOwner)).toContain("权限");
   expect(await command("#椰奶通知设置好友消息群单独开启", groupOwner)).toContain("不支持此作用域");
   expect(await command("#椰奶通知设置删除缓存时间0", privateOwner)).toContain("正整数");
-  expect(await command("#椰奶通知设置群邀请开启", privateOwner)).toContain("尚不支持");
+  expect(await command("#椰奶通知设置群消息开启", privateOwner)).toContain("尚不支持");
   expect(await command("#椰奶启用全部通知", privateOwner)).toContain("尚不支持");
   expect(await readFile(legacy, "utf8")).toBe(raw);
   expect(isNoticeSettingsCommand("#椰奶通知设置群邀请开启")).toBe(true);
@@ -216,4 +217,16 @@ test("加群申请设置仅管理主人编号通知详情及旧群覆盖", async
   expect(await command("#椰奶通知设置加群申请bot群单独关闭", groupOwner)).toContain("加群申请：关闭");
   expect(await command("#椰奶通知设置加群申请bot群单独取消", groupOwner)).toContain("加群申请：开启");
   expect(await readFile(legacy, "utf8")).toContain("groupInviteRequest: true");
+});
+
+test("群邀请仅开放旧默认和当前 bot 设置", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { addGroupApplication: true, groupInviteRequest: false }\n");
+  expect(await command(overview, groupOwner)).toContain("群邀请：关闭（主人编号通知详情）");
+  expect(await command("#椰奶通知设置群邀请群单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置群邀请bot群单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置群邀请开启", groupOwner)).toContain("群邀请：开启");
+  expect(await command("#椰奶通知设置群邀请bot单独关闭", groupOwner)).toContain("群邀请：关闭");
+  expect(await command("#椰奶通知设置群邀请bot单独取消", groupOwner)).toContain("群邀请：开启");
+  expect(await readFile(legacy, "utf8")).toContain("addGroupApplication: true");
 });

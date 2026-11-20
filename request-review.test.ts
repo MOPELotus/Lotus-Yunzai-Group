@@ -192,3 +192,36 @@ test("入群申请主人详情只送一次，沿用同一编号，邀请与原�
   const invitationId = visibleId(prior[0]!);
   expect(prior[0]).toBe(`【待审核群请求】\n${invitationId} · 邀请机器人加入群聊 · 群 30 · 邀请者 42\n#同意入群 ${invitationId}\n#拒绝入群 ${invitationId} [原因]\n也可引用此通知回复「同意」或「拒绝」。`);
 });
+
+test("主人邀请详情使用原编号，且仅在旧 Milky 引用能力存在时附原提示", async () => {
+  const queue = createGroupRequestReview();
+  const invitations: [string, string][] = [];
+  const old: string[] = [];
+  const notifyInvitationRequestOwners = async (ordinaryMessage: string, actions: string) => {
+    invitations.push([ordinaryMessage, actions]);
+    return 1;
+  };
+  const notifyRequestOwners = async (message: string) => { old.push(message); return 1; };
+  const invitation = {
+    ...request, groupRequestScope: "milky", sub_type: "invite", flag: "quote",
+    notifyInvitationRequestOwners, notifyRequestOwners,
+  } as const;
+  await Promise.all([queue.receive(invitation), queue.receive(invitation)]);
+  expect(invitations).toHaveLength(1);
+  expect(old).toEqual([]);
+  const [ordinary, actions] = invitations[0]!;
+  const id = visibleId(ordinary);
+  expect(actions).toBe(`#同意入群 ${id}\n#拒绝入群 ${id} [原因]\n也可引用此通知回复「同意」或「拒绝」。`);
+  expect(ordinary).toBe(`【待审核群请求】\n${id} · 邀请机器人加入群聊 · 群 30 · 邀请者 42\n${actions}`);
+  expect(queue.commands["#入群申请"]("", {
+    ...owner, groupRequestScope: "milky", canReviewGroupRequests: true,
+  })).toContain(id);
+
+  await queue.receive({ ...invitation, flag: "numbered-only", notifyRequestOwners: undefined });
+  await queue.receive({ ...invitation, flag: "onebot", groupRequestScope: undefined });
+  await queue.receive({ ...invitation, flag: "application", sub_type: "add" });
+  expect(invitations).toHaveLength(3);
+  expect(invitations.slice(1).every(([, actionText]) => !actionText.includes("引用"))).toBe(true);
+  expect(old).toHaveLength(1);
+  expect(old[0]).toContain("成员申请入群");
+});
