@@ -19,6 +19,7 @@ import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, t
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
 import { createNoticeSettings, isNoticeSettingsCommand, noticeSettingsFeature, type NoticeSettingsContext } from "./notice-settings.ts";
+import { createGroupOwnerAdminNotice, type GroupOwnerAdminNotice } from "./group-owner-admin-notice.ts";
 import { createGroupOwnerMemberNotice, type GroupOwnerMemberNotice } from "./group-owner-member-notice.ts";
 import { createTemporaryMessageNotice, type TemporaryMessageNotice } from "./temporary-message-notice.ts";
 import { createFriendRelationshipNotice, type FriendRelationshipNotice } from "./friend-relationship-notice.ts";
@@ -53,6 +54,7 @@ export { groupActivityFeature, groupActivityRankFeature, type GroupActivityConte
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 export { groupNotificationFeature, type GroupNotificationContext, type GroupNotificationPart } from "./group-notify.ts";
 export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, type GroupAddNoticePart } from "./group-add-notice.ts";
+export { createGroupOwnerAdminNotice, groupOwnerAdminNoticeFeature, type GroupOwnerAdminNotice, type GroupOwnerAdminNoticeInput, type GroupOwnerAdminNoticePart } from "./group-owner-admin-notice.ts";
 export { noticeSettingsFeature, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
 export { createTemporaryMessageNotice, temporaryMessageNoticeFeature, type TemporaryMessageNotice, type TemporaryMessageNoticeInput, type TemporaryMessageNoticePart } from "./temporary-message-notice.ts";
 export { createFriendRelationshipNotice, friendRelationshipNoticeFeature, type FriendRelationshipNotice, type FriendRelationshipNoticeInput, type FriendRelationshipNoticePart } from "./friend-relationship-notice.ts";
@@ -134,7 +136,7 @@ export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
   lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
   registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice,
-  registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice,
+  registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice, registerGroupOwnerAdminNotice,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -149,6 +151,7 @@ export async function createModule({
   readonly groupTimedMute?: GroupTimedMuteServices;
   readonly registerGroupAddNotice?: (policy: GroupAddNotice) => () => void;
   readonly registerGroupRecallNotice?: (policy: GroupRecallNotice) => () => void;
+  readonly registerGroupOwnerAdminNotice?: (policy: GroupOwnerAdminNotice) => () => void;
   readonly registerGroupOwnerMemberNotice?: (policy: GroupOwnerMemberNotice) => () => void;
   readonly registerFriendRecallNotice?: (policy: FriendRecallNotice) => () => void;
   readonly registerFriendPokeNotice?: (policy: FriendPokeNotice) => () => void;
@@ -187,6 +190,7 @@ export async function createModule({
   const stopFriendRecallNotice = !signal.aborted && registerFriendRecallNotice?.(createFriendRecallNotice(noticeOptions));
   const stopGroupRecallNotice = !signal.aborted && registerGroupRecallNotice?.(createGroupRecallNotice(noticeOptions));
   const stopGroupOwnerMemberNotice = !signal.aborted && registerGroupOwnerMemberNotice?.(createGroupOwnerMemberNotice(noticeOptions));
+  const stopGroupOwnerAdminNotice = !signal.aborted && registerGroupOwnerAdminNotice?.(createGroupOwnerAdminNotice(noticeOptions));
   if (groupLeaveBlacklist && !signal.aborted) {
     const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
@@ -286,6 +290,7 @@ export async function createModule({
       if (stopFriendRecallNotice) stopFriendRecallNotice();
       if (stopGroupRecallNotice) stopGroupRecallNotice();
       if (stopGroupOwnerMemberNotice) stopGroupOwnerMemberNotice();
+      if (stopGroupOwnerAdminNotice) stopGroupOwnerAdminNotice();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();

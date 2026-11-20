@@ -173,3 +173,14 @@ test("配置最终回读后权限仍须有效，最后一次复核拒绝时不�
   expect(checks).toBe(3);
   expect(await readFile(legacy, "utf8")).toBe(original);
 });
+
+test("群管理变动状态及单项设置只允许旧真实群覆盖层", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { groupAdminChange: false, groupMemberNumberChange: true }\n");
+  expect(await command(overview, groupOwner)).toContain("群管理变动：关闭");
+  expect(await command("#椰奶通知设置群管理变动bot单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置群管理变动bot群单独开启", groupOwner)).toContain("群管理变动：开启");
+  expect(await command(overview, privateOwner)).toContain("群管理变动：关闭");
+  expect(await command("#椰奶通知设置群管理变动bot群单独取消", groupOwner)).toContain("群管理变动：关闭");
+  expect(await readFile(legacy, "utf8")).toContain("groupMemberNumberChange: true");
+});
