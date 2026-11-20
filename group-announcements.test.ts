@@ -111,8 +111,8 @@ function announcementDeletion() {
 
 test("旧删公告别名接同群实时序号，允许前导零和列表显示上限之后的正序号", async () => {
   const { remove, context, indices } = announcementDeletion();
-  expect(await remove("#删群公告001", context)).toBe("✅ 已删除「第一行 第二行」");
-  expect(await remove("#删公告21", { ...context, message_id: -8 })).toBe("✅ 已删除「第一行 第二行」");
+  expect(await remove("#删群公告001", context)).toBe("✅ 已删除「第一行\n第二行」");
+  expect(await remove("#删公告21", { ...context, message_id: -8 })).toBe("✅ 已删除「第一行\n第二行」");
   expect(await remove(`#删公告${Number.MAX_SAFE_INTEGER}`, { ...context, message_id: -9 })).toContain("已删除");
   expect(await remove(`#删公告${Number.MAX_SAFE_INTEGER + 1}`, context)).toContain("序号须为正整数");
   expect(await remove("#删公告0", context)).toContain("序号须为正整数");
@@ -120,6 +120,18 @@ test("旧删公告别名接同群实时序号，允许前导零和列表显示�
     expect(await remove(input, context)).toBeUndefined();
   }
   expect(indices).toEqual([1, 21, Number.MAX_SAFE_INTEGER]);
+});
+
+test("已确认删除保留正常长正文、原换行和表情，并明确提示无文字公告", async () => {
+  const { remove, context } = announcementDeletion();
+  const text = `${"公告".repeat(24)}\r\n第二行👩‍🎨\u202E\u0000`;
+  expect(await remove("#删公告2", { ...context, groupDeleteAnnouncement: async () => ({ status: "confirmed", text }) }))
+    .toBe(`✅ 已删除「${"公告".repeat(24)}\n第二行👩‍🎨」`);
+  expect(await remove("#删公告2", { ...context, message_id: -8, groupDeleteAnnouncement: async () => ({ status: "confirmed", text: " \n" }) }))
+    .toBe("✅ 已删除「（无文字，可能仅含图片）」");
+  const longText = `${"字".repeat(4094)}😀剩余字符`;
+  expect(await remove("#删公告2", { ...context, message_id: -9, groupDeleteAnnouncement: async () => ({ status: "confirmed", text: longText }) }))
+    .toBe(`✅ 已删除「${"字".repeat(4094)}…」`);
 });
 
 test("群删除缺可信会话、命令 ID 或已退出时不操作", async () => {

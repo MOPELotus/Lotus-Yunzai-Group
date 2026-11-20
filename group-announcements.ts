@@ -43,10 +43,11 @@ const maxEntries = 20;
 const summaryLength = 30;
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const unavailable = "当前无法获取本群的 QQ 群公告，请在 QQ 中查看。";
+const directionControls = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu;
 
 function summary(text: string): string {
   // Keep joiners used by emoji, while removing controls and directional formatting.
-  const line = text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim();
+  const line = text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").replace(directionControls, "").trim();
   if (!line) return "（无文字）";
   const parts: string[] = [];
   for (const { segment } of graphemes.segment(line.toWellFormed())) {
@@ -54,6 +55,15 @@ function summary(text: string): string {
     parts.push(segment);
   }
   return parts.join("");
+}
+
+function deletedText(text: string): string {
+  const cleaned = text.replace(/\r\n?|[\u2028\u2029]/gu, "\n")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, "").replace(directionControls, "").toWellFormed();
+  if (!cleaned.trim()) return "（无文字，可能仅含图片）";
+  const maxLength = 4096;
+  if (cleaned.length <= maxLength) return cleaned;
+  return cleaned.slice(0, maxLength - 1).replace(/[\ud800-\udbff]$/u, "") + "…";
 }
 
 export async function groupAnnouncementsCommand(message: string, context: GroupAnnouncementsContext, signal?: AbortSignal): Promise<string | undefined> {
@@ -131,7 +141,7 @@ export function createGroupAnnouncementDeletion(signal?: AbortSignal) {
     let result: GroupAnnouncementDeleteResult;
     try { result = await groupDeleteAnnouncement(index); } catch { result = { status: "unknown" }; }
     switch (result.status) {
-      case "confirmed": return result.text === undefined ? `✅ 已删除第 ${index} 条群公告` : `✅ 已删除「${summary(result.text)}」`;
+      case "confirmed": return result.text === undefined ? `✅ 已删除第 ${index} 条群公告` : `✅ 已删除「${deletedText(result.text)}」`;
       case "rejected": return "❎ 删除失败，协议端拒绝删除群公告。";
       case "unknown": return "群公告删除结果未确认，请先在 QQ 中核对。";
       case "not-found": return "找不到该序号的群公告，请先发送 #查群公告。";
