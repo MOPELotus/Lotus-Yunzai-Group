@@ -131,6 +131,17 @@ function text(ctx: Context, value: string, x: number, y: number, font: string, c
   }
 }
 
+function statusValueFont(ctx: Context, value: string, family: string): string {
+  for (let size = 20; size > 1; size--) {
+    const font = `700 ${size}px ${family}`;
+    ctx.font = font;
+    const measured = ctx.measureText(value);
+    // Leave the 160 px column's inner padding and room for the synthetic bold stroke.
+    if (Math.max(measured.width, 2 * measured.actualBoundingBoxLeft, 2 * measured.actualBoundingBoxRight) <= 149) return font;
+  }
+  return `700 1px ${family}`;
+}
+
 function descriptionHeight(row: NoticeSettingsCardRow, first: boolean): number {
   if (!row.description) return 0;
   return first && (row.label === "好友消息" || row.label === "通知全部主人") ? 29 : 26;
@@ -189,7 +200,8 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
           text(ctx, row.hint, hintX, top + 26, `16px ${theme.body}`, "#303030", x + lineWidth - 170 - hintX);
         }
         ctx.textAlign = "center";
-        text(ctx, row.value, x + lineWidth - 80, top + 26, `700 20px ${theme.body}`, row.off ? "#b74545" : "#2d5285", 150);
+        const valueFont = statusValueFont(ctx, row.value, theme.body);
+        text(ctx, row.value, x + lineWidth - 80, top + 26, valueFont, row.off ? "#b74545" : "#2d5285");
         ctx.textAlign = "start";
         if (row.description) {
           text(ctx, row.description, x + 20, top + 62, `16px ${theme.body}`, "#454444", lineWidth - 40);
