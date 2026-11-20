@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -18,14 +18,20 @@ afterEach(async () => {
 });
 
 async function lock(file: string) {
-  const database = new Database(file);
-  database.exec("PRAGMA busy_timeout = 0");
   try {
-    for (let attempt = 0; ; attempt++) {
+    if (!(await lstat(file)).isFile()) throw new Error("通知设置锁须为普通文件。");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const database = new Database(file);
+  const deadline = performance.now() + 2_000;
+  try {
+    database.exec("PRAGMA busy_timeout = 0");
+    for (;;) {
       try { database.exec("BEGIN IMMEDIATE"); return database; }
       catch (error) {
-        if (attempt >= 50 || !(error as NodeJS.ErrnoException).code?.startsWith("SQLITE_BUSY")) throw error;
-        await delay(5);
+        if (!(error as NodeJS.ErrnoException).code?.startsWith("SQLITE_BUSY") || performance.now() >= deadline) throw error;
+        await delay(20);
       }
     }
   } catch (error) { database.close(); throw error; }
@@ -115,12 +121,24 @@ test("权限按四种作用域传入，撤权、非法及未实现操作不写",
 
 test("并发保存不丢修改，canonical 路径优先且保留真实符号链接目标", async () => {
   const { command, legacy, primary } = await fixture();
-  await Promise.all([
-    command("#椰奶通知设置好友消息开启", privateOwner),
-    command("#椰奶通知设置好友申请开启", privateOwner),
-  ]);
-  expect((await readFile(primary, "utf8"))).toContain("privateMessage: true");
-  expect((await readFile(primary, "utf8"))).toContain("friendRequest: true");
+  const held = Promise.withResolvers<void>();
+  const proceed = Promise.withResolvers<void>();
+  let checks = 0;
+  const first = command("#椰奶通知设置好友消息开启", { ...privateOwner, async configureNoticeSettings() {
+    if (++checks === 2) {
+      held.resolve();
+      await proceed.promise;
+    }
+    return true;
+  } });
+  await held.promise;
+  const second = command("#椰奶通知设置好友申请开启", privateOwner);
+  try { await delay(350); } finally { proceed.resolve(); }
+  const results = await Promise.all([first, second]);
+  for (const result of results) expect(result).toContain("已保存通知设置");
+  const saved = await readFile(primary, "utf8");
+  expect(saved).toContain("privateMessage: true");
+  expect(saved).toContain("friendRequest: true");
   await writeFile(legacy, "default: { groupRecall: true }\n");
   const live = primary + ".actual";
   const raw = "default: {groupRecall: false, untouched:[1,2]}\n";
@@ -143,4 +161,15 @@ test("提交前发现配置由其他程序更改则保留外部修改", async ()
   } };
   expect(await command("#椰奶通知设置好友消息开启", scope)).toContain("暂无法保存");
   expect(await readFile(legacy, "utf8")).toBe(external);
+});
+
+test("配置最终回读后权限仍须有效，最后一次复核拒绝时不得提交", async () => {
+  const { command, legacy } = await fixture();
+  const original = "default: { privateMessage: false }\n";
+  await writeFile(legacy, original);
+  let checks = 0;
+  const context = { ...privateOwner, async configureNoticeSettings() { return ++checks < 3; } };
+  expect(await command("#椰奶通知设置好友消息开启", context)).toContain("当前会话没有修改此通知设置的权限");
+  expect(checks).toBe(3);
+  expect(await readFile(legacy, "utf8")).toBe(original);
 });

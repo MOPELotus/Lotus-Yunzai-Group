@@ -190,7 +190,8 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
           const latest = await read();
           if (before ? !latest || latest.file !== file || latest.stat.ino !== before.stat.ino ||
               latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) throw unsafe();
-          active();
+          // Authorization may change while the asynchronous snapshot is being read.
+          await assertPermission();
           if (before) await rename(staged, file);
           else await link(staged, file);
           return true;
