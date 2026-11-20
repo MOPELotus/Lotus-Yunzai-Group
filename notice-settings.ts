@@ -1,4 +1,5 @@
 import { createNoticeSettingsStore, NoticeSettingsPermissionError, type NoticeSettingsField, type NoticeSettingsScope } from "./notice-settings-store.ts";
+import { buildNoticeSettingsCard, type NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 import { configuredOwnerNoticeRecipients } from "./owner-notice-recipients.ts";
 import { recallRetentionSeconds } from "./recall-notice.ts";
 import { configuredPrivateNotice, privateNoticeSetting } from "./private-notice-config.ts";
@@ -72,9 +73,38 @@ function status(config: Record<string, unknown>, botId: number, groupId: number 
   return ["【通知设置】", ...rows, `删除缓存时间：${seconds === undefined ? "无效" : `${seconds} 秒`}`].join("\n");
 }
 
-export function createNoticeSettings(root: URL, lockFile: Parameters<typeof createNoticeSettingsStore>[1], signal?: AbortSignal) {
+type NoticeStatusImage = { readonly type: "image"; readonly file: Uint8Array };
+type NoticeStatusReply = string | NoticeStatusImage | readonly [string, NoticeStatusImage];
+
+export function createNoticeSettings(
+  root: URL, lockFile: Parameters<typeof createNoticeSettingsStore>[1], signal?: AbortSignal,
+): (message: string, context: NoticeSettingsContext) => Promise<string | undefined>;
+export function createNoticeSettings(
+  root: URL, lockFile: Parameters<typeof createNoticeSettingsStore>[1], signal?: AbortSignal,
+  render?: NoticeSettingsCardRenderer,
+): (message: string, context: NoticeSettingsContext) => Promise<NoticeStatusReply | undefined>;
+export function createNoticeSettings(
+  root: URL, lockFile: Parameters<typeof createNoticeSettingsStore>[1], signal?: AbortSignal,
+  render?: NoticeSettingsCardRenderer,
+) {
   const store = createNoticeSettingsStore(root, lockFile, signal);
-  return async (message: string, context: NoticeSettingsContext): Promise<string | undefined> => {
+  async function display(config: Record<string, unknown>, botId: number, groupId?: number, result?: string): Promise<NoticeStatusReply | undefined> {
+    if (signal?.aborted) return;
+    if (render) {
+      try {
+        const file = await render(buildNoticeSettingsCard(config, botId, groupId), signal);
+        if (signal?.aborted) return;
+        if (file instanceof Uint8Array && file.byteLength) {
+          const image: NoticeStatusImage = { type: "image", file };
+          return result ? [result, image] : image;
+        }
+      } catch { /* The text overview is available if rendering fails. */ }
+    }
+    if (signal?.aborted) return;
+    const overview = status(config, botId, groupId);
+    return result ? result + "\n" + overview : overview;
+  }
+  return async (message: string, context: NoticeSettingsContext): Promise<NoticeStatusReply | undefined> => {
     const { self_id, user_id, group_id, isBotMaster, configureNoticeSettings } = context;
     if (signal?.aborted || context.message_type === "terminal" || !isNoticeSettingsCommand(message)) return;
     const group = context.message_type === "group" && positiveId(group_id) ? group_id : undefined;
@@ -83,7 +113,7 @@ export function createNoticeSettings(root: URL, lockFile: Parameters<typeof crea
       if (context.isDelegated || !positiveId(self_id) || (context.message_type === "group" && group === undefined)) return;
       try {
         const config = await store.read();
-        if (!signal?.aborted) return status(config, self_id, group);
+        return display(config, self_id, group);
       } catch { if (!signal?.aborted) return "当前无法读取通知设置。"; }
       return;
     }
@@ -135,7 +165,7 @@ export function createNoticeSettings(root: URL, lockFile: Parameters<typeof crea
       batch ? `✅ 已${batch[1]}全部 ${eventFields.length} 项默认事件通知。` : "✅ 已保存通知设置。";
     try {
       const config = await store.read();
-      if (!signal?.aborted) return result + "\n" + status(config, self_id, group);
+      return display(config, self_id, group, result);
     } catch { if (!signal?.aborted) return result + "\n当前无法读取通知设置。"; }
   };
 }

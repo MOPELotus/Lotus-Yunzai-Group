@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
+import type { NoticeSettingsCardModel, NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 import { createNoticeSettings, isNoticeSettingsCommand, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
 
 const temporary: string[] = [];
@@ -44,7 +45,11 @@ async function fixture() {
   const root = pathToFileURL(path + "/");
   const legacy = join(path, "plugins/yenai-plugin/config/config/notice.yaml");
   await mkdir(join(path, "plugins/yenai-plugin/config/config"), { recursive: true });
-  return { command: createNoticeSettings(root, lock), legacy, primary: join(path, "config/group-notice.yaml") };
+  return {
+    command: createNoticeSettings(root, lock),
+    withRenderer: (render: NoticeSettingsCardRenderer, signal?: AbortSignal) => createNoticeSettings(root, lock, signal, render),
+    legacy, primary: join(path, "config/group-notice.yaml"),
+  };
 }
 
 test("旧状态列当前生效值和已支持范围，普通群员可读，未实施字段不列", async () => {
@@ -358,4 +363,53 @@ test("批量在无权限、最终权限撤销和任一字段不安全时整体�
     expect(await readFile(legacy, "utf8")).toBe(unsafe);
     expect((await stat(legacy)).ino).toBe(before.ino);
   }
+});
+
+test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群，写入回执保留实情", async () => {
+  const { withRenderer, legacy } = await fixture();
+  await writeFile(legacy, [
+    "default: { groupMessage: true, notificationsAll: false, msgSaveDeltime: 600 }",
+    "'bot:99': { privateMessage: true }",
+    "77: { groupMessage: false, notificationsAll: true, friendRequest: true, secret: abc }",
+    "'bot:99:77': { groupRecall: false }",
+    "'bot:100': { groupMessage: true }",
+    "'bot:99:78': { groupRecall: true }",
+  ].join("\n"));
+  const models: NoticeSettingsCardModel[] = [];
+  const bytes = new Uint8Array([1, 2]);
+  const command = withRenderer(async model => { models.push(model); return bytes; });
+  const image = { type: "image", file: bytes } as const;
+  expect(await command(overview, groupOwner)).toEqual(image);
+  expect(models[0]?.groups.map(({ title }) => title)).toEqual([
+    "消息相关", "申请通知", "列表变动", "其他通知", "系统设置",
+    "Bot:99 单独配置", "群:77 单独配置", "Bot:99 & 群:77 单独配置",
+  ]);
+  expect(models[0]?.groups[0]?.rows.find(row => row.label === "群消息")?.value).toBe("已开启");
+  expect(models[0]?.groups[6]).toEqual({
+    title: "群:77 单独配置", override: true, rows: [{ label: "群消息", value: "已关闭", off: true }],
+  });
+  expect(await command(overview, privateOwner)).toEqual(image);
+  expect(models[1]?.groups.map(({ title }) => title).slice(5)).toEqual(["Bot:99 单独配置"]);
+
+  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toEqual(["✅ 已保存通知设置。", image]);
+  expect(models[2]?.groups[6]?.rows[0]?.value).toBe("已开启");
+  expect(await command("#椰奶通知设置群消息群单独开启", groupOwner)).toEqual(["通知设置无变化。", image]);
+  expect(await command("#椰奶通知设置群消息关闭", { ...groupOwner, isDelegated: true })).toContain("权限");
+  expect(models).toHaveLength(4);
+});
+
+test("未配置原主题、渲染失败或连接已结束时保留既有文字与停止行为", async () => {
+  const { withRenderer, command, legacy } = await fixture();
+  await writeFile(legacy, "default: { groupMessage: true }\n");
+  const expected = await command(overview, groupOwner);
+  const fallback = withRenderer(async () => { throw new Error("无可用主题"); });
+  expect(await fallback(overview, groupOwner)).toBe(expected);
+  const unavailable = withRenderer(async () => undefined);
+  expect(await unavailable(overview, groupOwner)).toBe(expected);
+  const failedWriteCard = await fallback("#椰奶通知设置群消息关闭", groupOwner);
+  expect(failedWriteCard).toContain("已保存通知设置");
+  expect(failedWriteCard).toContain("群消息：关闭");
+  const stopped = new AbortController();
+  const aborted = withRenderer(async () => { stopped.abort(); return new Uint8Array([1]); }, stopped.signal);
+  expect(await aborted(overview, groupOwner)).toBeUndefined();
 });

@@ -19,6 +19,7 @@ import { createGroupTimedMute, groupTimedMuteFeature, isGroupTimedMuteCommand, t
 import { createGroupNotification, groupNotificationFeature, isGroupNotificationCommand, type GroupNotificationContext } from "./group-notify.ts";
 import { createGroupAddNotice, groupAddNoticeFeature, isGroupAddNoticeCommand, type GroupAddNotice } from "./group-add-notice.ts";
 import { createNoticeSettings, isNoticeSettingsCommand, noticeSettingsFeature, type NoticeSettingsContext } from "./notice-settings.ts";
+import type { NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 import { createGroupOwnerJoinRequestNotice, type GroupOwnerJoinRequestNotice } from "./group-owner-join-request-notice.ts";
 import { createGroupOwnerInvitationNotice, type GroupOwnerInvitationNotice } from "./group-owner-invitation-notice.ts";
 import { createGroupMessageNotice, type GroupMessageNotice } from "./group-message-notice.ts";
@@ -68,6 +69,7 @@ export { createGroupOwnerGroupNotice, groupOwnerGroupNoticeFeature, type GroupOw
 export { createGroupOwnerBanNotice, groupOwnerBanNoticeFeature, type GroupOwnerBanNotice, type GroupOwnerBanNoticeInput, type GroupOwnerBanNoticePart } from "./group-owner-ban-notice.ts";
 export { createGroupOwnerAdminNotice, groupOwnerAdminNoticeFeature, type GroupOwnerAdminNotice, type GroupOwnerAdminNoticeInput, type GroupOwnerAdminNoticePart } from "./group-owner-admin-notice.ts";
 export { noticeSettingsFeature, type NoticeSettingsContext, type NoticeSettingsScope } from "./notice-settings.ts";
+export type { NoticeSettingsCardModel, NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 export { createTemporaryMessageNotice, temporaryMessageNoticeFeature, type TemporaryMessageNotice, type TemporaryMessageNoticeInput, type TemporaryMessageNoticePart } from "./temporary-message-notice.ts";
 export { createFriendRelationshipNotice, friendRelationshipNoticeFeature, type FriendRelationshipNotice, type FriendRelationshipNoticeInput, type FriendRelationshipNoticePart } from "./friend-relationship-notice.ts";
 export { createGroupRecallNotice, groupRecallNoticeFeature, type GroupRecallNotice, type GroupRecallNoticeInput, type GroupRecallNoticeOutput, type GroupRecallPart } from "./group-recall-notice.ts";
@@ -148,7 +150,7 @@ export default manifest;
 
 export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
-  lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
+  lockFile, noticeSettingsThemeDirectory, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
   registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice,
   registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice, registerGroupOwnerAdminNotice, registerGroupOwnerBanNotice, registerGroupOwnerGroupNotice, registerGroupOwnerJoinRequestNotice, registerGroupOwnerInvitationNotice, registerGroupMessageNotice, registerOwnerNoticeRecipients,
 }: {
@@ -159,6 +161,7 @@ export async function createModule({
   readonly registerAutoGroupCardTask?: (cron: string, run: () => Promise<AutoGroupCardSummary | undefined>) => (() => void | Promise<void>);
   readonly groupLeaveBlacklist?: { readonly io: GroupLeaveBlacklistIO; register(policy: GroupLeaveBlacklist): () => void };
   readonly profileLikeImage?: ProfileLikeImage;
+  readonly noticeSettingsThemeDirectory?: string;
   readonly lockFile?: Parameters<typeof createManagedBlacklist>[1];
   readonly registerManagedBlacklist?: (policy: GroupManagedBlacklist) => () => void;
   readonly registerGroupBannedWords?: (policy: GroupBannedWords) => () => void;
@@ -221,7 +224,14 @@ export async function createModule({
     const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
   }
-  const noticeSettings = lockFile && createNoticeSettings(root, lockFile, signal);
+  let noticeCard: Promise<NoticeSettingsCardRenderer> | undefined;
+  const noticeSettings = lockFile && createNoticeSettings(root, lockFile, signal, noticeSettingsThemeDirectory
+    ? async (model, signal) => {
+      noticeCard ??= import("./notice-settings-card-renderer.ts").then(({ createNoticeSettingsCardRenderer }) =>
+        createNoticeSettingsCardRenderer({ resourceDirectory: noticeSettingsThemeDirectory }));
+      return (await noticeCard)(model, signal);
+    }
+    : undefined);
   const blacklist = lockFile && !signal.aborted ? createManagedBlacklist(root, lockFile) : undefined;
   const stopManagedBlacklist = blacklist && registerManagedBlacklist?.(blacklist);
   const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal) : undefined;
