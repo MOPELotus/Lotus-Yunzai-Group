@@ -87,3 +87,24 @@ test("机器人自己发言或撤回、无正文、非法时间与已中止会�
   controller.abort();
   expect(await notice.retention(99, 77)).toBeUndefined();
 });
+
+test("群撤回保持摘要字节，输出一个按原序的正文段列表", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { groupRecall: true }\n");
+  const notice = createGroupRecallNotice(paths);
+  const face = { type: "face", data: { id: "8", is_large: false } } as const;
+  const original = await notice.format(event);
+  if (!original) throw new Error("纯文本通知缺失");
+  expect(original.parts).toBeUndefined();
+  expect(await notice.format({ ...event, parts: ["先\r\n行\u0000", face, "后"] })).toEqual({
+    ...original, parts: ["先\n行", face, "后"],
+  });
+  expect(await notice.format({ ...event, text: "", parts: [face] })).toEqual({
+    ...original, text: "", parts: [face],
+  });
+  expect(await notice.format({ ...event, parts: [
+    "勿转发前半段", { type: "image", file: new Uint8Array([1]) },
+  ] })).toBeUndefined();
+  expect(await notice.format({ ...event, parts: [{ type: "face", data: { id: "unsupported" } }] })).toBeUndefined();
+  expect(await notice.format({ ...event, parts: [] })).toBeUndefined();
+});

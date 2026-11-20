@@ -1,7 +1,7 @@
-import { formatNoticeBodyText } from "./message-notice-content.ts";
+import type { MessageNoticePart } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import type { PrivateNoticeOptions } from "./private-notice-config.ts";
-import { createRecallRetention, formatRecallTime, positiveRecallId } from "./recall-notice.ts";
+import { createRecallRetention, formatRecallBody, formatRecallTime, positiveRecallId, type RecallNoticeBodyPart } from "./recall-notice.ts";
 
 export type GroupRecallPart = string | { readonly type: "image"; readonly file: string };
 export interface GroupRecallNoticeInput {
@@ -11,6 +11,7 @@ export interface GroupRecallNoticeInput {
   readonly operatorId?: number;
   readonly time: number;
   readonly text: string;
+  readonly parts?: readonly MessageNoticePart[];
   readonly groupName?: string;
   readonly nickname?: string;
   readonly operatorName?: string;
@@ -18,6 +19,7 @@ export interface GroupRecallNoticeInput {
 export interface GroupRecallNoticeOutput {
   readonly summary: readonly GroupRecallPart[];
   readonly text: string;
+  readonly parts?: readonly RecallNoticeBodyPart[];
   readonly nickname?: string;
 }
 export interface GroupRecallNotice {
@@ -31,11 +33,11 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
   const retention = createRecallRetention(options, "groupRecall");
   return {
     retention,
-    async format({ botId, groupId, userId, operatorId, time, text, groupName, nickname, operatorName }, signal) {
+    async format({ botId, groupId, userId, operatorId, time, text, parts, groupName, nickname, operatorName }, signal) {
       if (!positiveRecallId(userId) || botId === userId || botId === operatorId || typeof text !== "string") return;
       const when = formatRecallTime(time);
-      const content = formatNoticeBodyText(text);
-      if (!when || !content.trim() || await retention(botId, groupId, signal) === undefined || options.signal?.aborted || signal?.aborted) return;
+      const content = formatRecallBody(text, parts);
+      if (!when || !content || await retention(botId, groupId, signal) === undefined || options.signal?.aborted || signal?.aborted) return;
 
       const name = displayRequestField(nickname, 128);
       const author = name ? `${name}(${userId})` : String(userId);
@@ -51,7 +53,7 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
         summary.push(`撤回管理：${operator ? `${operator}(${manager})` : manager}\n`, `被撤回人：${author}\n`);
       } else summary.push(`撤回人员：${author}\n`);
       summary.push(`撤回时间：${when}`);
-      return { summary, text: content, ...(name && { nickname: name }) };
+      return { summary, ...content, ...(name && { nickname: name }) };
     },
   };
 }

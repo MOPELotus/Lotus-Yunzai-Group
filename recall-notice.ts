@@ -1,3 +1,4 @@
+import { formatNoticeBodyText, verifyMessageNoticeParts, type MessageNoticePart } from "./message-notice-content.ts";
 import { configuredPrivateNotice, createPrivateNoticeReader, privateNoticeSetting, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
 const defaultRetention = 600;
@@ -21,6 +22,21 @@ export function formatRecallTime(seconds: number): string | undefined {
   if (!positiveRecallId(seconds) || seconds > 8_640_000_000_000) return;
   const parts = Object.fromEntries(shanghaiTime.formatToParts(seconds * 1_000).map(({ type, value }) => [type, value]));
   return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+export type RecallNoticeBodyPart = Extract<MessageNoticePart, string | { readonly type: "face" }>;
+
+export function formatRecallBody(text: string, parts?: readonly MessageNoticePart[]): {
+  readonly text: string;
+  readonly parts?: readonly RecallNoticeBodyPart[];
+} | undefined {
+  const content = formatNoticeBodyText(text);
+  if (parts === undefined) return content.trim() ? { text: content } : undefined;
+
+  const verified = verifyMessageNoticeParts(parts);
+  if (!verified?.every((part): part is RecallNoticeBodyPart =>
+    typeof part === "string" || part.type === "face")) return;
+  return { text: content, parts: verified };
 }
 
 export function createRecallRetention(options: PrivateNoticeOptions, field: "PrivateRecall" | "groupRecall") {

@@ -1,13 +1,14 @@
-import { formatNoticeBodyText } from "./message-notice-content.ts";
+import type { MessageNoticePart } from "./message-notice-content.ts";
 import type { PrivateNoticeOptions } from "./private-notice-config.ts";
-import { createRecallRetention, formatRecallTime, positiveRecallId } from "./recall-notice.ts";
+import { createRecallRetention, formatRecallBody, formatRecallTime, positiveRecallId, type RecallNoticeBodyPart } from "./recall-notice.ts";
 
-export type FriendRecallNoticePart = string | { readonly type: "image"; readonly file: string };
+export type FriendRecallNoticePart = RecallNoticeBodyPart | { readonly type: "image"; readonly file: string };
 export interface FriendRecallNoticeInput {
   readonly botId: number;
   readonly userId: number;
   readonly time: number;
   readonly text: string;
+  readonly parts?: readonly MessageNoticePart[];
 }
 export interface FriendRecallNotice {
   retention(botId: number, signal?: AbortSignal): Promise<number | undefined>;
@@ -21,18 +22,18 @@ export function createFriendRecallNotice(options: PrivateNoticeOptions): FriendR
 
   return {
     retention,
-    async format({ botId, userId, time, text }, signal) {
+    async format({ botId, userId, time, text, parts }, signal) {
       if (!positiveRecallId(userId) || botId === userId || typeof text !== "string") return;
       const when = formatRecallTime(time);
       if (!when) return;
-      const content = formatNoticeBodyText(text);
-      if (!content.trim() || await retention(botId, signal) === undefined || options.signal?.aborted || signal?.aborted) return;
+      const content = formatRecallBody(text, parts);
+      if (!content || await retention(botId, signal) === undefined || options.signal?.aborted || signal?.aborted) return;
       return [
         { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
         `[消息(${botId}) - 好友撤回消息]\n`,
         `好友账号：${userId}\n`,
         `撤回时间：${when}\n`,
-        "撤回消息：", content,
+        "撤回消息：", ...(content.parts ?? [content.text]),
       ];
     },
   };

@@ -58,7 +58,8 @@ test("旧状态列当前生效值和已支持范围，普通群员可读，未�
   const result = await command(overview, { ...groupOwner, user_id: 43 });
   expect(result).toContain("【通知设置】");
   expect(result).toContain("好友消息：开启");
-  expect(result).toContain("群撤回：开启（当前仅文本）");
+  expect(result).toContain("群撤回：开启（当前支持文本和表情）");
+  expect(result).toContain("好友撤回：关闭（当前支持文本和表情）");
   expect(result).toContain("删除缓存时间：150 秒");
   expect(result).toContain("群邀请：开启（主人编号通知详情）");
   for (const privateDetails of ["bot:100", "notice.yaml"]) expect(result).not.toContain(privateDetails);

@@ -71,6 +71,8 @@ export { noticeSettingsFeature, type NoticeSettingsContext, type NoticeSettingsS
 export { createTemporaryMessageNotice, temporaryMessageNoticeFeature, type TemporaryMessageNotice, type TemporaryMessageNoticeInput, type TemporaryMessageNoticePart } from "./temporary-message-notice.ts";
 export { createFriendRelationshipNotice, friendRelationshipNoticeFeature, type FriendRelationshipNotice, type FriendRelationshipNoticeInput, type FriendRelationshipNoticePart } from "./friend-relationship-notice.ts";
 export { createGroupRecallNotice, groupRecallNoticeFeature, type GroupRecallNotice, type GroupRecallNoticeInput, type GroupRecallNoticeOutput, type GroupRecallPart } from "./group-recall-notice.ts";
+export type { MessageNoticePart } from "./message-notice-content.ts";
+export type { RecallNoticeBodyPart } from "./recall-notice.ts";
 export { createFriendRecallNotice, friendRecallNoticeFeature, type FriendRecallNotice, type FriendRecallNoticeInput, type FriendRecallNoticePart } from "./friend-recall-notice.ts";
 export { createFriendPokeNotice, friendPokeNoticeFeature, type FriendPokeNotice, type FriendPokeNoticeInput, type FriendPokeNoticePart } from "./friend-poke-notice.ts";
 export { createFriendMessageNotice, friendMessageNoticeFeature, type FriendMessageNotice, type FriendMessageNoticeInput, type FriendMessageNoticePart } from "./friend-message-notice.ts";

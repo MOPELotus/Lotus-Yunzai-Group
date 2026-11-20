@@ -15,7 +15,7 @@ function faceId(value: unknown): boolean {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function verifyMessageNoticeParts(original: readonly MessageNoticePart[] | undefined): MessageNoticePart[] | undefined {
+export function verifyMessageNoticeParts(original: readonly MessageNoticePart[] | undefined): MessageNoticePart[] | undefined {
   if (!Array.isArray(original)) return;
   const parts: MessageNoticePart[] = [];
   const source: readonly MessageNoticePart[] = original;
