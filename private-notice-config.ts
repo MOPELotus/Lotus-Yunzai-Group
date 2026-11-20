@@ -6,7 +6,7 @@ export interface PrivateNoticeOptions {
   readonly legacyConfig?: URL;
   readonly signal?: AbortSignal;
 }
-type NoticeField = "friendRequest" | "privateMessage" | "grouptemporaryMessage" | "friendNumberChange" | "PrivateRecall";
+type NoticeField = "friendRequest" | "privateMessage" | "grouptemporaryMessage" | "friendNumberChange" | "PrivateRecall" | "groupRecall";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
