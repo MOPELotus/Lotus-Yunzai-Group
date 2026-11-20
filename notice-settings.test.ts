@@ -84,7 +84,7 @@ test("单项修改使用正确旧作用域，与实际来源保持一致且保�
   expect(current).toContain("unrelated: [1,2]");
   expect(await stat(primary).catch(() => undefined)).toBeUndefined();
   expect(await command("#椰奶通知设置群撤回单独开启", groupOwner)).toContain("群撤回：开启");
-  expect(await command("#椰奶通知设置群临时消息bot群单独开启", groupOwner)).toContain("群临时消息：开启（支持已核验的文本，语音原音限已核验的 QQ SILK）");
+  expect(await command("#椰奶通知设置群临时消息bot群单独开启", groupOwner)).toContain("群临时消息：开启（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK）");
   expect(await command("#椰奶通知设置好友申请bot单独开启", groupOwner)).toContain("好友申请：开启");
   expect(await command("#椰奶通知设置删除缓存时间123秒", groupOwner)).toContain("删除缓存时间：123 秒");
 });
@@ -387,7 +387,7 @@ test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群�
   expect(models[0]?.groups[0]?.rows.find(row => row.label === "好友消息")?.description)
     .toBe("已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK");
   expect(models[0]?.groups[0]?.rows.find(row => row.label === "群临时消息")?.description)
-    .toBe("转发已核验的群临时文本，语音原音限已核验的 QQ SILK");
+    .toBe("转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK");
   const groupMessage = models[0]?.groups[0]?.rows.find(row => row.label === "群消息");
   expect(groupMessage?.value).toBe("已开启");
   expect(groupMessage?.description).toBe("转发文本、图片和表情，语音原音限已核验的 QQ SILK");

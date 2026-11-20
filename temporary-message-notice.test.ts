@@ -73,14 +73,14 @@ test("非法账号、空正文或关闭的通知生命周期不产出消息", as
   expect(await notice(message)).toBeUndefined();
 });
 
-test("临时语音摘要仅在启用且会话有效时惰性读取，不改原通知布局", async () => {
+test("临时正文仅在启用且会话有效时惰性读取，语音摘要保留原通知布局", async () => {
   const paths = await fixture();
   const controller = new AbortController();
   const notice = createTemporaryMessageNotice({ ...paths, signal: controller.signal });
   let reads = 0;
   const input = {
     botId: 99, userId: 42, groupId: 77,
-    readText: async () => { reads++; return "[语音]（原音不可用）"; },
+    readParts: async () => { reads++; return ["[语音]（原音不可用）"]; },
   };
   expect(await notice(input)).toBeUndefined();
   expect(reads).toBe(0);
@@ -95,15 +95,40 @@ test("临时语音摘要仅在启用且会话有效时惰性读取，不改原�
     "[消息(99) - 群临时消息]\n", "来源群号：77\n", "发送人账号：42\n", "消息内容：", "[语音]（原音不可用）",
   ]);
   expect(reads).toBe(1);
-  expect(await notice({ ...input, text: "[语音]", readText: async () => undefined })).toBeUndefined();
-  expect(await notice({ ...input, readText: async () => { throw new Error("offline"); } })).toBeUndefined();
-  expect(await notice({ ...input, readText: async () => " \u0000" })).toBeUndefined();
+  expect(await notice({ ...input, text: "[语音]", readParts: async () => undefined })).toBeUndefined();
+  expect(await notice({ ...input, readParts: async () => { throw new Error("offline"); } })).toBeUndefined();
+  expect(await notice({ ...input, readParts: async () => [" \u0000"] })).toBeUndefined();
 
   const session = new AbortController();
   expect(await notice({
-    ...input, readText: async () => { session.abort(); return "[语音]"; },
+    ...input, readParts: async () => { session.abort(); return ["[语音]"]; },
   }, session.signal)).toBeUndefined();
   expect(await notice({
-    ...input, readText: async () => { controller.abort(); return "[语音]"; },
+    ...input, readParts: async () => { controller.abort(); return ["[语音]"]; },
+  })).toBeUndefined();
+});
+
+test("临时图文和表情保留原顺序，支持纯图与纯表情且拒绝未核正文", async () => {
+  const paths = await fixture();
+  await writeFile(paths.config, "default: { grouptemporaryMessage: true }\n");
+  const notice = createTemporaryMessageNotice(paths);
+  const input = { botId: 99, userId: 42, groupId: 77 };
+  const image = { type: "image", file: new Uint8Array([1, 2, 3]) } as const;
+  const face = { type: "face", data: { id: "21", is_large: true } } as const;
+  const prefix = [
+    { type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=42" },
+    "[消息(99) - 群临时消息]\n", "来源群号：77\n", "发送人账号：42\n", "消息内容：",
+  ] as const;
+  expect(await notice({
+    ...input, readParts: async () => ["先\r\n", image, "中", face, "末"],
+  })).toEqual([...prefix, "先\n", image, "中", face, "末"]);
+  expect(await notice({ ...input, readParts: async () => [image] })).toEqual([...prefix, image]);
+  expect(await notice({ ...input, readParts: async () => [face] })).toEqual([...prefix, face]);
+  expect(await notice({ ...input, readParts: async () => [] })).toBeUndefined();
+  expect(await notice({
+    ...input, text: "后备", readParts: async () => ["第一段", { type: "image", file: "https://example.invalid/image" }],
+  })).toBeUndefined();
+  expect(await notice({
+    ...input, readParts: async () => [image, { type: "face", data: { id: "invalid" } }],
   })).toBeUndefined();
 });
