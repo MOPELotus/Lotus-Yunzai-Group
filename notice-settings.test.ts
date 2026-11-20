@@ -184,3 +184,14 @@ test("群管理变动状态及单项设置只允许旧真实群覆盖层", async
   expect(await command("#椰奶通知设置群管理变动bot群单独取消", groupOwner)).toContain("群管理变动：关闭");
   expect(await readFile(legacy, "utf8")).toContain("groupMemberNumberChange: true");
 });
+
+test("禁言通知状态可按旧群或机器人群覆盖，仅面向机器人本人的事件范围", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { botBeenBanned: false, groupAdminChange: true }\n");
+  expect(await command(overview, groupOwner)).toContain("禁言：关闭（仅机器人本人）");
+  expect(await command("#椰奶通知设置禁言bot单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置禁言群单独开启", groupOwner)).toContain("禁言：开启（仅机器人本人）");
+  expect(await command("#椰奶通知设置禁言bot群单独关闭", groupOwner)).toContain("禁言：关闭（仅机器人本人）");
+  expect(await command("#椰奶通知设置禁言bot群单独取消", groupOwner)).toContain("禁言：开启（仅机器人本人）");
+  expect(await readFile(legacy, "utf8")).toContain("groupAdminChange: true");
+});
