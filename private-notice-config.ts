@@ -21,13 +21,13 @@ async function fileText(path: URL | undefined): Promise<string | undefined> {
   }
 }
 
-export function privateNoticeSetting(value: unknown, botId: number, field: NoticeField | "msgSaveDeltime", groupId?: number): unknown {
+export function privateNoticeSetting(value: unknown, botId: number, field: NoticeField | "msgSaveDeltime" | "notificationsAll", groupId?: number): unknown {
   const config = record(value);
   if (!config) return;
   const bot = `bot:${botId}`;
   const group = groupId === undefined ? "" : String(groupId);
-  // Unlike friend messages, a temporary message with no verified group must not use group overrides.
-  const keys = field === "grouptemporaryMessage" && groupId === undefined
+  // Owner routing and temporary messages without a verified group only use account-level settings.
+  const keys = field === "notificationsAll" || (field === "grouptemporaryMessage" && groupId === undefined)
     ? ["default", bot] : ["default", group, bot, `${bot}:${group}`];
   let setting: unknown;
   for (const key of keys) {

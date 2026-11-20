@@ -22,6 +22,7 @@ import { createNoticeSettings, isNoticeSettingsCommand, noticeSettingsFeature, t
 import { createGroupOwnerJoinRequestNotice, type GroupOwnerJoinRequestNotice } from "./group-owner-join-request-notice.ts";
 import { createGroupOwnerInvitationNotice, type GroupOwnerInvitationNotice } from "./group-owner-invitation-notice.ts";
 import { createGroupMessageNotice, type GroupMessageNotice } from "./group-message-notice.ts";
+import { createOwnerNoticeRecipients, type OwnerNoticeRecipients } from "./owner-notice-recipients.ts";
 import { createGroupOwnerGroupNotice, type GroupOwnerGroupNotice } from "./group-owner-group-notice.ts";
 import { createGroupOwnerBanNotice, type GroupOwnerBanNotice } from "./group-owner-ban-notice.ts";
 import { createGroupOwnerAdminNotice, type GroupOwnerAdminNotice } from "./group-owner-admin-notice.ts";
@@ -62,6 +63,7 @@ export { groupAddNoticeFeature, type GroupAddNotice, type GroupAddNoticeEvent, t
 export { createGroupOwnerJoinRequestNotice, groupOwnerJoinRequestNoticeFeature, type GroupOwnerJoinRequestNotice, type GroupOwnerJoinRequestNoticeInput, type GroupOwnerJoinRequestNoticePart } from "./group-owner-join-request-notice.ts";
 export { createGroupOwnerInvitationNotice, groupOwnerInvitationNoticeFeature, type GroupOwnerInvitationNotice, type GroupOwnerInvitationNoticeInput, type GroupOwnerInvitationNoticePart } from "./group-owner-invitation-notice.ts";
 export { createGroupMessageNotice, groupMessageNoticeFeature, type GroupMessageNotice, type GroupMessageNoticeInput, type GroupMessageNoticePart } from "./group-message-notice.ts";
+export { createOwnerNoticeRecipients, type OwnerNoticeRecipients } from "./owner-notice-recipients.ts";
 export { createGroupOwnerGroupNotice, groupOwnerGroupNoticeFeature, type GroupOwnerGroupNotice, type GroupOwnerGroupNoticeInput } from "./group-owner-group-notice.ts";
 export { createGroupOwnerBanNotice, groupOwnerBanNoticeFeature, type GroupOwnerBanNotice, type GroupOwnerBanNoticeInput, type GroupOwnerBanNoticePart } from "./group-owner-ban-notice.ts";
 export { createGroupOwnerAdminNotice, groupOwnerAdminNoticeFeature, type GroupOwnerAdminNotice, type GroupOwnerAdminNoticeInput, type GroupOwnerAdminNoticePart } from "./group-owner-admin-notice.ts";
@@ -146,7 +148,7 @@ export async function createModule({
   signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
   lockFile, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
   registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice,
-  registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice, registerGroupOwnerAdminNotice, registerGroupOwnerBanNotice, registerGroupOwnerGroupNotice, registerGroupOwnerJoinRequestNotice, registerGroupOwnerInvitationNotice, registerGroupMessageNotice,
+  registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice, registerGroupOwnerAdminNotice, registerGroupOwnerBanNotice, registerGroupOwnerGroupNotice, registerGroupOwnerJoinRequestNotice, registerGroupOwnerInvitationNotice, registerGroupMessageNotice, registerOwnerNoticeRecipients,
 }: {
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
@@ -164,6 +166,7 @@ export async function createModule({
   readonly registerGroupOwnerJoinRequestNotice?: (policy: GroupOwnerJoinRequestNotice) => () => void;
   readonly registerGroupOwnerInvitationNotice?: (policy: GroupOwnerInvitationNotice) => () => void;
   readonly registerGroupMessageNotice?: (policy: GroupMessageNotice) => () => void;
+  readonly registerOwnerNoticeRecipients?: (policy: OwnerNoticeRecipients) => () => void;
   readonly registerGroupOwnerGroupNotice?: (policy: GroupOwnerGroupNotice) => () => void;
   readonly registerGroupOwnerBanNotice?: (policy: GroupOwnerBanNotice) => () => void;
   readonly registerGroupOwnerAdminNotice?: (policy: GroupOwnerAdminNotice) => () => void;
@@ -211,6 +214,7 @@ export async function createModule({
   const stopGroupOwnerJoinRequestNotice = !signal.aborted && registerGroupOwnerJoinRequestNotice?.(createGroupOwnerJoinRequestNotice(noticeOptions));
   const stopGroupOwnerInvitationNotice = !signal.aborted && registerGroupOwnerInvitationNotice?.(createGroupOwnerInvitationNotice(noticeOptions));
   const stopGroupMessageNotice = !signal.aborted && registerGroupMessageNotice?.(createGroupMessageNotice(noticeOptions));
+  const stopOwnerNoticeRecipients = !signal.aborted && registerOwnerNoticeRecipients?.(createOwnerNoticeRecipients(noticeOptions));
   if (groupLeaveBlacklist && !signal.aborted) {
     const policy = await readGroupLeaveBlacklist(root, groupLeaveBlacklist.io);
     if (!signal.aborted) stopLeaveBlacklist = groupLeaveBlacklist.register(policy);
@@ -316,6 +320,7 @@ export async function createModule({
       if (stopGroupOwnerJoinRequestNotice) stopGroupOwnerJoinRequestNotice();
       if (stopGroupOwnerInvitationNotice) stopGroupOwnerInvitationNotice();
       if (stopGroupMessageNotice) stopGroupMessageNotice();
+      if (stopOwnerNoticeRecipients) stopOwnerNoticeRecipients();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
       stopRepeat();

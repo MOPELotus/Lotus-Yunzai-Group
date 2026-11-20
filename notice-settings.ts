@@ -1,4 +1,5 @@
 import { createNoticeSettingsStore, NoticeSettingsPermissionError, type NoticeSettingsField, type NoticeSettingsScope } from "./notice-settings-store.ts";
+import { configuredOwnerNoticeRecipients } from "./owner-notice-recipients.ts";
 import { recallRetentionSeconds } from "./recall-notice.ts";
 import { configuredPrivateNotice, privateNoticeSetting } from "./private-notice-config.ts";
 
@@ -33,6 +34,7 @@ const fields = {
   群成员变动: { key: "groupMemberNumberChange", specific: "group", note: "" },
   群聊列表变动: { key: "groupNumberChange", specific: "group", note: "（机器人进退群、被移出及群解散）" },
   禁言: { key: "botBeenBanned", specific: "group", note: "（仅机器人本人）" },
+  全部通知: { key: "notificationsAll", specific: "default", note: "" },
 } as const;
 
 export function isNoticeSettingsCommand(message: string): boolean {
@@ -55,6 +57,11 @@ function resolvedScope(value: string | undefined, hasGroup: boolean): NoticeSett
 
 function status(config: Record<string, unknown>, botId: number, groupId: number | undefined): string {
   const rows = Object.entries(fields).map(([label, { key, specific, note }]) => {
+    if (key === "notificationsAll") {
+      const all = configuredOwnerNoticeRecipients(config, botId);
+      const recipients = all === false ? "首位主人" : "所有主人";
+      return `全部通知：当前机器人的${recipients}${all === undefined ? "（未设置）" : ""}`;
+    }
     const groupSetting = specific === "group";
     const source = groupSetting && groupId === undefined ? { default: config.default } : config;
     const enabled = configuredPrivateNotice(source, botId, key, groupSetting ? groupId : undefined);

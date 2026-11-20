@@ -240,3 +240,30 @@ test("群消息主人通知沿用旧群作用域且列明支持的正文类型",
   expect(await command("#椰奶通知设置群消息bot群单独取消", groupOwner)).toContain("群消息：开启（当前支持文本、图片和表情）");
   expect(await readFile(legacy, "utf8")).toContain("privateMessage: true");
 });
+
+test("全部通知只改默认收件人策略，取消还原 Lotus 缺省行为", async () => {
+  const { command, legacy } = await fixture();
+  const before = "# 原注释\ndefault: { friendRequest: true, groupMessage: false }\n'bot:100': { notificationsAll: false }\n";
+  await writeFile(legacy, before);
+  const scopes: NoticeSettingsScope[] = [];
+  const owner = { ...groupOwner, configureNoticeSettings: async (scope: NoticeSettingsScope) => { scopes.push(scope); return true; } };
+  expect(await command(overview, owner)).toContain("全部通知：当前机器人的所有主人（未设置）");
+  for (const suffix of ["群单独", "bot单独", "bot群单独", "单独"]) {
+    expect(await command(`#椰奶通知设置全部通知${suffix}开启`, owner)).toContain("不支持此作用域");
+  }
+  expect(await command("#椰奶通知设置全部通知关闭", { ...owner, isDelegated: true })).toContain("权限");
+  expect(await command("#椰奶禁用全部通知", owner)).toContain("尚不支持");
+  expect(await command("#椰奶通知设置全部通知10秒", owner)).toContain("请使用开启、关闭或取消");
+  expect(scopes).toEqual([]);
+  expect(await readFile(legacy, "utf8")).toBe(before);
+
+  expect(await command("#椰奶通知设置全部通知关闭", owner)).toContain("全部通知：当前机器人的首位主人");
+  expect((await command("#椰奶通知设置全部通知开启", owner))?.split("\n")).toContain("全部通知：当前机器人的所有主人");
+  expect(await command("#椰奶通知设置全部通知取消", owner)).toContain("全部通知：当前机器人的所有主人（未设置）");
+  expect(scopes.length).toBeGreaterThan(0);
+  expect(new Set(scopes)).toEqual(new Set(["default"]));
+  const after = await readFile(legacy, "utf8");
+  expect(after).toContain("friendRequest: true");
+  expect(after).toContain("groupMessage: false");
+  expect(after).toContain("'bot:100': { notificationsAll: false }");
+});
