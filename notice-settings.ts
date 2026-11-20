@@ -28,6 +28,7 @@ const fields = {
   好友列表变动: { key: "friendNumberChange", specific: "bot", note: "（当前仅 NapCat 新增）" },
   群管理变动: { key: "groupAdminChange", specific: "group", note: "" },
   群成员变动: { key: "groupMemberNumberChange", specific: "group", note: "" },
+  群聊列表变动: { key: "groupNumberChange", specific: "group", note: "（机器人进退群、被移出及群解散）" },
   禁言: { key: "botBeenBanned", specific: "group", note: "（仅机器人本人）" },
 } as const;
 

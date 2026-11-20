@@ -29,6 +29,10 @@ const shanghaiTime = new Intl.DateTimeFormat("sv-SE", {
   hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
 });
 
+export function formatGroupNoticeTime(timestampMs: number): string {
+  return shanghaiTime.format(timestampMs);
+}
+
 function positiveId(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
 }
@@ -58,7 +62,7 @@ export function createGroupOwnerMemberNotice(options: PrivateNoticeOptions): Gro
       if (action === "approve") lines.push("方式：申请通过");
       if (inviterId !== undefined && positiveId(inviterId)) lines.push(`邀请人：${inviterId}`);
     }
-    lines.push("", `时间：${shanghaiTime.format(timestamp)}`, `机器人：${botId}`);
+    lines.push("", `时间：${formatGroupNoticeTime(timestamp)}`, `机器人：${botId}`);
     return lines.join("\n");
   };
 }

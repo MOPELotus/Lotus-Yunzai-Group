@@ -195,3 +195,14 @@ test("禁言通知状态可按旧群或机器人群覆盖，仅面向机器人�
   expect(await command("#椰奶通知设置禁言bot群单独取消", groupOwner)).toContain("禁言：开启（仅机器人本人）");
   expect(await readFile(legacy, "utf8")).toContain("groupAdminChange: true");
 });
+
+test("群聊列表变动设置含机器人入退群限定，并沿用旧群覆盖语法", async () => {
+  const { command, legacy } = await fixture();
+  await writeFile(legacy, "default: { groupNumberChange: false, groupMemberNumberChange: true }\n");
+  expect(await command(overview, groupOwner)).toContain("群聊列表变动：关闭（机器人进退群、被移出及群解散）");
+  expect(await command("#椰奶通知设置群聊列表变动bot单独开启", groupOwner)).toContain("不支持此作用域");
+  expect(await command("#椰奶通知设置群聊列表变动群单独开启", groupOwner)).toContain("群聊列表变动：开启");
+  expect(await command("#椰奶通知设置群聊列表变动bot群单独关闭", groupOwner)).toContain("群聊列表变动：关闭");
+  expect(await command("#椰奶通知设置群聊列表变动bot群单独取消", groupOwner)).toContain("群聊列表变动：开启");
+  expect(await readFile(legacy, "utf8")).toContain("groupMemberNumberChange: true");
+});
