@@ -404,8 +404,12 @@ test("模式与时限写入复用 YAML 原范围及锁，兼容新旧路径和�
     await writeFile(primary, canonical);
     await expect(store.toggleGroupVerificationMode(undefined, async () => false)).rejects.toThrow();
     expect(await readFile(legacy, "utf8")).toBe(original);
-    const both = await Promise.all([store.toggleGroupVerificationMode(), store.toggleGroupVerificationMode(), store.setGroupVerificationTime(360)]);
-    expect(both).toEqual(["模糊", "精确", true]);
+    const [first, second, timeChanged] = await Promise.all([
+      store.toggleGroupVerificationMode(), store.toggleGroupVerificationMode(), store.setGroupVerificationTime(360),
+    ]);
+    // Either toggle may reach the lock first.
+    expect(new Set([first, second])).toEqual(new Set(["模糊", "精确"]));
+    expect(timeChanged).toBe(true);
     expect(await readFile(legacy, "utf8")).toBe(original.replace('"精确"', "精确"));
     expect(await readFile(primary, "utf8")).toBe(canonical.replace("180", "360"));
     expect(await store.readGroupVerificationSettings(77)).toMatchObject({ enabled: true, time: 360, mode: "精确" });
