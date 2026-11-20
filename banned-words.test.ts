@@ -91,12 +91,12 @@ test("旧单图精确指纹按群和原规则顺序匹配，纯文字不能假�
   expect(await readFile(legacy, "utf8")).toBe(original);
 });
 
-test("图指纹惰性读取只用于精确规则，配置更新、连接结束和读取未确认均跳过", async () => {
+test("图指纹惰性读取跳过正则规则，配置更新、连接结束和读取未确认均跳过", async () => {
   const { policy, legacy, whitelist } = await fixture();
   const digest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
   const key = `{image:${digest}}`;
   const rules = (matchType: number) => JSON.stringify({ bannedWords: { [key]: { matchType, penaltyType: 3 } } });
-  await writeFile(legacy, rules(2));
+  await writeFile(legacy, rules(3));
   let reads = 0;
   const readDigest = async () => { reads++; return digest; };
   expect(await policy.match(77, 43, "", undefined, readDigest)).toBeUndefined();
@@ -106,7 +106,7 @@ test("图指纹惰性读取只用于精确规则，配置更新、连接结束�
   expect(await policy.match(77, 43, "", undefined, async () => "错误的摘要")).toBeUndefined();
   expect(await policy.match(77, 43, "", undefined, async () => { throw new Error("网络中断"); })).toBeUndefined();
   expect(await policy.match(77, 43, "", undefined, async () => {
-    await writeFile(legacy, rules(2));
+    await writeFile(legacy, rules(3));
     return digest;
   })).toBeUndefined();
   await writeFile(legacy, rules(1));
@@ -142,10 +142,10 @@ test("旧精确图文词保留两张原图、普通表情、标记顺序与内�
   expect(await match(parts)).toEqual({ action: "recall", seconds: 300, preview: "[图片]" });
   expect(reads).toBe(2);
   expect(await match([text("前文  "), image(second), face, text("  附件"), image(first), text("结束")])).toBeUndefined();
-  expect(reads).toBe(4);
+  expect(reads).toBe(3);
 });
 
-test("图文惰性读取尊重首条文字规则，迟到结果重新核对且不启用模糊或正则图文", async () => {
+test("图文惰性读取尊重首条文字规则，迟到结果重新核对且不启用正则图文", async () => {
   const { policy, legacy, whitelist } = await fixture();
   const digest = "a".repeat(32);
   const rule = `开会{image:${digest}}`;
@@ -157,7 +157,7 @@ test("图文惰性读取尊重首条文字规则，迟到结果重新核对且�
   await write({ 开会: literals.开会, [rule]: literals[rule]! });
   expect(await match()).toMatchObject({ action: "kick" });
   expect(reads).toBe(0);
-  await write({ [rule]: { matchType: 2, penaltyType: 3 }, [`/${rule}/`]: { matchType: 3, penaltyType: 6 } });
+  await write({ [`/${rule}/`]: { matchType: 3, penaltyType: 6 } });
   expect(await match()).toBeUndefined();
   expect(reads).toBe(0);
   await write(literals);
@@ -166,6 +166,59 @@ test("图文惰性读取尊重首条文字规则，迟到结果重新核对且�
   expect(await match(async () => { await write({ 开会: literals.开会 }); return digest; })).toMatchObject({ action: "kick" });
   await write(literals);
   expect(await match(async () => { await writeFile(whitelist, "whiteQQ: [43]\n"); return digest; })).toBeUndefined();
+});
+
+test("旧模糊单图在任何真实位置匹配，多个候选各读原图最多一次并保留首条规则", async () => {
+  const { policy, legacy } = await fixture();
+  const needed = "a".repeat(32), other = "b".repeat(32);
+  const key = `{image:${needed}}`;
+  await writeFile(legacy, JSON.stringify({ bannedWords: {
+    [key]: { matchType: 2, penaltyType: 3 }, [`{image_${other}}`]: { matchType: 2, penaltyType: 1 },
+  } }));
+  const reads: number[] = [];
+  const image = (position: number, digest: string): GroupBannedWordPart => ({ type: "image", readMd5: async () => { reads.push(position); return digest; } });
+  const text = (text: string): GroupBannedWordPart => ({ type: "text", text });
+  expect(await policy.match(77, 43, key, undefined, undefined, [text(key)])).toBeUndefined();
+  expect(await policy.match(77, 43, "", undefined, async () => needed)).toMatchObject({ action: "recall" });
+  const parts = [image(1, other), text("中间"), image(2, needed.toUpperCase()), image(3, other)];
+  expect(await policy.match(77, 43, "中间", undefined, undefined, parts)).toMatchObject({ action: "recall" });
+  expect(reads).toEqual([1, 2]);
+});
+
+test("模糊图文只放宽首尾文字，图、表情和夹在中间的文字均须实际连续且相等", async () => {
+  const { policy, legacy } = await fixture();
+  const one = "a".repeat(32), two = "b".repeat(32);
+  const phrase = `尾巴{image:${one}}  中{face:17}{image:${two}}头部`;
+  await writeFile(legacy, JSON.stringify({ bannedWords: { [phrase]: { matchType: 2, penaltyType: 3 } } }));
+  const reads: string[] = [];
+  const image = (digest: string): GroupBannedWordPart => ({ type: "image", readMd5: async () => { reads.push(digest); return digest; } });
+  const text = (text: string): GroupBannedWordPart => ({ type: "text", text });
+  const face: GroupBannedWordPart = { type: "face", id: 17 };
+  const submit = (parts: readonly GroupBannedWordPart[]) => policy.match(77, 43, "群中消息", undefined, undefined, parts);
+  expect(await submit([text("先写尾巴，再写其他"), image(one), text("  中"), face, image(two), text("头部后续")])).toBeUndefined();
+  expect(await submit([text("原尾巴"), image(one), text("  中间"), face, image(two), text("头部后续")])).toBeUndefined();
+  expect(await submit([text("原尾巴"), image(one), text("  中{face:17}"), image(two), text("头部后续")])).toBeUndefined();
+  expect(await submit([text("原尾巴"), image(one), text("  中"), face, image(two), text("另起头部")])).toBeUndefined();
+  expect(reads).toEqual([]);
+  expect(await submit([image(two), text("原尾巴"), image(one), text("  中"), face, image(two), text("头部后续")])).toMatchObject({ action: "recall" });
+  expect(reads).toEqual([one, two]);
+});
+
+test("图读回期间改变配置时不会读掉失效候选的下一张图，相同候选间不重复读", async () => {
+  const { policy, legacy } = await fixture();
+  const one = "a".repeat(32), two = "b".repeat(32);
+  const first = `{image:${one}}{image:${two}}`;
+  const later = `{image_${one}}`;
+  const rules = { [first]: { matchType: 2, penaltyType: 6 }, [later]: { matchType: 2, penaltyType: 3 } };
+  const write = (bannedWords: typeof rules) => writeFile(legacy, JSON.stringify({ bannedWords }));
+  await write(rules);
+  const reads: number[] = [];
+  const parts: GroupBannedWordPart[] = [
+    { type: "image", readMd5: async () => { reads.push(1); await write({ [later]: rules[later]! }); return one; } },
+    { type: "image", readMd5: async () => { reads.push(2); return two; } },
+  ];
+  expect(await policy.match(77, 43, "", undefined, undefined, parts)).toMatchObject({ action: "recall" });
+  expect(reads).toEqual([1]);
 });
 
 test("单图增查删重用旧 JSON 键和权限，兼容冒号与下划线的同一摘要", async () => {
