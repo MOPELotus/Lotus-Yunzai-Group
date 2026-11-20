@@ -5,7 +5,8 @@ export type TemporaryMessageNoticePart = string | { readonly type: "image"; read
 export interface TemporaryMessageNoticeInput {
   readonly botId: number;
   readonly userId: number;
-  readonly text: string;
+  readonly text?: string;
+  readonly readText?: () => Promise<string | undefined>;
   readonly groupId?: number;
   readonly reportedGroupId?: number;
 }
@@ -20,11 +21,19 @@ function positiveId(value: number | undefined): value is number {
 
 export function createTemporaryMessageNotice(options: PrivateNoticeOptions): TemporaryMessageNotice {
   const isEnabled = createPrivateNoticeSettings(options, "grouptemporaryMessage");
-  return async ({ botId, userId, text, groupId, reportedGroupId }, signal) => {
-    if (!positiveId(botId) || !positiveId(userId) || botId === userId || typeof text !== "string") return;
-    const content = formatNoticeBodyText(text);
+  return async ({ botId, userId, text, readText, groupId, reportedGroupId }, signal) => {
+    if (!positiveId(botId) || !positiveId(userId) || botId === userId) return;
+    let content = !readText && typeof text === "string" ? formatNoticeBodyText(text) : "";
     const group = positiveId(groupId) ? groupId : undefined;
-    if (!content.trim() || !await isEnabled(botId, signal, group) || options.signal?.aborted || signal?.aborted) return;
+    if ((!readText && !content.trim()) || !await isEnabled(botId, signal, group) || options.signal?.aborted || signal?.aborted) return;
+    if (readText) {
+      try {
+        const value = await readText();
+        if (typeof value !== "string" || options.signal?.aborted || signal?.aborted) return;
+        content = formatNoticeBodyText(value);
+      } catch { return; }
+      if (!content.trim()) return;
+    }
 
     const source = group ?? (positiveId(reportedGroupId) ? `未核实（协议报告 ${reportedGroupId}）` : "未核实");
     return [

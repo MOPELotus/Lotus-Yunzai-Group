@@ -72,3 +72,38 @@ test("非法账号、空正文或关闭的通知生命周期不产出消息", as
   controller.abort();
   expect(await notice(message)).toBeUndefined();
 });
+
+test("临时语音摘要仅在启用且会话有效时惰性读取，不改原通知布局", async () => {
+  const paths = await fixture();
+  const controller = new AbortController();
+  const notice = createTemporaryMessageNotice({ ...paths, signal: controller.signal });
+  let reads = 0;
+  const input = {
+    botId: 99, userId: 42, groupId: 77,
+    readText: async () => { reads++; return "[语音]（原音不可用）"; },
+  };
+  expect(await notice(input)).toBeUndefined();
+  expect(reads).toBe(0);
+  await writeFile(paths.config, "77: { grouptemporaryMessage: true }\n");
+  expect(await notice({ ...input, groupId: undefined, reportedGroupId: 77 })).toBeUndefined();
+  expect(await notice({ ...input, userId: 99 })).toBeUndefined();
+  expect(await notice(input, AbortSignal.abort())).toBeUndefined();
+  expect(reads).toBe(0);
+
+  expect(await notice(input)).toEqual([
+    { type: "image", file: "https://q1.qlogo.cn/g?b=qq&s=100&nk=42" },
+    "[消息(99) - 群临时消息]\n", "来源群号：77\n", "发送人账号：42\n", "消息内容：", "[语音]（原音不可用）",
+  ]);
+  expect(reads).toBe(1);
+  expect(await notice({ ...input, text: "[语音]", readText: async () => undefined })).toBeUndefined();
+  expect(await notice({ ...input, readText: async () => { throw new Error("offline"); } })).toBeUndefined();
+  expect(await notice({ ...input, readText: async () => " \u0000" })).toBeUndefined();
+
+  const session = new AbortController();
+  expect(await notice({
+    ...input, readText: async () => { session.abort(); return "[语音]"; },
+  }, session.signal)).toBeUndefined();
+  expect(await notice({
+    ...input, readText: async () => { controller.abort(); return "[语音]"; },
+  })).toBeUndefined();
+});

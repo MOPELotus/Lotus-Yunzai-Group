@@ -23,7 +23,7 @@ const denied = "当前会话没有修改此通知设置的权限。";
 const fields = {
   好友消息: { key: "privateMessage", specific: "bot", note: "（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK）" },
   群消息: { key: "groupMessage", specific: "group", note: "（当前支持文本、图片和表情，语音原音限已核验的 QQ SILK）" },
-  群临时消息: { key: "grouptemporaryMessage", specific: "group", note: "（当前仅文本）" },
+  群临时消息: { key: "grouptemporaryMessage", specific: "group", note: "（支持已核验的文本，语音原音限已核验的 QQ SILK）" },
   群撤回: { key: "groupRecall", specific: "group", note: "（当前支持文本和表情）" },
   好友撤回: { key: "PrivateRecall", specific: "bot", note: "（当前支持文本和表情）" },
   好友申请: { key: "friendRequest", specific: "bot", note: "" },
