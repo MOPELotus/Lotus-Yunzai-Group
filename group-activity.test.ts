@@ -262,3 +262,34 @@ test("按时长清理分页只展示一页，确认按原截止和全量安全�
     expect(await command({ ...scope, normalizedMessage: "#确认清理", message_id: 4 })).toBeUndefined();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test("旧带页码从未发言清理明确预览一页，确认前说明全候选范围", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lotus-cleanup-page-"));
+  try {
+    const lifetime = new AbortController();
+    const session = new AbortController();
+    const command = createGroupActivityCleanup(pathToFileURL(`${directory}/`), lifetime.signal);
+    const members = Array.from({ length: 31 }, (_unused, index) => ({ ...bot, userId: 10_000 + index }));
+    const kicked: number[] = [];
+    let reads = 0;
+    const scope: GroupActivityContext = { ...context, groupActivitySignal: session.signal,
+      async groupManageBlacklist() { return true; },
+      async groupActivityRoster() { reads++; return [bot, ...members]; },
+      async groupKick(id, block) { expect(block).toBe(false); kicked.push(id); return "confirmed"; },
+    };
+    const invocation = "#清理从未发言过的人第二页";
+    expect(isGroupActivityCleanupCommand(invocation)).toBe(true);
+    expect(await command({ ...scope, normalizedMessage: "#清理从未发言的人第零页", message_id: 1 })).toBe("请输入有效页码。");
+    expect(reads).toBe(0);
+    const page = await command({ ...scope, normalizedMessage: invocation, message_id: 2 });
+    if (!page || typeof page !== "object" || !("nodes" in page)) throw new Error("未返回带页码的清理预览");
+    expect(page.nodes[0]?.join("")).toContain("清理 31 人");
+    expect(page.nodes[0]?.join("")).toContain("确认范围为全部预览页");
+    expect(page.nodes[1]?.join("")).toContain("当前为第 2 页，共 2 页，本页共 1 人");
+    expect(page.nodes).toHaveLength(3);
+    expect(kicked).toEqual([]);
+    await command({ ...scope, normalizedMessage: "#确认清理", message_id: 3 });
+    expect(kicked).toEqual(members.map(({ userId }) => userId));
+    expect(reads).toBe(2);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

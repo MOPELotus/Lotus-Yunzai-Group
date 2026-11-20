@@ -32,7 +32,7 @@ export const groupActivityFeature = "[group] 从未发言成员";
 export const groupActivityRankFeature = "[group] 群成员活动排行";
 const commandPattern = /^#查看从未发言过?的人(?:第([零一壹二两三四五六七八九十百千万亿\d]+)页)?$/u;
 const rankPattern = /^#(?:查看|获取)?(不活跃排行榜|潜水排行榜|最近的?入群(?:情况|记录))([零一壹二两三四五六七八九十百千万亿\d]+)?$/u;
-const cleanupPattern = /^#清理从未发言过?的人$/u;
+const cleanupPattern = /^#清理从未发言过?的人(?:第([零一壹二两三四五六七八九十百千万亿\d]+)页)?$/u;
 const responsePattern = /^#?(确认|取消)清理$/u;
 const inactivityUnits = [...groupTimeUnits.keys()].join("|");
 const integerPattern = String.raw`[零一壹二两三四五六七八九十百千万亿\d]+`;
@@ -232,7 +232,8 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
   return async (context: GroupActivityContext): Promise<ActivityReply | readonly [] | undefined> => {
     const text = context.normalizedMessage.trim();
     const timed = timedPattern.exec(text);
-    const preview = cleanupPattern.test(text) || timed?.[1] === "清理";
+    const never = cleanupPattern.exec(text);
+    const preview = never || timed?.[1] === "清理";
     const response = responsePattern.exec(text);
     const { group_id, self_id, user_id, adapter, message_id, groupActivitySignal, groupKick } = context;
     if ((!preview && !response) || context.message_type !== "group" || signal.aborted || context.isDelegated ||
@@ -259,6 +260,9 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     if (preview) {
       const window = timed ? inactivityWindow(timed, wallNow()) : undefined;
       if (typeof window === "string") return window;
+      const paged = never?.[1];
+      const page = paged === undefined ? window?.page : parseGroupInteger(paged);
+      if (paged !== undefined && !page) return "请输入有效页码。";
       if (preparing.has(key)) return "正在核对本群成员，请稍候。";
       pending.delete(key);
       preparing.add(key);
@@ -271,7 +275,7 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
         if (!active()) return;
         const eligible = members.filter(({ userId }) => !protectedId(userId, whitelist));
         if (!eligible.length) return window ? `本群暂无符合清理条件的${window.label}没发言成员。` : "本群暂无符合清理条件的从未发言成员。";
-        const rosterPage = window ? activityPage(eligible, window.page, window) : undefined;
+        const rosterPage = page === undefined ? undefined : activityPage(eligible, page, window);
         if (typeof rosterPage === "string") return rosterPage;
         const selected = new Map(eligible.map(({ userId, joinTime, lastSentTime }) => [userId, { joinTime, lastSentTime }]));
         if (pending.size >= 128) {
