@@ -64,7 +64,7 @@ test("旧状态列当前生效值和已支持范围，普通群员可读，未�
   ].join("\n"));
   const result = await command(overview, { ...groupOwner, user_id: 43 });
   expect(result).toContain("【通知设置】");
-  expect(result).toContain("好友消息：开启（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK）");
+  expect(result).toContain("好友消息：开启（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
   expect(result).toContain("群撤回：开启（支持文本、表情和已核验原图混排）");
   expect(result).toContain("好友撤回：关闭（支持文本、表情和已核验原图混排）");
   expect(result).toContain("删除缓存时间：150 秒");
@@ -86,7 +86,7 @@ test("单项修改使用正确旧作用域，与实际来源保持一致且保�
   expect(current).toContain("unrelated: [1,2]");
   expect(await stat(primary).catch(() => undefined)).toBeUndefined();
   expect(await command("#通知设置群撤回单独开启", groupOwner)).toContain("群撤回：开启");
-  expect(await command("#通知设置群临时消息bot群单独开启", groupOwner)).toContain("群临时消息：开启（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK）");
+  expect(await command("#通知设置群临时消息bot群单独开启", groupOwner)).toContain("群临时消息：开启（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）");
   expect(await command("#通知设置好友申请bot单独开启", groupOwner)).toContain("好友申请：开启");
   expect(await command("#通知设置删除缓存时间123秒", groupOwner)).toContain("删除缓存时间：123 秒");
 });
@@ -387,9 +387,9 @@ test("原状态卡结构和覆盖仅来自当前已核对机器人及当前群�
     "Bot:99 单独配置", "群:77 单独配置", "Bot:99 & 群:77 单独配置",
   ]);
   expect(models[0]?.groups[0]?.rows.find(row => row.label === "好友消息")?.description)
-    .toBe("已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK");
+    .toBe("已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4");
   expect(models[0]?.groups[0]?.rows.find(row => row.label === "群临时消息")?.description)
-    .toBe("转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK");
+    .toBe("转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4");
   expect(models[0]?.groups[0]?.rows.find(row => row.label === "群撤回")?.description)
     .toBe("群撤回与好友撤回均支持文本、表情和已核验原图混排");
   const groupMessage = models[0]?.groups[0]?.rows.find(row => row.label === "群消息");

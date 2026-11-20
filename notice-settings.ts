@@ -21,9 +21,9 @@ const bulk = /^#(启用|禁用)全部通知$/u;
 const change = /^#通知设置(好友消息|群消息|群临时消息|群撤回|好友撤回|好友申请|群邀请|加群申请|群管理变动|好友列表变动|群聊列表变动|群成员变动|禁言|删除缓存时间|全部通知)(群单独|bot单独|bot群单独|单独)?(开启|关闭|取消|(\d+)秒?)$/u;
 const denied = "当前会话没有修改此通知设置的权限。";
 const fields = {
-  好友消息: { key: "privateMessage", specific: "bot", note: "（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK）" },
+  好友消息: { key: "privateMessage", specific: "bot", note: "（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
   群消息: { key: "groupMessage", specific: "group", note: "（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
-  群临时消息: { key: "grouptemporaryMessage", specific: "group", note: "（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK）" },
+  群临时消息: { key: "grouptemporaryMessage", specific: "group", note: "（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）" },
   群撤回: { key: "groupRecall", specific: "group", note: "（支持文本、表情和已核验原图混排）" },
   好友撤回: { key: "PrivateRecall", specific: "bot", note: "（支持文本、表情和已核验原图混排）" },
   好友申请: { key: "friendRequest", specific: "bot", note: "" },
