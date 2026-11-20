@@ -46,7 +46,7 @@ export type { AutoGroupCardContext, AutoGroupCardSummary, OwnGroupCardAccount, O
 export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, groupManagedWhitelistFeature, groupMuteFeature, groupMuteSelfFeature, groupMuteRosterFeature, groupSetAdminFeature,
   maxGroupMuteSeconds, type GroupEssenceResult, type GroupKickResult, type GroupMuteContext, type GroupMuteResult, type GroupMuteRosterEntry,
   type GroupSetAdminResult, type GroupWholeMuteResult } from "./group-mute.ts";
-export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult } from "./private-group-mute.ts";
+export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult, type PrivateGroupWholeMuteResult } from "./private-group-mute.ts";
 
 type ModerationContext = GroupMuteContext & PrivateGroupMuteContext;
 function privateMuteCommand(context: Pick<ModerationContext, "message_type">, command: string) {

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createPrivateGroupMute, isPrivateGroupMuteCommand, type PrivateGroupMuteContext, type PrivateGroupMuteResult } from "./private-group-mute.ts";
+import { createPrivateGroupMute, isPrivateGroupMuteCommand, type PrivateGroupMuteContext, type PrivateGroupMuteResult, type PrivateGroupWholeMuteResult } from "./private-group-mute.ts";
 
 function fixture(result?: () => Promise<PrivateGroupMuteResult>) {
   const calls: [number, number, number][] = [];
@@ -32,7 +32,7 @@ test("私聊旧格式解析群号、QQ、中文时长、默认单位和零时长
 test("私聊禁言不接群命令、非主人、委托、跨上下文、无来源消息或无效目标", async () => {
   const { calls, context, handle } = fixture();
   const command = "#禁言77 510 1秒";
-  for (const invalid of ["#禁言77 510", "#禁言77 @510 10秒", "#解禁77 510 5", "#全体禁言77", "#踢77 510"]) {
+  for (const invalid of ["#禁言77 510", "#禁言77 @510 10秒", "#解禁77 510 5", "#全体禁言", "#踢77 510"]) {
     expect(await handle(invalid, context)).toBeUndefined();
   }
   for (const invalid of [{ message_type: "group" }, { message_type: "terminal" }, { isDelegated: true },
@@ -84,7 +84,58 @@ test("OneBot 兼容未标明 adapter 的可信宿主事件，和显式 OneBot �
 test("私聊命令检测只认实际旧格式，不抢占同名群内入口", () => {
   expect(isPrivateGroupMuteCommand("#禁言77 510 两年")).toBe(true);
   expect(isPrivateGroupMuteCommand("#解禁 77 510")).toBe(true);
-  for (const other of ["#禁言", "#解禁510", "#全体解禁77", "#踢77 510", "#禁言77 510"]) {
+  expect(isPrivateGroupMuteCommand("#全体解禁77")).toBe(true);
+  for (const other of ["#禁言", "#解禁510", "#全体解禁", "#全员解禁77", "#踢77 510", "#禁言77 510"]) {
     expect(isPrivateGroupMuteCommand(other)).toBe(false);
   }
+});
+
+test("旧私聊全体禁言和解禁只识别紧跟群号的全体语法，确认后带群名和群号", async () => {
+  const { context, handle, calls: memberCalls } = fixture();
+  const calls: [number, boolean][] = [];
+  const wholeContext: PrivateGroupMuteContext = { ...context, async privateGroupWholeMute(groupId, enabled) {
+    calls.push([groupId, enabled]);
+    return { status: "confirmed", groupName: "测试群" };
+  } };
+  expect(await handle("#全体禁言77", { ...wholeContext, adapter: undefined })).toBe("✅ 已将群「测试群(77)」开启全体禁言");
+  expect(await handle("#全体禁言77", wholeContext)).toEqual([]);
+  expect(await handle("#全体解禁77", { ...wholeContext, adapter: "milky" })).toBe("✅ 已将群「测试群(77)」解除全体禁言");
+  for (const other of ["#全体禁言", "#全体禁言 77", "#全员禁言77", "#全体禁言77 3分钟", "#定时全体禁言77"]) {
+    expect(await handle(other, wholeContext)).toBeUndefined();
+  }
+  for (const group of ["0", "9007199254740993"]) {
+    expect(await handle(`#全体禁言${group}`, wholeContext)).toContain("有效的群号");
+  }
+  expect(calls).toEqual([[77, true], [77, false]]);
+  expect(memberCalls).toEqual([]);
+});
+
+test("全体禁言复用私聊主人和消息去重，未知不回退为单人操作", async () => {
+  const { context, handle, calls: memberCalls } = fixture();
+  let resolve!: (value: PrivateGroupWholeMuteResult) => void;
+  const pending = new Promise<PrivateGroupWholeMuteResult>((settle) => { resolve = settle; });
+  let calls = 0;
+  const wholeContext: PrivateGroupMuteContext = { ...context, privateGroupWholeMute() { calls++; return pending; } };
+  const command = "#全体解禁77";
+  expect(await handle(command, context)).toContain("没有群禁言权限");
+  expect(await handle(command, { ...wholeContext, isBotMaster: () => false })).toContain("没有群禁言权限");
+  expect(await handle(command, { ...wholeContext, isDelegated: true })).toBeUndefined();
+  expect(await handle(command, { ...wholeContext, message_type: "group" })).toBeUndefined();
+  const first = handle(command, wholeContext);
+  expect(await handle(command, wholeContext)).toEqual([]);
+  expect(await handle("#解禁77 510", wholeContext)).toEqual([]);
+  resolve({ status: "unknown", groupName: "不显示" });
+  expect(await first).toBe("群 77 的解除全体禁言结果未确认，请核对当前禁言状态。");
+  expect(await handle(command, wholeContext)).toEqual([]);
+  expect(calls).toBe(1);
+  expect(memberCalls).toEqual([]);
+});
+
+test("全体禁言区分明确拒绝、无法执行和回执异常", async () => {
+  for (const [status, notice] of [["rejected", "协议端拒绝"], ["unavailable", "请核对群管理权限"]] as const) {
+    const { handle, context } = fixture();
+    expect(await handle("#全体禁言77", { ...context, privateGroupWholeMute: async () => ({ status }) })).toContain(notice);
+  }
+  const { handle, context } = fixture();
+  expect(await handle("#全体禁言77", { ...context, privateGroupWholeMute: async () => { throw new Error("protocol"); } })).toContain("结果未确认");
 });
