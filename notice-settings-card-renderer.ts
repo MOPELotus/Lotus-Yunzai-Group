@@ -6,7 +6,9 @@ import { FontLibrary, loadImage, type CanvasRenderingContext2D as Context, type 
 import type { NoticeSettingsCardModel, NoticeSettingsCardRenderer, NoticeSettingsCardRow } from "./notice-settings-card-model.ts";
 
 const width = 800;
-const scale = 1.4;
+const scale = 4;
+// Skia filters and shadow distances use device pixels. Keep their former logical sizes.
+const effectScale = scale / 1.4;
 type Mode = Parameters<typeof renderPng>[3];
 
 interface Theme {
@@ -99,8 +101,8 @@ function background(ctx: Context, image: Image, height: number) {
 function section(ctx: Context, theme: Theme, height: number, top: number, h: number, override: boolean) {
   ctx.save();
   rounded(ctx, 15, top, 770, h, 26);
-  ctx.shadowOffsetY = 8;
-  ctx.shadowBlur = 32;
+  ctx.shadowOffsetY = 8 * effectScale;
+  ctx.shadowBlur = 32 * effectScale;
   ctx.shadowColor = "rgba(51,51,52,0.50)";
   ctx.fillStyle = "white";
   ctx.fill();
@@ -109,7 +111,7 @@ function section(ctx: Context, theme: Theme, height: number, top: number, h: num
   ctx.save();
   rounded(ctx, 15, top, 770, h, 26);
   ctx.clip();
-  ctx.filter = "blur(18px)";
+  ctx.filter = `blur(${18 * effectScale}px)`;
   background(ctx, theme.background, height);
   ctx.filter = "none";
   ctx.fillStyle = "rgba(255,255,255,0.30)";
@@ -120,7 +122,7 @@ function section(ctx: Context, theme: Theme, height: number, top: number, h: num
   light.addColorStop(1, "rgba(255,255,255,0.24)");
   ctx.fillStyle = light;
   ctx.fillRect(15, top, 770, h);
-  ctx.filter = "blur(10px)";
+  ctx.filter = `blur(${10 * effectScale}px)`;
   ctx.strokeStyle = "rgba(255,255,255,0.65)";
   ctx.lineWidth = 13;
   ctx.stroke();
@@ -180,10 +182,10 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
     background(ctx, theme.background, height);
 
     ctx.save();
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
+    ctx.shadowOffsetX = 1 * effectScale;
+    ctx.shadowOffsetY = 1 * effectScale;
     ctx.shadowColor = "#000";
-    ctx.shadowBlur = 3;
+    ctx.shadowBlur = 3 * effectScale;
     text(ctx, label, 35, 47, `16px ${theme.body}`, "#fff");
     text(ctx, "Lotus-Yunzai 管理面板", 35, 80, `36px ${theme.title}`, "#fff", 700);
     ctx.restore();
@@ -201,8 +203,8 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
       for (const [index, row] of group.rows.entries()) {
         ctx.save();
         rounded(ctx, x, top, lineWidth, 37, [5, 20, 5, 20]);
-        ctx.shadowOffsetY = 1;
-        ctx.shadowBlur = 2;
+        ctx.shadowOffsetY = 1 * effectScale;
+        ctx.shadowBlur = 2 * effectScale;
         ctx.shadowColor = "rgba(0,0,0,0.50)";
         const gradient = ctx.createLinearGradient(x, 0, x + lineWidth, 0);
         gradient.addColorStop(0, "#fceae7");
@@ -231,8 +233,8 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
     }
 
     ctx.textAlign = "center";
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
+    ctx.shadowOffsetX = 1 * effectScale;
+    ctx.shadowOffsetY = 1 * effectScale;
     ctx.shadowColor = "#000";
     text(ctx, "Created By Lotus-Yunzai", width / 2 + 5, y + 16, `14px ${theme.body}`, "#fff");
   }, mode);
