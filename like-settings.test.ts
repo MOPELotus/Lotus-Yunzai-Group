@@ -68,6 +68,20 @@ test("新配置按需创建，同一版本的并发请求只保存一次", () =>
   expect(await readdir(join(root, "config"))).toEqual(["group.yaml"]);
 }));
 
+test("提交聊天点赞设置前再次核对授权", () => withDirectory(async (root) => {
+  const file = join(root, "group.yaml");
+  const original = "# 留下旧配置\nstrangeThumbUp: true\n";
+  await writeFile(file, original);
+  const { revision } = await readLikeSettings({ file });
+  let checks = 0;
+  await expect(saveLikeSettings({ strangeThumbUp: false }, {
+    file, revision, canWrite: () => ++checks === 1,
+  })).rejects.toMatchObject({ code: "conflict" });
+  expect(checks).toBe(2);
+  expect(await readFile(file, "utf8")).toBe(original);
+  expect(await readdir(root)).toEqual(["group.yaml"]);
+}));
+
 test("拒绝无效补丁、坏文件和会改变其他字段的共享锚点", () => withDirectory(async (root) => {
   const file = join(root, "group.yaml");
   const original = "enable: &status true\nunrelated: *status\n";

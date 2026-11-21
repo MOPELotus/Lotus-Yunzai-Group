@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { link, mkdir, mkdtemp, open, realpath, rename, rm } from "node:fs/promises";
+import { constants, linkSync, renameSync } from "node:fs";
+import { mkdir, mkdtemp, open, realpath, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
@@ -197,7 +197,10 @@ export async function readLikeSettings(options?: LikeSettingsLocation) {
  * Writes in this process are serialized by canonical path. Editors outside this
  * process do not share that lock.
  */
-export async function saveLikeSettings(patch: unknown, options: LikeSettingsLocation & { readonly revision: string }) {
+export async function saveLikeSettings(patch: unknown, options: LikeSettingsLocation & {
+  readonly revision: string;
+  readonly canWrite?: () => boolean;
+}) {
   const prototype = typeof patch === "object" && patch !== null ? Object.getPrototypeOf(patch) : undefined;
   if (prototype !== Object.prototype && prototype !== null) {
     throw new LikeSettingsError("invalid", "点赞配置修改须为映射。");
@@ -207,7 +210,11 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
   }
   const updates = Object.entries(patch as Record<string, unknown>).map(([key, value]) => [key, validate(key, value)] as const);
   const { file, required, legacy, fallback } = await configLocation(options);
+  const authorize = () => {
+    if (options.canWrite && !options.canWrite()) throw new LikeSettingsError("conflict", "点赞配置写入权限已失效。");
+  };
   const operation = (pendingWrites.get(file) ?? Promise.resolve()).then(async () => {
+    authorize();
     const current = await readSnapshot(file, required);
     const inherited = await readFallback(fallback);
     const revision = settingsRevision(current.revision, inherited?.revision);
@@ -217,7 +224,10 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
     const before = effectiveSettings(values, legacy, inherited);
     const changes = updates.filter(([key, value]) => before[key as keyof LikeSettings] !== value ||
       (key === "recall" && values.has(key) && !recallSeconds(values.get(key))));
-    if (!changes.length) return { settings: before, revision };
+    if (!changes.length) {
+      authorize();
+      return { settings: before, revision };
+    }
 
     const output = values.size || document.contents === null ? document : new Document();
     for (const [key, value] of changes) output.set(key, value);
@@ -244,15 +254,16 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
 
       if ((await readSnapshot(file, false)).revision !== current.revision) throw conflict();
       if ((await readFallback(fallback))?.revision !== inherited?.revision) throw conflict();
+      authorize();
       if (current.revision === "missing") {
         try {
-          await link(staged, file);
+          linkSync(staged, file);
         } catch (error) {
           if (codeOf(error) === "EEXIST") throw conflict();
           throw error;
         }
       } else {
-        await rename(staged, file);
+        renameSync(staged, file);
       }
     } finally {
       await rm(directory, { recursive: true, force: true }).catch(() => undefined);
