@@ -1,23 +1,49 @@
+import { realpath, stat } from "node:fs/promises";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { drawInfoText, infoCardColors as colors, measureInfoText, renderInfoCard, type InfoCardOptions } from "@lotus-yunzai/skia/info-card";
 import type { NoticeSettingsCardModel, NoticeSettingsCardRenderer } from "./notice-settings-card-model.ts";
 
 type Mode = InfoCardOptions["mode"];
 type Label = "#设置" | "#通知设置";
 
-export function createNoticeSettingsCardRenderer({ mode }: {
+export function createNoticeSettingsCardRenderer({ resourceDirectory, mode }: {
   readonly resourceDirectory?: string;
   readonly mode?: Mode;
 } = {}): NoticeSettingsCardRenderer {
-  return createAdminSettingsCardRenderer({ mode });
+  return createAdminSettingsCardRenderer({ resourceDirectories: resourceDirectory ? [resourceDirectory] : undefined, mode });
 }
 
-export function createAdminSettingsCardRenderer({ mode, label = "#通知设置" }: {
+async function readThemeAvailability(resourceDirectories: readonly string[]) {
+  for (const directory of resourceDirectories) {
+    const root = await realpath(directory).catch(() => undefined);
+    if (!root) continue;
+    for (const theme of [root, join(root, "resources")]) {
+      if (await realpath(theme).catch(() => undefined) !== theme) continue;
+      const available = await Promise.all(["admin/imgs/bg/default.jpg", "common/font/FZB.ttf", "common/font/NZBZ.ttf"]
+        .map(async entry => {
+          const path = await realpath(join(theme, entry)).catch(() => undefined);
+          if (!path) return false;
+          const inside = relative(theme, path);
+          if (!inside || inside === ".." || inside.startsWith(".." + sep) || isAbsolute(inside)) return false;
+          const info = await stat(path).catch(() => undefined);
+          return !!info?.isFile() && info.size > 0 && info.size <= 24 * 1024 ** 2;
+        }));
+      if (available.every(Boolean)) return true;
+    }
+  }
+  return false;
+}
+
+export function createAdminSettingsCardRenderer({ resourceDirectories = [], mode, label = "#通知设置" }: {
   readonly resourceDirectories?: readonly string[];
   readonly mode?: Mode;
   readonly label?: Label;
 } = {}): NoticeSettingsCardRenderer {
+  let theme: Promise<boolean> | undefined;
   return async (model, signal) => {
     if (signal?.aborted) return;
+    theme ??= readThemeAvailability(resourceDirectories);
+    if (!await theme || signal?.aborted) return;
     const { png, engine } = await renderNoticeSettingsCard(model, mode, label);
     if (signal?.aborted) return;
     console.log(`[渲染] ${label.slice(1)} ${engine.renderer} ${engine.api} ${engine.device}`);
