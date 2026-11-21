@@ -112,6 +112,18 @@ function privateMuteCommand(context: Pick<ModerationContext, "message_type">, co
   return context.message_type === "private" && isPrivateGroupMuteCommand(command);
 }
 
+const activeFriendRequestFeature = "[group] 主动好友申请提示";
+
+function activeFriendRequestCommand(context: Pick<ModerationContext, "message_type">, command: string) {
+  return context.message_type === "private" && /^#?(?:加为好友|添加好友)$/u.test(command);
+}
+
+function activeFriendRequestReply(context: ModerationContext) {
+  if (!context.isDelegated && context.user_id !== undefined && context.isBotMaster(context.user_id)) {
+    return "当前协议端不支持主动发送好友申请。";
+  }
+}
+
 const defaultModeration = createGroupMute();
 const defaultPrivateMute = createPrivateGroupMute();
 const defaultPendingJoinReview = createGroupPendingJoinReview();
@@ -128,6 +140,7 @@ const manifest = {
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context);
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
     if (privateInvitationReviewCommand(context, normalized)) return defaultGroupInvitationReview(normalized, context);
+    if (activeFriendRequestCommand(context, normalized)) return activeFriendRequestReply(context);
     if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return defaultOwnerFriendReply(normalized, context);
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return defaultFriendRequestReview(normalized, context);
@@ -140,6 +153,7 @@ const manifest = {
     if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return [requestOverviewFeature];
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
     if (privateInvitationReviewCommand(context, normalized)) return [groupInvitationReviewFeature];
+    if (activeFriendRequestCommand(context, normalized)) return [activeFriendRequestFeature];
     if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return [ownerFriendReplyFeature];
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return [friendRequestReviewFeature];
@@ -266,6 +280,7 @@ export async function createModule({
       if (privateMuteCommand(context, normalized)) return privateMute(message, context);
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
       if (privateInvitationReviewCommand(context, normalized)) return groupInvitationReview(normalized, context);
+      if (activeFriendRequestCommand(context, normalized)) return signal.aborted ? undefined : activeFriendRequestReply(context);
       if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return ownerFriendReply(normalized, context);
       if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
       if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return friendRequestReview(normalized, context);
@@ -293,6 +308,7 @@ export async function createModule({
       if (privateMuteCommand(context, message)) return [privateGroupMuteFeature];
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
       if (privateInvitationReviewCommand(context, message)) return [groupInvitationReviewFeature];
+      if (activeFriendRequestCommand(context, message)) return [activeFriendRequestFeature];
       if (context.message_type === "private" && isOwnerFriendReplyCommand(message, context.reply_id, context.message)) return [ownerFriendReplyFeature];
       if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
       if (context.message_type === "private" && isFriendRequestReviewCommand(message)) return [friendRequestReviewFeature];
