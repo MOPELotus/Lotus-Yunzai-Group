@@ -55,15 +55,33 @@ export function createNoticeSettingsCardRenderer({ resourceDirectory, mode }: {
   readonly resourceDirectory: string;
   readonly mode?: Mode;
 }): NoticeSettingsCardRenderer {
+  return createAdminSettingsCardRenderer({ resourceDirectories: [resourceDirectory], mode });
+}
+
+export function createAdminSettingsCardRenderer({ resourceDirectories, mode, label = "#通知设置" }: {
+  readonly resourceDirectories: readonly string[];
+  readonly mode?: Mode;
+  readonly label?: "#设置" | "#通知设置";
+}): NoticeSettingsCardRenderer {
+  async function findTheme() {
+    for (const directory of resourceDirectories) {
+      const loaded = await loadNoticeSettingsCardTheme(directory).catch(() => undefined);
+      if (loaded) return loaded;
+    }
+  }
+
   let theme: Promise<Theme | undefined> | undefined;
   return async (model, signal) => {
     if (signal?.aborted) return;
-    theme ??= loadNoticeSettingsCardTheme(resourceDirectory).catch(() => undefined);
+    theme ??= findTheme();
     const loaded = await theme;
     if (!loaded && !signal?.aborted) theme = undefined;
     if (!loaded || signal?.aborted) return;
-    const { png } = await renderNoticeSettingsCard(model, loaded, mode);
-    if (!signal?.aborted) return png;
+    const { png, engine } = await renderNoticeSettingsCard(model, loaded, mode, label);
+    if (!signal?.aborted) {
+      if (label === "#设置") console.log(`[渲染] 设置 ${engine.renderer} ${engine.api} ${engine.device}`);
+      return png;
+    }
   };
 }
 
@@ -147,7 +165,8 @@ function descriptionHeight(row: NoticeSettingsCardRow, first: boolean): number {
   return first && (row.label === "好友消息" || row.label === "通知全部主人") ? 29 : 26;
 }
 
-export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, theme: Theme, mode: Mode = "gpu") {
+export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, theme: Theme, mode: Mode = "gpu",
+  label = "#通知设置") {
   const groups = model.groups.map(({ title, rows, override }) => ({
     title, rows, override: override === true,
     height: (override ? 70 : 59) + rows.reduce((total, row, i) => total + 47 + descriptionHeight(row, i === 0), 0),
@@ -165,7 +184,7 @@ export async function renderNoticeSettingsCard(model: NoticeSettingsCardModel, t
     ctx.shadowOffsetY = 1;
     ctx.shadowColor = "#000";
     ctx.shadowBlur = 3;
-    text(ctx, "#通知设置", 35, 47, `16px ${theme.body}`, "#fff");
+    text(ctx, label, 35, 47, `16px ${theme.body}`, "#fff");
     text(ctx, "Lotus-Yunzai 管理面板", 35, 80, `36px ${theme.title}`, "#fff", 700);
     ctx.restore();
 
