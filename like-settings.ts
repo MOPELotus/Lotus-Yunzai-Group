@@ -20,6 +20,7 @@ export interface LikeSettings {
 
 interface LikeSettingsLocation {
   readonly file?: string | URL;
+  readonly root?: URL;
 }
 
 export class LikeSettingsError extends Error {
@@ -41,7 +42,8 @@ const defaults: LikeSettings = {
   noFriendMsg: "当前仅向好友点赞。",
 };
 
-const defaultConfig = new URL("../../config/group.yaml", import.meta.url);
+const defaultRoot = new URL("../../", import.meta.url);
+const legacyConfig = "plugins/yenai-plugin/config/config/thumbUp.yaml";
 const pendingWrites = new Map<string, Promise<void>>();
 
 function codeOf(error: unknown): string | undefined {
@@ -91,15 +93,20 @@ function readSettings(values: Map<unknown, unknown>, legacy: boolean): LikeSetti
   return result;
 }
 
-function configLocation(options?: LikeSettingsLocation) {
+async function configLocation(options?: LikeSettingsLocation) {
   const overridden = options?.file;
   const configured = Bun.env.LOTUS_GROUP_CONFIG;
-  const file = overridden ?? (configured || defaultConfig);
+  const root = options?.root ?? defaultRoot;
+  const file = overridden ?? (configured || new URL("config/group.yaml", root));
   const path = typeof file === "string" ? resolve(file) : fileURLToPath(file);
+  const resolved = await canonical(path);
+  const fallback = overridden === undefined && !configured ? fileURLToPath(new URL(legacyConfig, root)) : undefined;
+  const sharedSource = fallback !== undefined && await canonical(fallback) === resolved;
   return {
-    path,
-    legacy: basename(path) === "thumbUp.yaml",
+    file: resolved,
+    legacy: sharedSource || basename(path) === "thumbUp.yaml",
     required: overridden === undefined && Boolean(configured),
+    fallback: sharedSource ? undefined : fallback,
   };
 }
 
@@ -161,10 +168,28 @@ function conflict() {
   return new LikeSettingsError("conflict", "点赞配置已变更，请重新读取后保存。");
 }
 
+function settingsRevision(primary: string, fallback?: string) {
+  return fallback === undefined ? primary : createHash("sha256").update(`${primary}:${fallback}`).digest("hex");
+}
+
+async function readFallback(path: string | undefined) {
+  if (path === undefined) return;
+  const source = await readSnapshot(await canonical(path), false);
+  if (source.revision !== "missing") return { values: readDocument(source.text).values, revision: source.revision };
+}
+
+function effectiveSettings(values: Map<unknown, unknown>, legacy: boolean, fallback?: Awaited<ReturnType<typeof readFallback>>) {
+  return fallback ? readSettings(new Map([...fallback.values, ...values]), true) : readSettings(values, legacy);
+}
+
 export async function readLikeSettings(options?: LikeSettingsLocation) {
-  const { path, required, legacy } = configLocation(options);
-  const current = await readSnapshot(await canonical(path), required);
-  return { settings: readSettings(readDocument(current.text).values, legacy), revision: current.revision };
+  const { file, required, legacy, fallback } = await configLocation(options);
+  const current = await readSnapshot(file, required);
+  const inherited = await readFallback(fallback);
+  return {
+    settings: effectiveSettings(readDocument(current.text).values, legacy, inherited),
+    revision: settingsRevision(current.revision, inherited?.revision),
+  };
 }
 
 /**
@@ -181,23 +206,24 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
     throw new LikeSettingsError("invalid", "点赞配置版本无效，请重新读取。");
   }
   const updates = Object.entries(patch as Record<string, unknown>).map(([key, value]) => [key, validate(key, value)] as const);
-  const { path, required, legacy } = configLocation(options);
-  const file = await canonical(path);
+  const { file, required, legacy, fallback } = await configLocation(options);
   const operation = (pendingWrites.get(file) ?? Promise.resolve()).then(async () => {
     const current = await readSnapshot(file, required);
-    if (current.revision !== options.revision) throw conflict();
+    const inherited = await readFallback(fallback);
+    const revision = settingsRevision(current.revision, inherited?.revision);
+    if (revision !== options.revision) throw conflict();
 
     const { document, values } = readDocument(current.text);
-    const before = readSettings(values, legacy);
+    const before = effectiveSettings(values, legacy, inherited);
     const changes = updates.filter(([key, value]) => before[key as keyof LikeSettings] !== value ||
       (key === "recall" && values.has(key) && !recallSeconds(values.get(key))));
-    if (!changes.length) return { settings: before, revision: current.revision };
+    if (!changes.length) return { settings: before, revision };
 
     const output = values.size || document.contents === null ? document : new Document();
     for (const [key, value] of changes) output.set(key, value);
     const yaml = output.toString();
     const after = readDocument(yaml).values;
-    const settings = readSettings(after, legacy);
+    const settings = effectiveSettings(after, legacy, inherited);
     if (!isDeepStrictEqual(unknownFields(values), unknownFields(after)) ||
         !isDeepStrictEqual(settings, { ...before, ...Object.fromEntries(changes) })) {
       throw new LikeSettingsError("invalid", "保存将改变其他 YAML 字段，请先检查配置中的引用。");
@@ -217,6 +243,7 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
       }
 
       if ((await readSnapshot(file, false)).revision !== current.revision) throw conflict();
+      if ((await readFallback(fallback))?.revision !== inherited?.revision) throw conflict();
       if (current.revision === "missing") {
         try {
           await link(staged, file);
@@ -231,7 +258,7 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
       await rm(directory, { recursive: true, force: true }).catch(() => undefined);
     }
 
-    return { settings, revision: createHash("sha256").update(yaml).digest("hex") };
+    return { settings, revision: settingsRevision(createHash("sha256").update(yaml).digest("hex"), inherited?.revision) };
   });
 
   const finished = operation.then(() => undefined, () => undefined);
