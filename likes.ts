@@ -3,6 +3,7 @@ import { readLikeSettings, type LikeSettings } from "./like-settings.ts";
 export interface MentionLike {
   readonly userId: number;
   isFriend(): Promise<boolean>;
+  friendship?(): Promise<boolean | undefined>;
   /** Return the confirmed count, zero on a definitive refusal, or throw if the result is uncertain. */
   like(count: number): Promise<number>;
 }
@@ -17,6 +18,7 @@ export interface LikeContext {
   readonly self_id?: number;
   readonly isDelegated?: boolean;
   readonly isFriend?: () => Promise<boolean>;
+  readonly profileLikeFriendship?: () => Promise<boolean | undefined>;
   /** Same receipt semantics as MentionLike.like. */
   readonly likeSelf?: (count: number) => Promise<number>;
   readonly mentionLike?: MentionLike;
@@ -126,15 +128,19 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
       inFlight.add(requesterKey);
       inFlight.add(targetKey);
       try {
+        let friend: boolean | undefined;
         if (!current.strangeThumbUp) {
-          const friend = await (mention ? mention.isFriend() : context.isFriend?.())?.catch(() => undefined);
+          friend = await (mention ? mention.isFriend() : context.isFriend?.())?.catch(() => undefined);
           if (friend !== true) return mode === "all" ? [] : quoted(reply(current.noFriendMsg, context, style, undefined, friend, mention));
         }
         const count = await submit(current.count);
         const avatarId = mention?.userId ?? user_id;
         if (Number.isInteger(count) && count >= 1 && count <= current.count) {
+          if (current.strangeThumbUp && current.successMsg && /\{\{\s*noFriend:/u.test(current.successMsg)) {
+            friend = await (mention ? mention.friendship?.() : context.profileLikeFriendship?.())?.catch(() => undefined);
+          }
           const image = await renderImage(current.successMsg, context, avatarId, "success");
-          return quoted(reply(current.successMsg, context, style, count, undefined, mention, image), current.recall);
+          return quoted(reply(current.successMsg, context, style, count, friend, mention, image), current.recall);
         }
         if (count === 0 && mode !== "all") {
           const image = await renderImage(current.failsMsg, context, avatarId, "failure");
