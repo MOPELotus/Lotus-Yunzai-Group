@@ -3,7 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createGroupTimedMute, isGroupTimedMuteCommand, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
+import { createGroupTimedMute, isGroupTimedMuteCommand, prepareLegacyMuteHandoff,
+  type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
 
 async function fixture(old?: unknown) {
   const path = await mkdtemp(join(tmpdir(), "lotus-timed-mute-"));
@@ -66,8 +67,29 @@ test("旧定时禁言键只读取，待绑定只由同群原机器人明确认�
     expect(f.jobs.size).toBe(0);
     expect(await f.run(tasks, "#定时禁言任务")).toContain("没有定时禁言任务");
     expect(await f.services.readLegacy()).toBe(original);
+    const retained = JSON.stringify(records.slice(2));
+    expect(prepareLegacyMuteHandoff(await readFile(f.state), original)).toEqual({ value: retained, removed: 2 });
     await tasks.stop();
   } finally { await f.cleanup(); }
+});
+
+test("准备交还定时禁言时移除已绑定或取消的旧模式，保留原生任务与无关旧记录", () => {
+  const cron = "0 0 23 * * ?";
+  const native = { groupId: 77, enabled: true, cron, adapter: "milky", botId: 99, issuerId: 42 };
+  const state = Buffer.from(JSON.stringify({
+    version: 1, tasks: [native], retiredLegacy: [{ groupId: 77, enabled: true }, { groupId: 78, enabled: false }],
+  }));
+  const first = { group: 77, type: false, botId: 99, cron, extra: { policy: "keep" } };
+  const second = { group: "88", type: true, botId: "100", cron, hint: "保留" };
+  const old = JSON.stringify([first, { group: "77", type: true }, null, { group: 77, type: true },
+    { group: "78", type: false }, second], null, 2);
+  expect(prepareLegacyMuteHandoff(state, old)).toEqual({ value: JSON.stringify([first, null, second]), removed: 3 });
+  const unchanged = JSON.stringify([first, second], null, 2) + "\r\n";
+  expect(prepareLegacyMuteHandoff(state, unchanged)).toEqual({ value: unchanged, removed: 0 });
+  expect(prepareLegacyMuteHandoff(state, null)).toEqual({ value: null, removed: 0 });
+  expect(prepareLegacyMuteHandoff(state, "null\r\n")).toEqual({ value: "null\r\n", removed: 0 });
+  expect(() => prepareLegacyMuteHandoff(state, "{}")).toThrow("旧定时群禁言记录无效");
+  expect(() => prepareLegacyMuteHandoff(Buffer.from("{}"), old)).toThrow("定时群禁言记录无效");
 });
 
 test("合法旧快捷时间及六段 cron 重启恢复，重复、无权限和无效时间不上调度", async () => {

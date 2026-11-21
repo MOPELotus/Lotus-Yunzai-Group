@@ -67,19 +67,41 @@ function decode(raw?: Buffer): State {
   return { version: 1, tasks: data.tasks, retiredLegacy: data.retiredLegacy };
 }
 
-function legacyTasks(raw: string | null): readonly LegacyTask[] {
+function legacyRows(raw: string | null): readonly unknown[] {
   if (raw === null) return [];
   if (raw.length > maxBytes) throw new Error("旧定时群禁言记录过大。");
   const rows: unknown = JSON.parse(raw);
   if (rows == null) return [];
   if (!Array.isArray(rows)) throw new Error("旧定时群禁言记录无效。");
-  return rows.flatMap((entry) => {
-    if (!record(entry) || typeof entry.type !== "boolean") return [];
-    const groupId = legacyId(entry.group);
-    if (!groupId) return [];
-    return [{ groupId, enabled: entry.type, botId: legacyId(entry.botId),
-      cron: typeof entry.cron === "string" && entry.cron.length <= maxCronLength ? entry.cron : undefined }];
+  return rows;
+}
+
+function legacyMode(entry: unknown): Mode | undefined {
+  if (!record(entry) || typeof entry.type !== "boolean") return;
+  const groupId = legacyId(entry.group);
+  if (groupId !== undefined) return { groupId, enabled: entry.type };
+}
+
+function legacyTasks(raw: string | null): readonly LegacyTask[] {
+  return legacyRows(raw).flatMap((entry) => {
+    if (!record(entry)) return [];
+    const scope = legacyMode(entry);
+    return scope ? [{ ...scope, botId: legacyId(entry.botId),
+      cron: typeof entry.cron === "string" && entry.cron.length <= maxCronLength ? entry.cron : undefined }] : [];
   });
+}
+
+export function prepareLegacyMuteHandoff(state: Buffer, legacy: string | null): { value: string | null; removed: number } {
+  if (state.length > maxBytes) throw new Error("定时群禁言记录过大。");
+  const { retiredLegacy } = decode(state);
+  const retired = new Set(retiredLegacy.map(key));
+  const rows = legacyRows(legacy);
+  const kept = rows.filter((entry) => {
+    const scope = legacyMode(entry);
+    return !scope || !retired.has(key(scope));
+  });
+  const removed = rows.length - kept.length;
+  return { value: removed ? JSON.stringify(kept) : legacy, removed };
 }
 
 function normalizeCron(input: string): string | undefined {

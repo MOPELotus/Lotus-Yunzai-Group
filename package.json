@@ -6,6 +6,7 @@
     ".": "./index.ts",
     "./group-leave-blacklist": "./group-leave-blacklist.ts",
     "./group-notice-panel-settings": "./group-notice-panel-settings.ts",
+    "./group-timed-mute": "./group-timed-mute.ts",
     "./like-settings": "./like-settings.ts"
   },
   "lotusYunzai": {
