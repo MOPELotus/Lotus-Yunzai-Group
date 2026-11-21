@@ -1,4 +1,4 @@
-import { createNoticeSettingsStore, NoticeSettingsConflictError, type NoticeSettingsField } from "./notice-settings-store.ts";
+import { createNoticeSettingsStore, NoticeSettingsConflictError, NoticeSettingsPermissionError, type NoticeSettingsField } from "./notice-settings-store.ts";
 
 const panelFields = [
   "groupMessage", "grouptemporaryMessage", "groupRecall", "addGroupApplication",
@@ -12,6 +12,8 @@ export interface GroupNoticePanelSettingsSnapshot {
   readonly revision: string;
   readonly writable: boolean;
 }
+
+export { NoticeSettingsPermissionError as GroupNoticePanelSettingsPermission };
 
 export class GroupNoticePanelSettingsConflict extends Error {
   readonly code = "GROUP_NOTICE_SETTINGS_CONFLICT";
@@ -49,13 +51,14 @@ export function createGroupNoticePanelSettings(root: URL, lockFile: Parameters<t
     async read(): Promise<GroupNoticePanelSettingsSnapshot> {
       return project(await store.readVersionedDefaults(panelFields));
     },
-    async write(revision: string, patch: unknown): Promise<GroupNoticePanelSettingsSnapshot> {
+    async write(revision: string, patch: unknown, canWrite: () => boolean = () => true): Promise<GroupNoticePanelSettingsSnapshot> {
       if (typeof revision !== "string" || !/^[a-f0-9]{64}$/u.test(revision) || revision.length !== 64) {
         throw new GroupNoticePanelSettingsInputError();
       }
       const updates = parsePatch(patch);
-      try { return project(await store.writeVersionedDefaults(revision, panelFields, updates)); }
+      try { return project(await store.writeVersionedDefaults(revision, panelFields, updates, canWrite)); }
       catch (error) {
+        if (error instanceof NoticeSettingsPermissionError) throw error;
         if (error instanceof NoticeSettingsConflictError) throw new GroupNoticePanelSettingsConflict();
         throw new GroupNoticePanelSettingsUnavailable();
       }

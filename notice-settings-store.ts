@@ -11,7 +11,7 @@ export type NoticeSettingsField = "privateMessage" | "grouptemporaryMessage" | "
 export type NoticeSettingsScope = "default" | "group" | "bot" | "bot-group";
 type Value = boolean | number;
 type Update = readonly [field: NoticeSettingsField, value: Value | undefined];
-type Authorize = () => Promise<boolean>;
+type Authorize = () => boolean | Promise<boolean>;
 type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;
 
 const maxBytes = 1_048_576;
@@ -217,7 +217,10 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
       if (expected && revision(before) !== expected.revision) throw new NoticeSettingsConflictError();
       if (expected && !versionedDefaults(before, expected.fields).writable) throw unsafe();
       const output = applyPatch(decode(before?.bytes), section, updates);
-      if (!output) return { changed: false, location: before };
+      if (!output) {
+        await assertPermission();
+        return { changed: false, location: before };
+      }
       const file = before?.file ?? join(await realpath(dirname(primary)), basename(primary));
       const stage = await mkdtemp(join(dirname(file), ".lotus-group-notice-"));
       try {
@@ -277,8 +280,9 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
 
     async writeVersionedDefaults(revision: string, fields: readonly NoticeSettingsField[],
       updates: readonly (readonly [field: NoticeSettingsField, value: boolean])[],
+      authorize: Authorize,
     ): Promise<VersionedDefaults> {
-      const { location } = await write("default", updates, async () => true, { revision, fields });
+      const { location } = await write("default", updates, authorize, { revision, fields });
       return versionedDefaults(location, fields);
     },
   };
