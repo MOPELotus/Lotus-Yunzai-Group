@@ -1,6 +1,6 @@
 type CardResult = "confirmed" | "rejected" | "unknown" | "missing-group" | "insufficient-role";
 
-interface CardEvent {
+export interface CardEvent {
   readonly msg: string;
   readonly message_type: "group" | "private" | "terminal";
   readonly message: string | readonly { readonly type: string; readonly qq?: unknown }[];

@@ -1,10 +1,6 @@
 import group, { createGroupPlugin, type ProfileLikeImage } from "./likes.ts";
-import { GroupDeparture, GroupNewcomer } from "./member-notices-v3.js";
-import { apps as repeat } from "./repeat.js";
-import { AutoRepeat, configureAutoRepeat } from "./auto-repeat-v3.js";
 import { groupRequestReview } from "./request-review.ts";
-import { ReviewGroupRequest } from "./request-review-v3.js";
-import { GroupCard } from "./group-card-v3.js";
+import { groupRuntimeEvents } from "./runtime-events.ts";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
@@ -131,7 +127,6 @@ const defaultFriendRequestReview = createFriendRequestReview();
 const defaultGroupInvitationReview = createGroupInvitationReview();
 const defaultOwnerFriendReply = createOwnerFriendReply();
 
-export const apps = { ...repeat, GroupNewcomer, GroupDeparture, ReviewGroupRequest, GroupCard, AutoRepeat };
 const manifest = {
   ...group,
   commands: { ...group.commands, ...groupRequestReview.commands },
@@ -210,8 +205,9 @@ export async function createModule({
       console.warn("[group] 自动群名片配置无效，未启动定时更新。");
     }
   }
-  const stopRepeat = configureAutoRepeat({
-    signal, readImage: readAutoRepeatImage, sessionSignal: autoRepeatSessionSignal,
+  const repeatLifetime = new AbortController();
+  const nativeEvents = groupRuntimeEvents({
+    signal: AbortSignal.any([signal, repeatLifetime.signal]), readImage: readAutoRepeatImage, sessionSignal: autoRepeatSessionSignal,
     isBot: (id: number) => ownGroupCardAccounts?.().some(({ botId }) => id === botId) ?? false,
   });
   let stopLeaveBlacklist: (() => void) | undefined;
@@ -272,6 +268,7 @@ export async function createModule({
   const timedMute = lockFile && groupTimedMute && !signal.aborted ? await createGroupTimedMute(root, lockFile, groupTimedMute, signal) : undefined;
   return {
     ...manifest,
+    nativeEvents,
     fallback(message: string, context: ModerationContext & NoticeSettingsContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
       GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
       const normalized = context.normalizedMessage.trim();
@@ -353,7 +350,7 @@ export async function createModule({
       if (stopOwnerNoticeRecipients) stopOwnerNoticeRecipients();
       stopManagedBlacklist?.();
       stopLeaveBlacklist?.();
-      stopRepeat();
+      repeatLifetime.abort();
       await Promise.all([stopTask?.(), timedMute?.stop(), vote?.stop(), verification?.stop()]);
     },
   };

@@ -11,7 +11,7 @@ type ImageSource = {
   readonly resolve?: () => Promise<unknown>;
 };
 
-interface AutoRepeatEvent {
+export interface AutoRepeatEvent {
   readonly self_id?: number;
   readonly group_id?: number;
   readonly user_id?: number;
