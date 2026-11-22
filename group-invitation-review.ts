@@ -67,7 +67,7 @@ function receipt(result: PendingGroupInvitationReviewResult | QuotedGroupInvitat
   }
 }
 
-export function createGroupInvitationReview(signal?: AbortSignal, completeInvitation = groupRequestReview.completeMilkyInvitation) {
+export function createGroupInvitationReview(signal?: AbortSignal, completeInvitation = groupRequestReview.completeInvitation) {
   const inFlight = new Map<string, Promise<{ reply?: string | OwnerRequestBatchReply; unrelated?: true }>>();
   const seen = new Set<string>();
 
@@ -114,9 +114,9 @@ export function createGroupInvitationReview(signal?: AbortSignal, completeInvita
       try {
         if (batch && reviewAllPendingGroupInvitations) {
           const result = await reviewAllPendingGroupInvitations(approve);
-          if (adapter === "milky" && result.status === "processed") {
+          if (result.status === "processed") {
             for (const entry of result.entries) {
-              if (entry.status === "confirmed" && entry.resolvedFlag) completeInvitation(self_id, entry.resolvedFlag);
+              if (entry.status === "confirmed" && entry.resolvedFlag) completeInvitation(self_id, entry.resolvedFlag, adapter ?? "onebot");
             }
           }
           return !signal?.aborted && isBotMaster(user_id) ? { reply: ownerRequestBatchReply(result, "群邀请", verb) } : {};

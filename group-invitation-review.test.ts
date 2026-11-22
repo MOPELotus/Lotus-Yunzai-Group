@@ -97,7 +97,7 @@ test("同一原消息在途和未知均不重复提交，账号与协议独立",
 
 test("按群号审核确认后只摘除当前 Milky 账号的真实邀请，已完成重放不会复活", async () => {
   const queue = createGroupRequestReview();
-  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const handle = createGroupInvitationReview(undefined, queue.completeInvitation);
   const event: GroupRequestEvent = { self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag: "exact-opaque" };
   const scope = { ...owner, isMaster: true, groupRequestScope: "milky", canReviewGroupRequests: true } as const;
   const list = () => queue.commands["#入群申请"]("", scope);
@@ -125,7 +125,7 @@ test("按群号审核确认后只摘除当前 Milky 账号的真实邀请，已�
 
 test("已确认的延后邀请不入队，非 Milky 或未知和失败不清现有队列", async () => {
   const queue = createGroupRequestReview();
-  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const handle = createGroupInvitationReview(undefined, queue.completeInvitation);
   const event: GroupRequestEvent = { self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag: "exact-opaque" };
   const scope = { ...owner, isMaster: true, groupRequestScope: "milky", canReviewGroupRequests: true } as const;
   const list = () => queue.commands["#入群申请"]("", scope);
@@ -150,7 +150,7 @@ test("已确认的延后邀请不入队，非 Milky 或未知和失败不清现�
 
 test("仅接当前 Milky 主人原生私聊的引用，确认后清同一编号且不披露 flag", async () => {
   const queue = createGroupRequestReview();
-  const handle = createGroupInvitationReview(undefined, queue.completeMilkyInvitation);
+  const handle = createGroupInvitationReview(undefined, queue.completeInvitation);
   const flag = "opaque-invitation";
   await queue.receive({ self_id: 99, user_id: 51, group_id: 77, groupRequestScope: "milky", sub_type: "invite", flag });
   let calls = 0;

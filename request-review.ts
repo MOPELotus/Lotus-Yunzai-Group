@@ -89,9 +89,9 @@ export function createGroupRequestReview() {
     if (completed.size > maxCompleted) completed.delete(completed.values().next().value!);
   }
 
-  function completeMilkyInvitation(botId: number, flag: string) {
+  function completeInvitation(botId: number, flag: string, adapter: "milky" | "onebot" = "milky") {
     if (!isId(botId) || typeof flag !== "string" || !flag) return;
-    const key = requestKey("milky", botId, "invite", flag);
+    const key = requestKey(adapter === "milky" ? "milky" : undefined, botId, "invite", flag);
     for (const [id, request] of pending) {
       if (request.eventKey === key) {
         pending.delete(id);
@@ -184,7 +184,7 @@ export function createGroupRequestReview() {
 
   return {
     receive,
-    completeMilkyInvitation,
+    completeInvitation,
     commands: {
       "#入群申请": list,
       "#同意入群": (argument: string, context: CommandContext) => review(argument, context, true),
