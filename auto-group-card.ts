@@ -80,31 +80,32 @@ async function readSettings(root: URL): Promise<Settings | undefined> {
     });
     if (source === undefined) continue;
 
-    const input: unknown = Bun.YAML.parse(source) ?? {};
-    if (typeof input !== "object" || input === null || Array.isArray(input)) {
-      throw new TypeError("自动群名片配置须为映射。");
-    }
-    const { enable, cron, nickname, notGroup, suffixes } = input as Record<string, unknown>;
-    if (enable !== undefined && enable !== null && typeof enable !== "boolean") throw new TypeError("enable 应为布尔值。");
-    const expression = cron ? (typeof cron === "string" ? cron.trim().replace(/\s+/gu, " ") : "") : defaultCron;
-    if (![5, 6].includes(expression.split(" ").length)) throw new TypeError("cron 应为五段或六段表达式。");
-    if (nickname !== undefined && nickname !== null && nickname !== "" && !cardPart(nickname)) {
-      throw new TypeError("nickname 应为单行文本。");
-    }
-    if (notGroup != null && !Array.isArray(notGroup)) throw new TypeError("notGroup 应为群号列表。");
-    if (suffixes != null && !Array.isArray(suffixes)) throw new TypeError("suffixes 应为文案列表。");
-    return {
-      enabled: enable !== false,
-      cron: expression,
-      nickname: cardPart(nickname),
-      notGroup: new Set((notGroup as unknown[] | undefined)?.map(groupId)),
-      suffixes: suffixes === undefined ? originalSuffixes : (suffixes as unknown[] | null)?.map((value) => {
-        const text = cardPart(value);
-        if (!text) throw new TypeError("suffixes 应包含非空的单行文本。");
-        return text;
-      }) ?? [],
-    };
+    return parseAutoGroupCardSettings(Bun.YAML.parse(source) ?? {});
   }
+}
+
+export function parseAutoGroupCardSettings(input: unknown): Settings {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new TypeError("自动群名片配置须为映射。");
+  }
+  const { enable, cron, nickname, notGroup, suffixes } = input as Record<string, unknown>;
+  if (enable !== undefined && enable !== null && typeof enable !== "boolean") throw new TypeError("enable 应为布尔值。");
+  const expression = cron ? (typeof cron === "string" ? cron.trim().replace(/\s+/gu, " ") : "") : defaultCron;
+  if (![5, 6].includes(expression.split(" ").length)) throw new TypeError("cron 应为五段或六段表达式。");
+  if (nickname !== undefined && nickname !== null && nickname !== "" && !cardPart(nickname)) {
+    throw new TypeError("nickname 应为单行文本。");
+  }
+  if (notGroup != null && !Array.isArray(notGroup)) throw new TypeError("notGroup 应为群号列表。");
+  if (suffixes != null && !Array.isArray(suffixes)) throw new TypeError("suffixes 应为文案列表。");
+  return {
+    enabled: enable !== false, cron: expression, nickname: cardPart(nickname),
+    notGroup: new Set((notGroup as unknown[] | undefined)?.map(groupId)),
+    suffixes: suffixes === undefined ? originalSuffixes : (suffixes as unknown[] | null)?.map((value) => {
+      const text = cardPart(value);
+      if (!text) throw new TypeError("suffixes 应包含非空的单行文本。");
+      return text;
+    }) ?? [],
+  };
 }
 
 function scheduledAccounts(accounts: readonly OwnGroupCardAccount[]) {

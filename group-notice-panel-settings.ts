@@ -16,6 +16,12 @@ export interface GroupNoticePanelSettingsSnapshot {
   readonly writable: boolean;
 }
 
+interface ScopedNoticePanelSettingsSnapshot extends Omit<GroupNoticePanelSettingsSnapshot, "settings"> {
+  readonly settings: Record<typeof booleanFields[number], boolean | null> & { msgSaveDeltime: number | null | "invalid" };
+  readonly scope: string;
+  readonly scopes: readonly string[];
+}
+
 export { NoticeSettingsPermissionError as GroupNoticePanelSettingsPermission };
 
 export class GroupNoticePanelSettingsConflict extends Error {
@@ -31,7 +37,7 @@ export class GroupNoticePanelSettingsUnavailable extends Error {
   constructor() { super("暂无法安全保存通知设置。"); }
 }
 
-function parsePatch(patch: unknown): (readonly [GroupNoticePanelField, boolean | number])[] {
+function parsePatch(patch: unknown, scoped: boolean): (readonly [GroupNoticePanelField, boolean | number | undefined])[] {
   if (!patch || typeof patch !== "object" || ![null, Object.prototype].includes(Object.getPrototypeOf(patch))) {
     throw new GroupNoticePanelSettingsInputError();
   }
@@ -40,6 +46,7 @@ function parsePatch(patch: unknown): (readonly [GroupNoticePanelField, boolean |
     if (typeof key !== "string" || !panelFields.includes(key as GroupNoticePanelField) ||
         !entry || !("value" in entry)) throw new GroupNoticePanelSettingsInputError();
     const value: unknown = entry.value;
+    if (scoped && value === null) return [key as GroupNoticePanelField, undefined] as const;
     if (key === "msgSaveDeltime") {
       if (typeof value !== "number" || recallRetentionSeconds(value) === undefined) throw new GroupNoticePanelSettingsInputError();
       return [key, value] as const;
@@ -51,29 +58,44 @@ function parsePatch(patch: unknown): (readonly [GroupNoticePanelField, boolean |
 
 export function createGroupNoticePanelSettings(root: URL, lockFile: Parameters<typeof createNoticeSettingsStore>[1]) {
   const store = createNoticeSettingsStore(root, lockFile);
-  function project(snapshot: Awaited<ReturnType<typeof store.readVersionedDefaults>>): GroupNoticePanelSettingsSnapshot {
-    const { values, revision, writable } = snapshot;
+  function project(snapshot: Awaited<ReturnType<typeof store.readVersionedSettings>>, section?: string):
+    GroupNoticePanelSettingsSnapshot | ScopedNoticePanelSettingsSnapshot {
+    const { values, revision, writable, scopes = [] } = snapshot;
+    const scope = section === undefined ? {} : { scope: section, scopes };
+    if (section !== undefined && section !== "default") {
+      const settings = Object.fromEntries(booleanFields.map(key => [key,
+        !values.has(key) ? null : key === "notificationsAll" ? values.get(key) !== false : values.get(key) === true,
+      ])) as Record<typeof booleanFields[number], boolean | null>;
+      return { settings: { ...settings, msgSaveDeltime: !values.has("msgSaveDeltime") ? null :
+        recallRetentionSeconds(values.get("msgSaveDeltime")) ?? "invalid" }, revision, writable, scope: section, scopes };
+    }
     const switches = Object.fromEntries(booleanFields.map(key => [key,
       key === "notificationsAll" ? values.get(key) !== false : values.get(key) === true,
     ])) as Record<typeof booleanFields[number], boolean>;
     const settings = { ...switches, msgSaveDeltime: recallRetentionSeconds(values.get("msgSaveDeltime")) ?? null };
-    return { settings, revision, writable };
+    return { settings, revision, writable, ...scope };
   }
-  return {
-    async read(): Promise<GroupNoticePanelSettingsSnapshot> {
-      return project(await store.readVersionedDefaults(panelFields));
-    },
-    async write(revision: string, patch: unknown, canWrite: () => boolean = () => true): Promise<GroupNoticePanelSettingsSnapshot> {
-      if (typeof revision !== "string" || !/^[a-f0-9]{64}$/u.test(revision) || revision.length !== 64) {
-        throw new GroupNoticePanelSettingsInputError();
-      }
-      const updates = parsePatch(patch);
-      try { return project(await store.writeVersionedDefaults(revision, panelFields, updates, canWrite)); }
-      catch (error) {
-        if (error instanceof NoticeSettingsPermissionError) throw error;
-        if (error instanceof NoticeSettingsConflictError) throw new GroupNoticePanelSettingsConflict();
-        throw new GroupNoticePanelSettingsUnavailable();
-      }
-    },
-  };
+  async function read(): Promise<GroupNoticePanelSettingsSnapshot>;
+  async function read(section: string | undefined): Promise<GroupNoticePanelSettingsSnapshot | ScopedNoticePanelSettingsSnapshot>;
+  async function read(section?: string) {
+    return project(await store.readVersionedSettings(panelFields, section), section);
+  }
+  async function write(revision: string, patch: unknown, canWrite?: () => boolean): Promise<GroupNoticePanelSettingsSnapshot>;
+  async function write(revision: string, patch: unknown, canWrite: (() => boolean) | undefined, section: string | undefined):
+    Promise<GroupNoticePanelSettingsSnapshot | ScopedNoticePanelSettingsSnapshot>;
+  async function write(revision: string, patch: unknown, canWrite: () => boolean = () => true, section?: string) {
+    if (typeof revision !== "string" || !/^[a-f0-9]{64}$/u.test(revision) || revision.length !== 64) {
+      throw new GroupNoticePanelSettingsInputError();
+    }
+    const updates = parsePatch(patch, section !== undefined && section !== "default");
+    try { return project(await store.writeVersionedSettings(revision, panelFields, updates, canWrite, section), section); }
+    catch (error) {
+      if (error instanceof NoticeSettingsPermissionError) throw error;
+      if (error instanceof NoticeSettingsConflictError) throw new GroupNoticePanelSettingsConflict();
+      throw new GroupNoticePanelSettingsUnavailable();
+    }
+  }
+  return { read, write };
 }
+
+export { validNoticeScope } from "./notice-settings-store.ts";

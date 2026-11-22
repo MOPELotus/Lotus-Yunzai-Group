@@ -153,7 +153,7 @@ function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
 
 function isListField(field: Field): field is ListField { return field === "whiteQQ" || field === "blackQQ" || field === noticeGroups || field === verifyGroups; }
 
-function verificationSettings(group: number, primary?: ReturnType<typeof decode>, previous?: ReturnType<typeof decode>): GroupVerificationSettings {
+function verificationSettings(group: number, primary?: ReturnType<typeof decode>, previous?: ReturnType<typeof decode>, readDisabled = false): GroupVerificationSettings {
   const current = primary && yamlSection(primary.values, verifySection);
   const legacy = previous && yamlSection(previous.values, verifySection);
   const configured = (field: string) => current?.has(field) ? current.get(field) : legacy?.get(field);
@@ -161,7 +161,7 @@ function verificationSettings(group: number, primary?: ReturnType<typeof decode>
   const enabled = !!groups && listOf(groups.values, verifyGroups).includes(group);
   const defaults: GroupVerificationSettings = { enabled, mode: "精确", times: 7, time: 300, delay: 2, min: 10, max: 100,
     remind: true, success: "✅ 验证成功，欢迎入群" };
-  if (!enabled) return defaults;
+  if (!enabled && !readDisabled) return defaults;
 
   const number = (value: unknown, fallback: number, min: number, max: number): number => {
     if (value === undefined) return fallback;
@@ -186,6 +186,38 @@ function verificationSettings(group: number, primary?: ReturnType<typeof decode>
   if (typeof success !== "string" || success.length > 2048) throw new Error("入群验证成功消息无效。");
   return { enabled, mode, remind, min, max, success, times: number(configured("times"), defaults.times, 1, 100),
     time: number(configured("time"), defaults.time, 1, maxGroupVerificationSeconds), delay: number(configured("DelayTime"), defaults.delay, 0, maxGroupVerificationSeconds) };
+}
+
+export async function readGroupManagementPanelValues(root: URL) {
+  const { primary, previous } = paths(root);
+  const [modernFile, oldFile] = await Promise.all([snapshot(primary), snapshot(previous)]);
+  const modern = modernFile && decode(modernFile.bytes), old = oldFile && decode(oldFile.bytes);
+  const pick = (field: ReadField) => modern?.doc.hasIn(fieldPath(field)) ? modern : old;
+  const groups = (field: ListField) => [...new Set(listOf(pick(field)?.values ?? new Map(), field))];
+  const notice = yamlSection(pick(noticeMessage)?.values ?? new Map(), groupAddNoticeSection)?.get("msg") ?? groupAddNoticeDefault;
+  if (typeof notice !== "string" || notice.length > 2048) throw new Error("加群通知文案无效。");
+  const verification = verificationSettings(0, modern, old, true);
+  const messageMap = (document?: ReturnType<typeof decode>) => yamlSection(yamlSection(document?.values ?? new Map(), verifySection) ?? new Map(), "SuccessMsgs");
+  const messages = new Map<string, string>();
+  for (const document of [old, modern]) {
+    const entries = messageMap(document);
+    if (!entries) continue;
+    const keys = new Set([...entries.keys()].map(String));
+    for (const key of keys) {
+      if (!/^(?:0|[1-9]\d*)$/u.test(key) || !Number.isSafeInteger(Number(key))) continue;
+      const message = entries.get(Number(key)) ?? entries.get(key);
+      if (message == null) continue;
+      if (typeof message !== "string" || message.length > 2048) throw new Error("入群验证成功消息无效。");
+      messages.set(key, message);
+    }
+  }
+  return {
+    noticeGroups: groups(noticeGroups), noticeMessage: notice,
+    verifyGroups: groups(verifyGroups), verifyMode: verification.mode,
+    verifyAttempts: verification.times, verifySeconds: verification.time, verifyDelay: verification.delay,
+    verifyMin: verification.min, verifyMax: verification.max, verifyReminder: verification.remind,
+    verifyMessages: Object.fromEntries([...messages].filter(([, message]) => message !== "")),
+  };
 }
 
 function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Field, next: FieldValue): string {

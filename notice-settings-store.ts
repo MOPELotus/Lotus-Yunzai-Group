@@ -25,6 +25,13 @@ interface VersionedDefaults {
   readonly values: ReadonlyMap<unknown, unknown>;
   readonly revision: string;
   readonly writable: boolean;
+  readonly scopes?: readonly string[];
+}
+
+export function validNoticeScope(key: string): boolean {
+  if (key === "default") return true;
+  if (!/^(?:[1-9]\d*|bot:[1-9]\d*(?::[1-9]\d*)?)$/u.test(key)) return false;
+  return key.split(":").filter(part => part !== "bot").every(part => Number.isSafeInteger(Number(part)));
 }
 
 async function snapshot(path: string) {
@@ -152,7 +159,7 @@ function applyPatch(current: ReturnType<typeof decode>, sectionKey: string, upda
   if (output.length > maxBytes) throw unsafe();
   const next = decode(output);
   const nextValue = next.values.get(key);
-  if (!(nextValue instanceof Map) || updates.some(([field, value]) => value !== undefined && nextValue.get(field) !== value)) {
+  if (!(nextValue instanceof Map) || updates.some(([field, value]) => value === undefined ? nextValue.has(field) : nextValue.get(field) !== value)) {
     throw unsafe();
   }
 
@@ -173,28 +180,34 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
   const previous = fileURLToPath(new URL(legacy, root));
   const read = async () => await snapshot(primary) ?? await snapshot(previous);
 
-  function revision(location: ConfigBytes | undefined, missing = "missing"): string {
+  function revision(location: ConfigBytes | undefined, missing = "missing", section = "default"): string {
     const hash = createHash("sha256");
     if (location) hash.update("present\0").update(location.source).update("\0").update(location.file).update("\0").update(location.bytes);
     else hash.update(missing).update("\0").update(primary);
+    if (section !== "default") hash.update("\0").update(section);
     return hash.digest("hex");
   }
 
-  function versionedDefaults(location: ConfigBytes | undefined, fields: readonly NoticeSettingsField[]): VersionedDefaults {
-    const current = revision(location);
+  function versionedSettings(location: ConfigBytes | undefined, section: string, fields: readonly NoticeSettingsField[]): VersionedDefaults {
+    const current = revision(location, "missing", section);
     const values = new Map<unknown, unknown>();
     try {
       const { root, values: config } = decode(location?.bytes);
-      const scope = root?.items.find(pair => isScalar(pair.key) && pair.key.value === "default")?.value;
-      const defaults = config.get("default");
-      if (defaults instanceof Map) {
-        for (const field of fields) if (defaults.has(field)) values.set(field, defaults.get(field));
+      const scopes = [...new Set([...config.keys()].flatMap(key => {
+        const value = typeof key === "number" || typeof key === "string" ? String(key) : "";
+        return value !== "default" && validNoticeScope(value) ? [value] : [];
+      }))];
+      const matches = [...config.keys()].filter(key => (typeof key === "string" || typeof key === "number") && String(key) === section);
+      const scope = root?.items.find(pair => isScalar(pair.key) && pair.key.value === matches[0])?.value;
+      const selected = config.get(matches[0]);
+      if (selected instanceof Map) {
+        for (const field of fields) if (selected.has(field)) values.set(field, selected.get(field));
       }
       const supported = [...values].every(([field, value]) => value === null ||
         (field === "msgSaveDeltime" ? typeof value === "number" || typeof value === "string" : typeof value === "boolean"));
-      const writable = supported && (defaults == null || defaults instanceof Map) &&
+      const writable = matches.length <= 1 && supported && (selected == null || selected instanceof Map) &&
         (scope == null || isMap(scope) || (isScalar(scope) && scope.value === null));
-      return { values, revision: current, writable };
+      return { values, revision: current, writable, scopes };
     } catch {
       return { values, revision: current, writable: false };
     }
@@ -215,9 +228,13 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
     try {
       active();
       const before = await read();
-      if (expected && revision(before) !== expected.revision) throw new NoticeSettingsConflictError();
-      if (expected && !versionedDefaults(before, expected.fields).writable) throw unsafe();
-      const output = applyPatch(decode(before?.bytes), section, updates);
+      if (expected && revision(before, "missing", section) !== expected.revision) throw new NoticeSettingsConflictError();
+      if (expected && !versionedSettings(before, section, expected.fields).writable) throw unsafe();
+      let output: Buffer | undefined;
+      for (const update of updates.filter(([, value]) => value === undefined)) {
+        output = applyPatch(decode(output ?? before?.bytes), section, [update]) ?? output;
+      }
+      output = applyPatch(decode(output ?? before?.bytes), section, updates.filter(([, value]) => value !== undefined)) ?? output;
       if (!output) {
         await assertPermission();
         return { changed: false, location: before };
@@ -274,17 +291,18 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
       return (await write("default", fields.map(field => [field, value]), authorize)).changed;
     },
 
-    async readVersionedDefaults(fields: readonly NoticeSettingsField[]): Promise<VersionedDefaults> {
-      try { return versionedDefaults(await read(), fields); }
-      catch { return { values: new Map(), revision: revision(undefined, "unreadable"), writable: false }; }
+    async readVersionedSettings(fields: readonly NoticeSettingsField[], section = "default"): Promise<VersionedDefaults> {
+      try { return versionedSettings(await read(), section, fields); }
+      catch { return { values: new Map(), revision: revision(undefined, "unreadable", section), writable: false }; }
     },
 
-    async writeVersionedDefaults(revision: string, fields: readonly NoticeSettingsField[],
-      updates: readonly (readonly [field: NoticeSettingsField, value: Value])[],
+    async writeVersionedSettings(revision: string, fields: readonly NoticeSettingsField[],
+      updates: readonly Update[],
       authorize: Authorize,
+      section = "default",
     ): Promise<VersionedDefaults> {
-      const { location } = await write("default", updates, authorize, { revision, fields });
-      return versionedDefaults(location, fields);
+      const { location } = await write(section, updates, authorize, { revision, fields });
+      return versionedSettings(location, section, fields);
     },
   };
 }
