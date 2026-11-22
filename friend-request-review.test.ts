@@ -15,7 +15,7 @@ test("仅原紧连 QQ 单条好友审核语法，当前主人收到确切回执"
     return { status: "confirmed" };
   } };
   for (const input of [command, "拒绝好友申请52"]) expect(isFriendRequestReviewCommand(input)).toBe(true);
-  for (const input of ["#同意", "拒绝", "#拒绝全部好友申请", "#同意好友申请 51", "#同意好友申请", "#同意好友申请@51",
+  for (const input of ["#同意", "拒绝", "#拒绝全部好友申请51", "#同意好友申请 51", "#同意好友申请", "#同意好友申请@51",
     "#同意好友申请51 52", "#同意加群申请51"]) {
     expect(isFriendRequestReviewCommand(input)).toBe(false);
     expect(await handle(input, scope)).toBeUndefined();
@@ -25,6 +25,24 @@ test("仅原紧连 QQ 单条好友审核语法，当前主人收到确切回执"
   expect(await handle(command, scope)).toBe("✅ 已同意 51 的好友申请");
   expect(await handle("拒绝好友申请52", { ...scope, message_id: 2 })).toBe("✅ 已拒绝 52 的好友申请");
   expect(calls).toEqual([[51, true], [52, false]]);
+});
+
+test("原批量好友命令沿用主人私聊与原消息去重，分开确认、风险和未知", async () => {
+  const handle = createFriendRequestReview();
+  const batch = "拒绝全部好友申请";
+  const scope: FriendRequestReviewContext = { ...owner, async reviewAllPendingFriendRequests(approve) {
+    expect(approve).toBe(false);
+    return { status: "processed", entries: [{ id: 51, status: "confirmed" }, { id: 52, status: "risk" }, { id: 53, status: "unknown" }] };
+  } };
+  expect(isFriendRequestReviewCommand(batch)).toBe(true);
+  expect(await handle(batch, { ...scope, message_type: "group" })).toBeUndefined();
+  expect(await handle(batch, { ...scope, isBotMaster: () => false })).toContain("当前机器人的主人");
+  expect(await handle(batch, owner)).toContain("在 QQ 中处理");
+  expect(await handle(batch, scope)).toEqual({ type: "forward", nodes: [
+    ["本次共核对 3 条好友申请。审核仅覆盖本次可核验的范围，完整列表请在 QQ 中查看。", "已拒绝：1 条", "结果未知：1 条", "风险：1 条"],
+    ["已拒绝名单\n1、51"], ["结果未知名单\n1、53"], ["风险名单\n1、52"],
+  ] });
+  expect(await handle(batch, scope)).toEqual([]);
 });
 
 test("未获得可信原生私聊能力、非主人和委托均不会写", async () => {

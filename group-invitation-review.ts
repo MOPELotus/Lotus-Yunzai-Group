@@ -1,4 +1,5 @@
 import type { GroupInvitationListContext } from "./group-invitation-list.ts";
+import { ownerRequestBatchReply, type OwnerRequestBatchReply, type OwnerRequestBatchResult } from "./owner-request-batch.ts";
 import { groupRequestReview } from "./request-review.ts";
 
 export interface PendingGroupInvitationReviewResult {
@@ -19,17 +20,19 @@ export interface GroupInvitationReviewContext extends Pick<GroupInvitationListCo
   readonly reply_id?: number | string;
   readonly reviewQuotedGroupInvitation?: (approve: boolean) => Promise<QuotedGroupInvitationReviewResult>;
   readonly reviewPendingGroupInvitation?: (groupId: number, approve: boolean) => Promise<PendingGroupInvitationReviewResult>;
+  readonly reviewAllPendingGroupInvitations?: (approve: boolean) => Promise<OwnerRequestBatchResult>;
 }
 
 export const groupInvitationReviewFeature = "[group] 群邀请审核";
 const review = /^#?(同意|拒绝)群邀请(\d+)$/u;
+const reviewAll = /^#?(同意|拒绝)全部群邀请$/u;
 const quotedReview = /^#?(同意|拒绝)$/u;
 const unavailable = "当前无法按群号核实并处理这条群邀请，请在 QQ 中处理。";
 const unknown = "群邀请处理结果未确认，请先在 QQ 中核对。";
 const maxRememberedMessages = 2048;
 
 export function isGroupInvitationReviewCommand(command: string): boolean {
-  return review.test(command);
+  return review.test(command) || reviewAll.test(command);
 }
 
 function nativeId(value: number | string | undefined): value is number | string {
@@ -65,33 +68,38 @@ function receipt(result: PendingGroupInvitationReviewResult | QuotedGroupInvitat
 }
 
 export function createGroupInvitationReview(signal?: AbortSignal, completeInvitation = groupRequestReview.completeMilkyInvitation) {
-  const inFlight = new Map<string, Promise<{ reply?: string; unrelated?: true }>>();
+  const inFlight = new Map<string, Promise<{ reply?: string | OwnerRequestBatchReply; unrelated?: true }>>();
   const seen = new Set<string>();
 
-  return async (command: string, context: GroupInvitationReviewContext): Promise<string | readonly [] | undefined> => {
+  return async (command: string, context: GroupInvitationReviewContext): Promise<string | OwnerRequestBatchReply | readonly [] | undefined> => {
     if (context.message_type !== "private" || context.isDelegated || signal?.aborted) return;
-    const direct = review.exec(command);
+    const batch = reviewAll.exec(command);
+    const direct = batch ?? review.exec(command);
     const reply = milkySequence(context.reply_id) ? quotedReview.exec(command) : null;
     const match = direct ?? reply;
     if (!match) return;
-    const { adapter, self_id, user_id, message_id, reviewPendingGroupInvitation, reviewQuotedGroupInvitation, isBotMaster } = context;
+    const { adapter, self_id, user_id, message_id, reviewPendingGroupInvitation, reviewAllPendingGroupInvitations,
+      reviewQuotedGroupInvitation, isBotMaster } = context;
     if (reply && (adapter !== "milky" || !reviewQuotedGroupInvitation)) return;
     if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) {
       return direct ? "请由当前机器人的主人私聊处理群邀请。" : undefined;
     }
-    if (!nativeId(message_id)) return direct ? unavailable : undefined;
     const verb = match[1] === "同意" ? "同意" : "拒绝";
     const approve = verb === "同意";
+    if (batch && (!nativeId(message_id) || !reviewAllPendingGroupInvitations)) {
+      return ownerRequestBatchReply({ status: "unavailable" }, "群邀请", verb);
+    }
+    if (!nativeId(message_id)) return direct ? unavailable : undefined;
 
     let groupId: number | undefined;
-    let submit: () => Promise<PendingGroupInvitationReviewResult | QuotedGroupInvitationReviewResult>;
-    if (direct) {
+    let submit: (() => Promise<PendingGroupInvitationReviewResult | QuotedGroupInvitationReviewResult>) | undefined;
+    if (direct && !batch) {
       if (!reviewPendingGroupInvitation) return unavailable;
       const target = Number(direct[2]);
       if (!positiveId(target)) return "请填写有效的群号。";
       groupId = target;
       submit = () => reviewPendingGroupInvitation(target, approve);
-    } else {
+    } else if (reply) {
       if (!reviewQuotedGroupInvitation) return;
       submit = () => reviewQuotedGroupInvitation(approve);
     }
@@ -104,6 +112,16 @@ export function createGroupInvitationReview(signal?: AbortSignal, completeInvita
     const attempt = Promise.resolve().then(async () => {
       if (signal?.aborted || !isBotMaster(user_id)) return {};
       try {
+        if (batch && reviewAllPendingGroupInvitations) {
+          const result = await reviewAllPendingGroupInvitations(approve);
+          if (adapter === "milky" && result.status === "processed") {
+            for (const entry of result.entries) {
+              if (entry.status === "confirmed" && entry.resolvedFlag) completeInvitation(self_id, entry.resolvedFlag);
+            }
+          }
+          return !signal?.aborted && isBotMaster(user_id) ? { reply: ownerRequestBatchReply(result, "群邀请", verb) } : {};
+        }
+        if (!submit) return {};
         const result = await submit();
         if (result.status === "unrelated") return { unrelated: true as const };
         if (adapter === "milky" && result.status === "confirmed" && result.resolvedFlag) {

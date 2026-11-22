@@ -17,7 +17,7 @@ test("原群邀请单条按明确的紧连群号审核，确认后才回复已�
     return { status: "confirmed" };
   } };
   for (const input of [command, "拒绝群邀请88"]) expect(isGroupInvitationReviewCommand(input)).toBe(true);
-  for (const input of ["#同意", "拒绝", "#拒绝全部群邀请", "#同意群邀请 77", "#同意群邀请", "#同意群邀请@77",
+  for (const input of ["#同意", "拒绝", "#拒绝全部群邀请77", "#同意群邀请 77", "#同意群邀请", "#同意群邀请@77",
     "#同意群邀请77 88", "#同意加群申请77", "#查看群邀请"]) {
     expect(isGroupInvitationReviewCommand(input)).toBe(false);
     expect(await handle(input, scope)).toBeUndefined();
@@ -27,6 +27,26 @@ test("原群邀请单条按明确的紧连群号审核，确认后才回复已�
   expect(await handle(command, scope)).toBe("✅ 已同意群 77 的邀请");
   expect(await handle("拒绝群邀请88", { ...scope, message_id: 2 })).toBe("✅ 已拒绝群 88 的邀请");
   expect(calls).toEqual([[77, true], [88, false]]);
+});
+
+test("旧群邀请批量命令与按群号共用去重，只有确认的原标识从队列移除", async () => {
+  const finished: [number, string][] = [];
+  const handle = createGroupInvitationReview(undefined, (account, flag) => { finished.push([account, flag]); });
+  const batch = "#同意全部群邀请";
+  const scope: GroupInvitationReviewContext = { ...owner, async reviewAllPendingGroupInvitations(approve) {
+    expect(approve).toBe(true);
+    return { status: "processed", entries: [
+      { id: 77, status: "confirmed", resolvedFlag: "first-opaque" }, { id: 77, status: "unknown", resolvedFlag: "second-opaque" },
+    ] };
+  } };
+  expect(isGroupInvitationReviewCommand(batch)).toBe(true);
+  expect(await handle(batch, { ...scope, isDelegated: true })).toBeUndefined();
+  expect(await handle(batch, owner)).toContain("在 QQ 中处理");
+  const reply = JSON.stringify(await handle(batch, scope));
+  expect(reply).toContain("本次共核对 2 条群邀请");
+  expect(reply).not.toContain("opaque");
+  expect(finished).toEqual([[99, "first-opaque"]]);
+  expect(await handle(batch, scope)).toEqual([]);
 });
 
 test("非主人、缺少可信私聊能力与委托均不能写", async () => {
