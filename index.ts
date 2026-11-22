@@ -4,6 +4,7 @@ import { groupRuntimeEvents } from "./runtime-events.ts";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
+import { changeGroupName, groupNameFeature, isGroupNameCommand, type GroupNameContext } from "./group-name.ts";
 import { createPrivateGroupMute, isPrivateGroupMuteCommand, privateGroupMuteFeature, type PrivateGroupMuteContext } from "./private-group-mute.ts";
 import { createManagedBlacklist, readManagedWhitelist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
@@ -96,7 +97,7 @@ export { groupEssenceFeature, groupKickFeature, groupManagedBlacklistFeature, gr
   type GroupSetAdminResult, type GroupWholeMuteResult } from "./group-mute.ts";
 export { privateGroupMuteFeature, type PrivateGroupMuteContext, type PrivateGroupMuteResult, type PrivateGroupWholeMuteResult } from "./private-group-mute.ts";
 
-type ModerationContext = GroupMuteContext & PrivateGroupMuteContext & GroupPendingJoinContext & GroupInvitationListContext & FriendRequestListContext & FriendRequestReviewContext & GroupInvitationReviewContext & OwnerFriendReplyContext;
+type ModerationContext = GroupMuteContext & PrivateGroupMuteContext & GroupPendingJoinContext & GroupInvitationListContext & FriendRequestListContext & FriendRequestReviewContext & GroupInvitationReviewContext & OwnerFriendReplyContext & GroupNameContext;
 function privateInvitationReviewCommand(
   context: Pick<ModerationContext, "message_type" | "reply_id" | "adapter">, command: string,
 ) {
@@ -136,6 +137,7 @@ const manifest = {
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context);
     if (privateInvitationReviewCommand(context, normalized)) return defaultGroupInvitationReview(normalized, context);
     if (activeFriendRequestCommand(context, normalized)) return activeFriendRequestReply(context);
+    if (isGroupNameCommand(normalized, context)) return changeGroupName(normalized, context);
     if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return defaultOwnerFriendReply(normalized, context);
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context);
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return defaultFriendRequestReview(normalized, context);
@@ -149,6 +151,7 @@ const manifest = {
     if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return [groupInvitationListFeature];
     if (privateInvitationReviewCommand(context, normalized)) return [groupInvitationReviewFeature];
     if (activeFriendRequestCommand(context, normalized)) return [activeFriendRequestFeature];
+    if (isGroupNameCommand(normalized, context)) return [groupNameFeature];
     if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return [ownerFriendReplyFeature];
     if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return [friendRequestListFeature];
     if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return [friendRequestReviewFeature];
@@ -278,6 +281,7 @@ export async function createModule({
       if (context.message_type === "private" && isGroupInvitationListCommand(normalized)) return groupInvitationListCommand(normalized, context, signal);
       if (privateInvitationReviewCommand(context, normalized)) return groupInvitationReview(normalized, context);
       if (activeFriendRequestCommand(context, normalized)) return signal.aborted ? undefined : activeFriendRequestReply(context);
+      if (isGroupNameCommand(normalized, context)) return signal.aborted ? undefined : changeGroupName(normalized, context);
       if (context.message_type === "private" && isOwnerFriendReplyCommand(normalized, context.reply_id, context.message)) return ownerFriendReply(normalized, context);
       if (context.message_type === "private" && isFriendRequestListCommand(normalized)) return friendRequestListCommand(normalized, context, signal);
       if (context.message_type === "private" && isFriendRequestReviewCommand(normalized)) return friendRequestReview(normalized, context);
@@ -306,6 +310,7 @@ export async function createModule({
       if (context.message_type === "private" && isGroupInvitationListCommand(message)) return [groupInvitationListFeature];
       if (privateInvitationReviewCommand(context, message)) return [groupInvitationReviewFeature];
       if (activeFriendRequestCommand(context, message)) return [activeFriendRequestFeature];
+      if (isGroupNameCommand(message, context)) return [groupNameFeature];
       if (context.message_type === "private" && isOwnerFriendReplyCommand(message, context.reply_id, context.message)) return [ownerFriendReplyFeature];
       if (context.message_type === "private" && isFriendRequestListCommand(message)) return [friendRequestListFeature];
       if (context.message_type === "private" && isFriendRequestReviewCommand(message)) return [friendRequestReviewFeature];
