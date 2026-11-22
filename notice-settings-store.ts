@@ -190,7 +190,8 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
       if (defaults instanceof Map) {
         for (const field of fields) if (defaults.has(field)) values.set(field, defaults.get(field));
       }
-      const supported = [...values.values()].every(value => value === null || typeof value === "boolean");
+      const supported = [...values].every(([field, value]) => value === null ||
+        (field === "msgSaveDeltime" ? typeof value === "number" || typeof value === "string" : typeof value === "boolean"));
       const writable = supported && (defaults == null || defaults instanceof Map) &&
         (scope == null || isMap(scope) || (isScalar(scope) && scope.value === null));
       return { values, revision: current, writable };
@@ -279,7 +280,7 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
     },
 
     async writeVersionedDefaults(revision: string, fields: readonly NoticeSettingsField[],
-      updates: readonly (readonly [field: NoticeSettingsField, value: boolean])[],
+      updates: readonly (readonly [field: NoticeSettingsField, value: Value])[],
       authorize: Authorize,
     ): Promise<VersionedDefaults> {
       const { location } = await write("default", updates, authorize, { revision, fields });

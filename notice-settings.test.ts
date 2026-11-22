@@ -450,14 +450,16 @@ test("通知设置三条规范化入口接管，旧品牌指令不读取或修�
   expect(await readFile(legacy, "utf8")).toBe(before);
 });
 
-test("面板只读写八个默认群通知开关并保留旧文件字节、覆盖和值", async () => {
+test("面板读写完整默认通知设置并保留旧文件字节、覆盖和值", async () => {
   const { panel, command, legacy } = await fixture();
   const before = "# 原文件\r\ndefault: {groupMessage: false, privateMessage: true, misc: [1,2]}\r\n77: {groupRecall: true} # 原覆盖\r\n";
   await writeFile(legacy, before);
   const initial = await panel.read();
   expect(initial).toEqual({ settings: {
+    privateMessage: true, PrivateRecall: false, friendRequest: false, friendNumberChange: false, groupInviteRequest: false,
     groupMessage: false, grouptemporaryMessage: false, groupRecall: false, addGroupApplication: false,
     groupNumberChange: false, groupMemberNumberChange: false, groupAdminChange: false, botBeenBanned: false,
+    notificationsAll: true, msgSaveDeltime: 600,
   }, revision: expect.stringMatching(/^[a-f0-9]{64}$/u), writable: true });
   expect(JSON.stringify(initial)).not.toContain(legacy);
   const after = await panel.write(initial.revision, { groupMessage: true, groupAdminChange: true });
@@ -533,7 +535,8 @@ test("面板拒绝其它字段和非法配置，异常来源原样保留", async
   const { revision } = await panel.read();
   for (const patch of [
     { groupMessage: "true" }, { botId: 99 }, { 77: false }, { path: "/tmp/notice.yaml" },
-    { notificationsAll: false }, { privateMessage: true }, { msgSaveDeltime: 600 },
+    { notificationsAll: 1 }, { privateMessage: "true" }, { msgSaveDeltime: "600" }, { msgSaveDeltime: 0 },
+    { msgSaveDeltime: null }, { msgSaveDeltime: 1.5 }, { msgSaveDeltime: Number.MAX_SAFE_INTEGER },
     ["groupMessage"], JSON.parse('{"__proto__":true}'), { get groupMessage() { throw new Error("不得调用"); } },
   ]) await expect(panel.write(revision, patch)).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_INPUT" });
   await expect(panel.write(revision + "\n", {})).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_INPUT" });
@@ -547,4 +550,25 @@ test("面板拒绝其它字段和非法配置，异常来源原样保留", async
     await expect(panel.write(broken.revision, { groupRecall: true })).rejects.toMatchObject({ code: "GROUP_NOTICE_SETTINGS_UNAVAILABLE" });
     expect(await readFile(legacy, "utf8")).toBe(invalid);
   }
+});
+
+test("面板收件方式和缓存秒数沿用当前有效默认及机器人覆盖", async () => {
+  const { panel, command, legacy } = await fixture();
+  const source = "default: { notificationsAll: false, msgSaveDeltime: '450' }\n" +
+    "'bot:99': { notificationsAll: false, msgSaveDeltime: 120, privateMessage: false }\n";
+  await writeFile(legacy, source);
+  const initial = await panel.read();
+  expect(initial.settings).toMatchObject({ notificationsAll: false, msgSaveDeltime: 450 });
+  const result = await panel.write(initial.revision, {
+    privateMessage: true, notificationsAll: true, msgSaveDeltime: 900,
+  });
+  expect(result.settings).toMatchObject({ privateMessage: true, notificationsAll: true, msgSaveDeltime: 900 });
+  expect(await readFile(legacy, "utf8")).toContain("'bot:99': { notificationsAll: false, msgSaveDeltime: 120, privateMessage: false }");
+  expect(await command(overview, privateOwner)).toContain("当前机器人的首位主人");
+  expect(await command(overview, privateOwner)).toContain("删除缓存时间：120 秒");
+  expect(await command(overview, { ...privateOwner, self_id: 100 })).toContain("当前机器人的所有主人");
+  await writeFile(legacy, "default: { msgSaveDeltime: 0 }\n");
+  const invalid = await panel.read();
+  expect(invalid.settings).toMatchObject({ msgSaveDeltime: null });
+  expect((await panel.write(invalid.revision, { msgSaveDeltime: 60 })).settings.msgSaveDeltime).toBe(60);
 });
