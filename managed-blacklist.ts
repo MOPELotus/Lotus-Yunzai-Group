@@ -69,11 +69,12 @@ type ReadField = Field | typeof noticeMessage;
 type FieldValue = boolean | number | readonly number[] | GroupVerificationSettings["mode"];
 
 const defaultGroupVote: GroupVoteSettings = { VoteBan: false, VoteKick: false, outTime: 180, minNum: 4, BanTime: 3600, veto: true, voteAdmin: false };
+export const groupVoteNumericLimits = { outTime: 2_147_483, minNum: 10_000, BanTime: 2_147_483_647 } as const;
 
 export function groupVoteSetting(field: keyof GroupVoteSettings, value: unknown): boolean | number | undefined {
-  if (typeof defaultGroupVote[field] === "boolean") return typeof value === "boolean" ? value : undefined;
+  if (!(field in groupVoteNumericLimits)) return typeof value === "boolean" ? value : undefined;
   const numeric = typeof value === "string" && /^\d+$/u.test(value) ? Number(value) : value;
-  const maximum = field === "outTime" ? 2_147_483 : field === "minNum" ? 10_000 : 2_147_483_647;
+  const maximum = groupVoteNumericLimits[field as keyof typeof groupVoteNumericLimits];
   if (typeof numeric === "number" && Number.isSafeInteger(numeric) && numeric > 0 && numeric <= maximum) return numeric;
 }
 
@@ -212,6 +213,9 @@ export async function readGroupManagementPanelValues(root: URL) {
     }
   }
   return {
+    whiteQQ: groups("whiteQQ"), blackQQ: groups("blackQQ"),
+    noBan: pick("noBan")?.values.get("noBan") === true,
+    ...voteSettings(modern, old),
     noticeGroups: groups(noticeGroups), noticeMessage: notice,
     verifyGroups: groups(verifyGroups), verifyMode: verification.mode,
     verifyAttempts: verification.times, verifySeconds: verification.time, verifyDelay: verification.delay,
