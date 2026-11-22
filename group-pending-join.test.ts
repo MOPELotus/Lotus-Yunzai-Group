@@ -80,7 +80,7 @@ test("旧按 QQ 审核保持同群真消息和单个安全 QQ，清晰回执确�
   for (const input of ["#同意加群申请510", "拒绝入群申请510", "#同意群申请511"]) {
     expect(isGroupPendingJoinReviewCommand(input)).toBe(true);
   }
-  for (const input of ["#同意全部群申请", "#同意", "#拒绝入群 10", "#同意加群申请", "#拒绝好友申请510",
+  for (const input of ["#同意", "#拒绝入群 10", "#同意加群申请", "#拒绝好友申请510",
     "#同意加群申请@510", "#拒绝群申请510 511"]) {
     expect(isGroupPendingJoinReviewCommand(input)).toBe(false);
     expect(await handle(input, scope)).toBeUndefined();
@@ -153,8 +153,10 @@ test("原批量审核汇总逐条回执，同 QQ 两条分别计数", async () =
     ],
   });
   expect(await handle("拒绝全部入群申请", { ...context, message_id: 2 })).toMatchObject({ type: "forward" });
-  expect(calls).toEqual([true, false]);
-  for (const input of ["#拒绝全部群申请", "#同意全部加群申请510", "#同意全部好友申请"]) {
+  expect(isGroupPendingJoinReviewCommand("#拒绝全部群申请")).toBe(true);
+  expect(await handle("#拒绝全部群申请", { ...context, message_id: 3 })).toMatchObject({ type: "forward" });
+  expect(calls).toEqual([true, false, false]);
+  for (const input of ["#同意全部加群申请510", "#同意全部好友申请"]) {
     expect(isGroupPendingJoinReviewCommand(input)).toBe(false);
     expect(await handle(input, context)).toBeUndefined();
   }
