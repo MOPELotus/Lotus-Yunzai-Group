@@ -48,15 +48,17 @@ function positiveId(value: unknown): value is number {
 }
 
 function imageSource(data: Record<string, unknown>, adapter?: "milky") {
-  const url = typeof data.url === "string" ? data.url : undefined;
+  const file = typeof data.file === "string" ? data.file : undefined;
+  const url = typeof data.url === "string" && data.url ? data.url
+    : adapter !== "milky" && file && /^https:\/\//iu.test(file) ? file : undefined;
   if (adapter === "milky") {
     const resource = data.resource_id;
     const resolve = typeof data.getDownloadUrl === "function" ? data.getDownloadUrl as ImageSource["resolve"] : undefined;
     if (typeof resource === "string" && resource && resource.length <= 4_096 && !/\s/u.test(resource) && (url || resolve)) {
       return { identity: ["milky", resource], url, resolve };
     }
-  } else if (url && typeof data.file === "string") {
-    const md5 = /(?:^|[/\\])([a-f\d]{32})(?:\.[a-z\d]+)?$/iu.exec(data.file)?.[1];
+  } else if (url && file) {
+    const md5 = /(?:^|[/\\])([a-f\d]{32})(?:\.[a-z\d]+)?$/iu.exec(file)?.[1];
     if (md5) return { identity: ["md5", md5.toLowerCase()], url, resolve: undefined };
   }
   if (url) return { identity: ["url", url], url, resolve: undefined };
@@ -130,6 +132,11 @@ export function createAutoRepeat({ signal, isBot, readImage, now = () => perform
     round.repeated = true;
 
     const active = signal ? AbortSignal.any([signal, session]) : session;
+    async function read(url: unknown) {
+      if (active.aborted || typeof url !== "string") return;
+      try { return await readImage?.(url, active); }
+      catch { return; }
+    }
     const result: ReplyPart[] = [];
     for (const part of message.payload) {
       if (active.aborted) return;
@@ -137,12 +144,10 @@ export function createAutoRepeat({ signal, isBot, readImage, now = () => perform
         result.push(part);
         continue;
       }
-      let file: Uint8Array | undefined;
-      try {
-        const url = part.url ?? await part.resolve?.();
-        if (!active.aborted && typeof url === "string") file = await readImage?.(url, active);
-      } catch {
-        return;
+      let file = await read(part.url);
+      if (!file?.byteLength && !active.aborted && part.resolve) {
+        const renewed = await Promise.resolve().then(part.resolve).catch(() => undefined);
+        if (renewed !== part.url) file = await read(renewed);
       }
       if (!file?.byteLength) return;
       result.push({ type: "image", file });

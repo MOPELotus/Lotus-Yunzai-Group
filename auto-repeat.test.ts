@@ -106,3 +106,27 @@ test("已占用的图片跟读遇到原连接断开时不发送，也不会重�
   expect(sent).toEqual([]);
   expect(reads).toBe(1);
 });
+
+test("OneBot 保留旧图片 file URL，Milky 临时链接失败后按资源重新查询一次", async () => {
+  const { sent, event } = fixture();
+  const reads: string[] = [];
+  const expired = cdn + "?expired";
+  const fresh = cdn + "?fresh";
+  const bytes = Uint8Array.of(137, 80, 78, 71);
+  const observe = createAutoRepeat({ async readImage(url) {
+    reads.push(String(url));
+    if (url === expired) throw new Error("链接已失效");
+    return bytes;
+  } });
+  await observe(event(42, [{ type: "image", file: cdn }]), session);
+  await observe(event(43, [{ type: "image", file: cdn, url: "" }]), session);
+  let renewals = 0;
+  const milky = [{ type: "image", url: expired, resource_id: "same-image", async getDownloadUrl() {
+    renewals++;
+    return fresh;
+  } }];
+  for (const user of [42, 43, 44]) await observe(event(user, milky, { adapter: "milky" }), session);
+  expect(reads).toEqual([cdn, expired, fresh]);
+  expect(renewals).toBe(1);
+  expect(sent).toEqual([[{ type: "image", file: bytes }], [{ type: "image", file: bytes }]]);
+});
