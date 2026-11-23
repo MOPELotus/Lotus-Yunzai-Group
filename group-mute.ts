@@ -32,7 +32,7 @@ export interface GroupMuteContext {
   readonly groupMuteRoster?: () => Promise<readonly GroupMuteRosterEntry[] | undefined>;
   readonly groupWholeMute?: (enabled: boolean) => Promise<GroupWholeMuteResult>;
   readonly groupKick?: (userId: number, block: boolean, onConfirmedName?: (name: string) => void) => Promise<GroupKickResult>;
-  readonly groupSetAdmin?: (userId: number, enabled: boolean) => Promise<GroupSetAdminResult>;
+  readonly groupSetAdmin?: (userId: number, enabled: boolean, onConfirmedName?: (name: string) => void) => Promise<GroupSetAdminResult>;
   readonly groupSetQuotedEssence?: (enabled: boolean) => Promise<GroupEssenceResult>;
   readonly groupManageBlacklist?: () => Promise<boolean>;
   readonly groupManageWhitelistAutoUnmute?: () => Promise<boolean>;
@@ -369,7 +369,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     let perform: (id: number) => Promise<GroupMuteResult>;
     let operation: string;
     let checkWhitelist: boolean;
-    const kickNames = kick ? new Map<number, string>() : undefined;
+    const memberNames = new Map<number, string>();
     if (admin) {
       if (!groupSetAdmin || !issuerMaster) return "当前会话没有设置群管理员的权限。";
       const numeric = admin[2];
@@ -377,7 +377,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
       if (!selected) return "请 @ 要操作的群成员，或输入一个有效 QQ 号。";
       ids = selected;
       const enabled = admin[1] === "设置";
-      perform = (id) => groupSetAdmin(id, enabled);
+      perform = (id) => groupSetAdmin(id, enabled, (name) => memberNames.set(id, name));
       operation = "设置为群管理员";
       checkWhitelist = false;
     } else if (kick) {
@@ -386,7 +386,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
       if (!selected) return "请 @ 要移出的群成员，或直接在指令后填写一个 QQ 号。";
       ids = selected;
       const block = kick[1] === "黑";
-      perform = (id) => groupKick(id, block, (name) => kickNames?.set(id, name));
+      perform = (id) => groupKick(id, block, (name) => memberNames.set(id, name));
       operation = block ? "踢出群聊，协议端已确认踢黑请求" : "踢出群聊";
       checkWhitelist = true;
     } else {
@@ -431,7 +431,7 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
         persistence = `协议已确认踢黑，未能将 ${confirmed.join("、")} 保存到跨群群管黑名单。`;
       }
     }
-    const confirmedLabels = confirmed?.map(id => formatGroupModerationMember(id, kickNames?.get(id))).join("、");
+    const confirmedLabels = confirmed?.map(id => formatGroupModerationMember(id, memberNames.get(id))).join("、");
     return [
       confirmedLabels && (admin?.[1] === "取消" ? `已取消 ${confirmedLabels} 的群管理员权限。` : `已将 ${confirmedLabels} ${operation}。`),
       persistence,

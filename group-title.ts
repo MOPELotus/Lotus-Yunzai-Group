@@ -1,4 +1,5 @@
 import { GroupRulesWritePermissionError } from "./banned-words.ts";
+import { formatGroupModerationMember } from "./group-mute.ts";
 
 export type GroupSpecialTitleResult = "confirmed" | "rejected" | "unknown" | "unavailable" | "protected";
 
@@ -14,7 +15,7 @@ export interface GroupTitleContext {
   readonly message?: string | readonly { readonly type: string; readonly qq?: unknown }[];
   readonly isBotMaster: (id: number) => boolean;
   readonly groupManageBlacklist?: () => Promise<boolean>;
-  readonly groupSetSpecialTitle?: (target: number, title: string, verify?: () => Promise<boolean>) => Promise<GroupSpecialTitleResult>;
+  readonly groupSetSpecialTitle?: (target: number, title: string, verify?: () => Promise<boolean>, onConfirmedName?: (name: string) => void) => Promise<GroupSpecialTitleResult>;
 }
 
 type Data = Record<string, unknown>;
@@ -148,11 +149,15 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
     } catch { return "头衔屏蔽词配置暂不可用。"; }
     if (signal.aborted) return;
     let result: GroupSpecialTitleResult;
-    try { result = await context.groupSetSpecialTitle(target, requested, verify); }
+    let name: string | undefined;
+    try { result = await context.groupSetSpecialTitle(target, requested, verify, other ? value => { name = value; } : undefined); }
     catch { result = "unknown"; }
     switch (result) {
-      case "confirmed": return requested ? (self ? `已将你的头衔更换为「${requested}」。` : `已将 ${target} 的头衔设置为「${requested}」。`)
-        : (self ? "已清空你的群头衔。" : `已清空 ${target} 的群头衔。`);
+      case "confirmed": {
+        if (self) return requested ? `已将你的头衔更换为「${requested}」。` : "已清空你的群头衔。";
+        const member = formatGroupModerationMember(target, name);
+        return requested ? `已将 ${member} 的头衔设置为「${requested}」。` : `已清空 ${member} 的群头衔。`;
+      }
       case "protected": return self ? "头衔包含屏蔽词，或该成员受群管保护。" : "该成员受群管保护。";
       case "unavailable": return "当前无法设置群头衔，请核对群成员和群主权限。";
       case "rejected": return "协议端拒绝设置群头衔。";
