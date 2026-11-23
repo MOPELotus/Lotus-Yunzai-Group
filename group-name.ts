@@ -8,7 +8,7 @@ export interface GroupNameContext {
   readonly setGroupName?: (name: string, groupId?: number) => Promise<GroupNameResult>;
 }
 
-const commandPattern = /^#改群(?:昵称?|名称?|名(?!片))/u;
+const commandPattern = /^#改群(?:昵称?|名(?!片)(?:称|字(?=\s|$))?)/u;
 
 export function isGroupNameCommand(command: string, context: Pick<GroupNameContext, "message_type">) {
   return context.message_type !== "terminal" && commandPattern.test(command);
