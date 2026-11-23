@@ -148,3 +148,29 @@ test("复读取触发消息的已知 OneBot 图片子类型，忽略 Milky 和�
     type: "image", file, ...(sub_type !== undefined && { sub_type }),
   }]));
 });
+
+test("延迟观察保留触发图段的原子类型及接收时间，外部规则的修改不渗入", async () => {
+  const { sent, event } = fixture();
+  const queued: ((receivedAt?: number) => Promise<void>)[] = [];
+  const file = Uint8Array.of(1);
+  const observe = createAutoRepeat({
+    async readImage() { return file; },
+    observeAutoRepeat(_group, run) { queued.push(run); },
+  });
+  const parts = [{ type: "image", url: cdn, sub_type: 1 }];
+  await observe(event(42, [{ ...parts[0], sub_type: 0 }]), session);
+  await observe(event(43, parts), session);
+  expect(sent).toEqual([]);
+  parts[0]!.sub_type = 0;
+  await queued[0]!(0);
+  await queued[1]!(1);
+  const reply = [{ type: "image", file, sub_type: 1 }];
+  expect(sent).toEqual([reply]);
+
+  await observe(event(44, [{ type: "image", url: cdn, sub_type: 1 }]), session);
+  await queued[2]!(120_002);
+  expect(sent).toEqual([reply]);
+  await observe(event(43, [{ type: "image", url: cdn, sub_type: 1 }]), session);
+  await queued[3]!(120_003);
+  expect(sent).toEqual([reply, reply]);
+});

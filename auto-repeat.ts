@@ -23,11 +23,14 @@ export interface AutoRepeatEvent {
   readonly reply: (content: readonly ReplyPart[]) => boolean | Promise<boolean>;
 }
 
+export type ObserveAutoRepeat = (group: number, run: (receivedAt?: number) => Promise<void>) => void | Promise<void>;
+
 export interface AutoRepeatOptions {
   readonly signal?: AbortSignal;
   readonly isBot?: (userId: number) => boolean;
   readonly readImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
   readonly now?: () => number;
+  readonly observeAutoRepeat?: ObserveAutoRepeat;
 }
 
 interface Round {
@@ -114,56 +117,65 @@ function prepare(message: unknown, adapter: AutoRepeatEvent["adapter"], withImag
   return { hash: createHash("sha256").update(JSON.stringify(signature)).digest("hex"), payload };
 }
 
-export function createAutoRepeat({ signal, isBot, readImage, now = () => performance.now() }: AutoRepeatOptions = {}) {
+export function createAutoRepeat({
+  signal, isBot, readImage, observeAutoRepeat, now = () => performance.now(),
+}: AutoRepeatOptions = {}) {
   const rounds = new Map<number, Round>();
 
   return async (event: AutoRepeatEvent, session?: AbortSignal): Promise<void> => {
-    const { group_id: group, user_id: user } = event;
-    if (!session || session.aborted || signal?.aborted || event.isDelegated || !positiveId(group) || !positiveId(user) || event.self_id === user ||
-        event.sender?.is_bot === true || isBot?.(user)) return;
+    const { group_id, user_id } = event;
+    if (!session || session.aborted || signal?.aborted || event.isDelegated || !positiveId(group_id) || !positiveId(user_id) || event.self_id === user_id ||
+        event.sender?.is_bot === true || isBot?.(user_id)) return;
+    const group = group_id, user = user_id;
 
     const message = prepare(event.message, event.adapter, !!readImage);
-    if (!message) {
-      rounds.delete(group);
-      return;
-    }
-    const timestamp = now();
-    const prior = rounds.get(group);
-    const round = prior?.hash === message.hash && timestamp - prior.last <= windowMs
-      ? prior : { hash: message.hash, first: user, repeated: false, last: timestamp };
-    round.last = timestamp;
-    rounds.delete(group);
-    rounds.set(group, round);
-    if (rounds.size > maxGroups) rounds.delete(rounds.keys().next().value!);
-    if (round.repeated || round.first === user) return;
-    round.repeated = true;
-
     const active = signal ? AbortSignal.any([signal, session]) : session;
-    async function read(url: unknown) {
-      if (active.aborted || typeof url !== "string") return;
-      try { return await readImage?.(url, active); }
-      catch { return; }
-    }
-    const result: ReplyPart[] = [];
-    for (const part of message.payload) {
+    const reply = event.reply.bind(event);
+    async function observe(receivedAt?: number) {
       if (active.aborted) return;
-      if (part.type !== "image") {
-        result.push(part);
-        continue;
+      if (!message) {
+        rounds.delete(group);
+        return;
       }
-      let file = await read(part.url);
-      if (!file?.byteLength && !active.aborted && part.resolve) {
-        const renewed = await Promise.resolve().then(part.resolve).catch(() => undefined);
-        if (renewed !== part.url) file = await read(renewed);
+      const timestamp = receivedAt ?? now();
+      const prior = rounds.get(group);
+      const round = prior?.hash === message.hash && timestamp - prior.last <= windowMs
+        ? prior : { hash: message.hash, first: user, repeated: false, last: timestamp };
+      round.last = timestamp;
+      rounds.delete(group);
+      rounds.set(group, round);
+      if (rounds.size > maxGroups) rounds.delete(rounds.keys().next().value!);
+      if (round.repeated || round.first === user) return;
+      round.repeated = true;
+
+      async function read(url: unknown) {
+        if (active.aborted || typeof url !== "string") return;
+        try { return await readImage?.(url, active); }
+        catch { return; }
       }
-      if (!file?.byteLength) return;
-      result.push({ type: "image", file, ...(part.sub_type !== undefined && { sub_type: part.sub_type }) });
+      const result: ReplyPart[] = [];
+      for (const part of message.payload) {
+        if (active.aborted) return;
+        if (part.type !== "image") {
+          result.push(part);
+          continue;
+        }
+        let file = await read(part.url);
+        if (!file?.byteLength && !active.aborted && part.resolve) {
+          const renewed = await Promise.resolve().then(part.resolve).catch(() => undefined);
+          if (renewed !== part.url) file = await read(renewed);
+        }
+        if (!file?.byteLength) return;
+        result.push({ type: "image", file, ...(part.sub_type !== undefined && { sub_type: part.sub_type }) });
+      }
+      if (active.aborted) return;
+      try {
+        if (!await reply(result)) console.warn("[group] 自动复读发送失败。");
+      } catch {
+        console.warn("[group] 自动复读发送结果未确认。");
+      }
     }
-    if (active.aborted) return;
-    try {
-      if (!await event.reply(result)) console.warn("[group] 自动复读发送失败。");
-    } catch {
-      console.warn("[group] 自动复读发送结果未确认。");
-    }
+    if (observeAutoRepeat) await observeAutoRepeat(group, observe);
+    else await observe();
   };
 }

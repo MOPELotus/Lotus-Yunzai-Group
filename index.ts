@@ -1,6 +1,7 @@
 import group, { createGroupPlugin, type ProfileLikeImage } from "./likes.ts";
 import { groupRequestReview } from "./request-review.ts";
 import { groupRuntimeEvents } from "./runtime-events.ts";
+import type { ObserveAutoRepeat } from "./auto-repeat.ts";
 import { createAutoGroupCard, type AutoGroupCardSummary, type OwnGroupCardAccount } from "./auto-group-card.ts";
 import { readGroupLeaveBlacklist, type GroupLeaveBlacklist, type GroupLeaveBlacklistIO } from "./group-leave-blacklist.ts";
 import { createGroupMute, groupModerationFeature } from "./group-mute.ts";
@@ -165,7 +166,7 @@ const manifest = {
 export default manifest;
 
 export async function createModule({
-  signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, groupLeaveBlacklist, profileLikeImage,
+  signal, ownGroupCardAccounts, registerAutoGroupCardTask, readAutoRepeatImage, autoRepeatSessionSignal, observeAutoRepeat, groupLeaveBlacklist, profileLikeImage,
   lockFile, noticeSettingsThemeDirectory, registerManagedBlacklist, registerGroupBannedWords, groupTimedMute, registerGroupAddNotice, registerGroupVerification,
   registerFriendRequestNotice, registerFriendMessageNotice, registerTemporaryMessageNotice, registerFriendRelationshipNotice,
   registerFriendPokeNotice, registerFriendRecallNotice, registerGroupRecallNotice, registerGroupOwnerMemberNotice, registerGroupOwnerAdminNotice, registerGroupOwnerBanNotice, registerGroupOwnerGroupNotice, registerGroupOwnerJoinRequestNotice, registerGroupOwnerInvitationNotice, registerGroupMessageNotice, registerOwnerNoticeRecipients,
@@ -173,6 +174,7 @@ export async function createModule({
   readonly signal: AbortSignal;
   readonly readAutoRepeatImage?: (url: unknown, signal?: AbortSignal) => Promise<Uint8Array | undefined>;
   readonly autoRepeatSessionSignal?: (event: unknown) => AbortSignal | undefined;
+  readonly observeAutoRepeat?: ObserveAutoRepeat;
   readonly ownGroupCardAccounts?: () => readonly OwnGroupCardAccount[];
   readonly registerAutoGroupCardTask?: (cron: string, run: () => Promise<AutoGroupCardSummary | undefined>) => (() => void | Promise<void>);
   readonly groupLeaveBlacklist?: { readonly io: GroupLeaveBlacklistIO; register(policy: GroupLeaveBlacklist): () => void };
@@ -212,7 +214,7 @@ export async function createModule({
   }
   const repeatLifetime = new AbortController();
   const nativeEvents = groupRuntimeEvents({
-    signal: AbortSignal.any([signal, repeatLifetime.signal]), readImage: readAutoRepeatImage, sessionSignal: autoRepeatSessionSignal,
+    signal: AbortSignal.any([signal, repeatLifetime.signal]), readImage: readAutoRepeatImage, sessionSignal: autoRepeatSessionSignal, observeAutoRepeat,
     isBot: (id: number) => ownGroupCardAccounts?.().some(({ botId }) => id === botId) ?? false,
   });
   let stopLeaveBlacklist: (() => void) | undefined;
