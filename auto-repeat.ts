@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 
 type Text = { readonly type: "text"; readonly text: string };
 type Face = { readonly type: "face"; readonly id: string | number; readonly is_large?: boolean };
-type Image = { readonly type: "image"; readonly file: Uint8Array };
+type Image = { readonly type: "image"; readonly file: Uint8Array; readonly sub_type?: number };
 type ReplyPart = Text | Face | Image;
 type Signature = ["text", string] | ["face", string, boolean] | ["image", ...string[]];
 type ImageSource = {
   readonly type: "image";
   readonly url?: string;
   readonly resolve?: () => Promise<unknown>;
+  readonly sub_type?: number;
 };
 
 export interface AutoRepeatEvent {
@@ -45,6 +46,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function positiveId(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function oneBotImageSubType(value: unknown): number | undefined {
+  const code = typeof value === "string" && /^[0-7]$/u.test(value) ? Number(value) : value;
+  if (typeof code === "number" && Number.isInteger(code) && code >= 0 && code <= 7) return code;
 }
 
 function imageSource(data: Record<string, unknown>, adapter?: "milky") {
@@ -96,7 +102,8 @@ function prepare(message: unknown, adapter: AutoRepeatEvent["adapter"], withImag
         const image = withImages && imageSource(data, adapter);
         if (!image) return;
         signature.push(["image", ...image.identity]);
-        payload.push({ type: "image", url: image.url, resolve: image.resolve });
+        const sub_type = adapter === "milky" ? undefined : oneBotImageSubType(data.sub_type);
+        payload.push({ type: "image", url: image.url, resolve: image.resolve, sub_type });
         break;
       }
       default: return;
@@ -150,7 +157,7 @@ export function createAutoRepeat({ signal, isBot, readImage, now = () => perform
         if (renewed !== part.url) file = await read(renewed);
       }
       if (!file?.byteLength) return;
-      result.push({ type: "image", file });
+      result.push({ type: "image", file, ...(part.sub_type !== undefined && { sub_type: part.sub_type }) });
     }
     if (active.aborted) return;
     try {

@@ -130,3 +130,21 @@ test("OneBot 保留旧图片 file URL，Milky 临时链接失败后按资源重�
   expect(renewals).toBe(1);
   expect(sent).toEqual([[{ type: "image", file: bytes }], [{ type: "image", file: bytes }]]);
 });
+
+test("复读取触发消息的已知 OneBot 图片子类型，忽略 Milky 和无效原值", async () => {
+  const { sent, event } = fixture();
+  const file = Uint8Array.of(1);
+  const observe = createAutoRepeat({ async readImage() { return file; } });
+  const cases = [0, 1, 7, "6", -1, 8, 1.5, "sticker"] as const;
+  for (const [index, sub_type] of cases.entries()) {
+    const url = `${cdn}?case=${index}`;
+    await observe(event(42, [{ type: "image", url, sub_type: 1 }]), session);
+    await observe(event(43, [{ type: "image", url, sub_type }]), session);
+  }
+  const sticker = [{ type: "image", url: cdn, resource_id: "milky-sticker", sub_type: "sticker" }];
+  await observe(event(42, sticker, { adapter: "milky" }), session);
+  await observe(event(43, sticker, { adapter: "milky" }), session);
+  expect(sent).toEqual([0, 1, 7, 6, undefined, undefined, undefined, undefined, undefined].map(sub_type => [{
+    type: "image", file, ...(sub_type !== undefined && { sub_type }),
+  }]));
+});
