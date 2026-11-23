@@ -8,6 +8,7 @@ import { changeGroupName, groupNameFeature, isGroupNameCommand, type GroupNameCo
 import { createPrivateGroupMute, isPrivateGroupMuteCommand, privateGroupMuteFeature, type PrivateGroupMuteContext } from "./private-group-mute.ts";
 import { createManagedBlacklist, readManagedWhitelist, type GroupManagedBlacklist } from "./managed-blacklist.ts";
 import { createGroupBannedWords, groupBannedWordsFeature, isGroupBannedWordCommand, type GroupBannedWords } from "./banned-words.ts";
+import { createGroupScreenedWords, groupScreenedWordsFeature, isGroupScreenedWordsCommand, type ScreenedWordsContext } from "./screened-words.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
 import { createGroupTitle, groupTitleCommandFeature, type GroupTitleContext } from "./group-title.ts";
 import { createGroupActivityCleanup, groupActivityCommand, groupActivityFeature, groupActivityRankFeature, isGroupActivityCleanupCommand,
@@ -52,7 +53,8 @@ export { createGroupPlugin };
 export type { LikeContext, MentionLike, ProfileLikeImage } from "./likes.ts";
 export * from "./group-leave-blacklist.ts";
 export type { GroupManagedBlacklist } from "./managed-blacklist.ts";
-export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch, type GroupBannedWordPart } from "./banned-words.ts";
+export { groupBannedWordsFeature, type GroupBannedWords, type GroupBannedWordMatch, type GroupBannedWordPart, type GroupWordMatchScope } from "./banned-words.ts";
+export { groupScreenedWordsFeature } from "./screened-words.ts";
 export { groupTitleFeature, groupTitleFilterFeature, type GroupTitleContext, type GroupSpecialTitleResult } from "./group-title.ts";
 export { groupActivityFeature, groupActivityRankFeature, type GroupActivityContext, type GroupActivityMember, type GroupActivityVisibility } from "./group-activity.ts";
 export { groupTimedMuteFeature, type GroupTimedMuteBinding, type GroupTimedMuteServices } from "./group-timed-mute.ts";
@@ -249,7 +251,8 @@ export async function createModule({
     : undefined);
   const blacklist = lockFile && !signal.aborted ? createManagedBlacklist(root, lockFile) : undefined;
   const stopManagedBlacklist = blacklist && registerManagedBlacklist?.(blacklist);
-  const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal) : undefined;
+  const screenedWords = lockFile && createGroupScreenedWords(root, lockFile, signal);
+  const bannedWords = lockFile && blacklist ? createGroupBannedWords(root, lockFile, blacklist, signal, screenedWords?.match) : undefined;
   const stopBannedWords = bannedWords && registerGroupBannedWords?.(bannedWords.policy);
   const moderation = createGroupMute(root, blacklist, signal);
   const privateMute = createPrivateGroupMute(signal);
@@ -273,7 +276,7 @@ export async function createModule({
     ...manifest,
     nativeEvents,
     fallback(message: string, context: ModerationContext & NoticeSettingsContext & GroupTitleContext & GroupActivityContext & GroupNotificationContext &
-      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext) {
+      GroupQuotedReviewContext & GroupAnnouncementPublishContext & GroupAnnouncementDeleteContext & GroupVoteContext & GroupVerificationContext & ScreenedWordsContext) {
       const normalized = context.normalizedMessage.trim();
       if (noticeSettings && isNoticeSettingsCommand(normalized)) return noticeSettings(normalized, context);
       if (context.message_type !== "terminal" && isRequestOverviewCommand(normalized)) return requestOverviewCommand(normalized, context, signal);
@@ -299,6 +302,7 @@ export async function createModule({
       if (isGroupActivityCommand(normalized) || isGroupActivityRankCommand(normalized)) return groupActivityCommand(context, signal);
       if (isGroupActivityCleanupCommand(normalized)) return activityCleanup(context);
       if (title && groupTitleCommandFeature(normalized)) return title(context);
+      if (screenedWords && isGroupScreenedWordsCommand(normalized)) return screenedWords.command(context);
       return bannedWords && isGroupBannedWordCommand(normalized)
         ? bannedWords.command(message, context) : moderation(message, context);
     },
@@ -327,6 +331,7 @@ export async function createModule({
       if (isGroupActivityCommand(message) || isGroupActivityCleanupCommand(message)) return [groupActivityFeature];
       const feature = groupTitleCommandFeature(message);
       if (feature) return [feature];
+      if (isGroupScreenedWordsCommand(message)) return [groupScreenedWordsFeature];
       return isGroupBannedWordCommand(message) ? [groupBannedWordsFeature] : groupModerationFeature(context);
     },
     commands: {

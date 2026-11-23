@@ -10,6 +10,12 @@ export interface GroupBannedWordMatch {
   readonly action: typeof actions[number];
   readonly seconds: number;
   readonly preview: string;
+  readonly screenedReply?: string;
+}
+
+export interface GroupWordMatchScope {
+  readonly groupRules: boolean;
+  readonly screenedText?: string;
 }
 
 type WordTextOrFace = { readonly type: "text"; readonly text: string } | { readonly type: "face"; readonly id: number };
@@ -17,7 +23,8 @@ export type GroupBannedWordPart = WordTextOrFace | { readonly type: "image"; rea
 
 export interface GroupBannedWords {
   match(groupId: number, userId: number, text: string, signal?: AbortSignal,
-    readImageMd5?: (signal: AbortSignal) => Promise<string | undefined>, mixed?: readonly GroupBannedWordPart[]): Promise<GroupBannedWordMatch | undefined>;
+    readImageMd5?: (signal: AbortSignal) => Promise<string | undefined>, mixed?: readonly GroupBannedWordPart[],
+    scope?: GroupWordMatchScope): Promise<GroupBannedWordMatch | undefined>;
   recordConfirmedKick(userId: number, signal: AbortSignal, authorize: () => Promise<boolean>): Promise<void>;
 }
 
@@ -306,7 +313,8 @@ async function regexMatch(text: string, rules: readonly RegexCandidate[], signal
   }
 }
 
-export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist: ManagedBlacklistStore, signal: AbortSignal) {
+export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist: ManagedBlacklistStore, signal: AbortSignal,
+  screened?: (group: number, text: string, signal: AbortSignal) => Promise<GroupBannedWordMatch | undefined>) {
   const directory = fileURLToPath(new URL("data/group/banned-words/", root));
   const legacy = fileURLToPath(new URL("plugins/yenai-plugin/config/group/", root));
   const recognized = new Set<string>();
@@ -373,9 +381,14 @@ export function createGroupBannedWords(root: URL, lockFile: LockFile, blacklist:
   }
 
   const policy: GroupBannedWords = {
-    async match(groupId, userId, text, eventSignal, readImageMd5, mixed) {
+    async match(groupId, userId, text, eventSignal, readImageMd5, mixed, scope) {
       const active = eventSignal ? AbortSignal.any([signal, eventSignal]) : signal;
-      if (!positive(groupId) || !positive(userId) || active.aborted || text.length > maxTextLength) return;
+      if (!positive(groupId) || !positive(userId) || active.aborted) return;
+      if (scope?.screenedText && screened) {
+        const found = await screened(groupId, scope.screenedText, active).catch(() => undefined);
+        if (found && !active.aborted && !(await readManagedWhitelist(root)).has(userId) && !active.aborted) return found;
+      }
+      if (scope?.groupRules === false || text.length > maxTextLength || active.aborted) return;
       const parts: readonly GroupBannedWordPart[] | undefined = prepareMixed(mixed) ??
         (!text && readImageMd5 ? [{ type: "image", readMd5: readImageMd5 }] : undefined);
       if (!text && !parts) return;
