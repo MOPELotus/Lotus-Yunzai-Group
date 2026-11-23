@@ -11,6 +11,8 @@ export interface GroupActivityMember {
 }
 
 export type GroupActivityVisibility = "management" | "member";
+type MemberActivity = Pick<GroupActivityMember, "joinTime" | "lastSentTime">;
+type CleanupResult = GroupKickResult | "activity-changed";
 
 export interface GroupActivityContext {
   readonly message_type: "group" | "private" | "terminal";
@@ -24,7 +26,7 @@ export interface GroupActivityContext {
   readonly groupActivityRoster?: (visibility?: GroupActivityVisibility) => Promise<readonly GroupActivityMember[] | undefined>;
   readonly groupActivitySignal?: AbortSignal;
   readonly groupManageBlacklist?: () => Promise<boolean>;
-  readonly groupKick?: (userId: number, block: boolean) => Promise<GroupKickResult>;
+  readonly groupKickInactive?: (userId: number, activity: MemberActivity) => Promise<CleanupResult>;
   readonly isBotMaster?: (userId: number) => boolean;
 }
 
@@ -182,12 +184,12 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
   const page = match[1] === undefined ? 1 : parseGroupInteger(match[1]);
   if (!page) return "请输入有效页码。";
   const members = await readMembers(context, context.self_id);
-  if (signal?.aborted) return;
+  if (signal?.aborted || context.groupActivitySignal?.aborted) return;
   return members ? activityPage(members, page) : unavailable;
 }
 
 interface PendingCleanup {
-  readonly members: ReadonlyMap<number, Pick<GroupActivityMember, "joinTime" | "lastSentTime">>;
+  readonly members: ReadonlyMap<number, MemberActivity>;
   readonly window?: InactivityWindow;
   readonly expires: number;
   readonly signal: AbortSignal;
@@ -199,7 +201,7 @@ function cleanupResult(outcomes: ReadonlyMap<GroupKickResult | "skipped", readon
   const perNode = Math.max(40, Math.ceil(total / 94));
   for (const [outcome, label] of [["confirmed", "成功清理如下人员"], ["rejected", "协议端拒绝清理"],
     ["unknown", "清理结果未确认，请在群内核对"], ["protected", "以下成员受保护"],
-    ["unavailable", "以下成员未能清理，请核对群管理权限"], ["skipped", "以下成员已不符合首次确认条件，已跳过"]] as const) {
+    ["unavailable", "以下成员未能清理，请核对权限和成员活动数据"], ["skipped", "以下成员已不符合首次确认条件，已跳过"]] as const) {
     const ids = outcomes.get(outcome);
     if (!ids?.length) continue;
     for (let start = 0; start < ids.length; start += perNode) {
@@ -235,7 +237,7 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     const never = cleanupPattern.exec(text);
     const preview = never || timed?.[1] === "清理";
     const response = responsePattern.exec(text);
-    const { group_id, self_id, user_id, adapter, message_id, groupActivitySignal, groupKick } = context;
+    const { group_id, self_id, user_id, adapter, message_id, groupActivitySignal, groupKickInactive } = context;
     if ((!preview && !response) || context.message_type !== "group" || signal.aborted || context.isDelegated ||
         !groupActivitySignal || groupActivitySignal.aborted || !positive(group_id) || !positive(self_id) || !positive(user_id)) return;
     const key = JSON.stringify([adapter ?? "onebot", self_id, group_id, user_id]);
@@ -253,7 +255,7 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     if (busy.has(group_id)) return "本群已有清理正在执行，请等待结果。";
 
     const active = () => !signal.aborted && !groupActivitySignal.aborted;
-    const authorized = async () => !!groupKick && active() && await managementAllowed(context) && active();
+    const authorized = async () => !!groupKickInactive && active() && await managementAllowed(context) && active();
     const protectedId = (id: number, whitelist: ReadonlySet<number>) => id === user_id || context.isBotMaster?.(id) || whitelist.has(id);
     const denied = "当前会话没有清理群成员的权限。";
 
@@ -292,7 +294,7 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
 
     if (!current) return;
     pending.delete(key);
-    if (!groupKick) return denied;
+    if (!groupKickInactive) return denied;
     busy.add(group_id);
     try {
       if (!await authorized()) return denied;
@@ -309,7 +311,10 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
             const whitelist = await readManagedWhitelist(root);
             if (protectedId(id, whitelist)) result = "protected";
             else if (active()) {
-              try { result = await groupKick(id, false); } catch { result = "unknown"; }
+              try {
+                const outcome = await groupKickInactive(id, initial);
+                result = outcome === "activity-changed" ? "skipped" : outcome;
+              } catch { result = "unknown"; }
             }
           } catch { result = "unavailable"; }
         }

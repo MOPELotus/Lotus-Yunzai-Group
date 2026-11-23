@@ -126,12 +126,12 @@ test("清理按同群确认且重读完整名单，只操作首次选中仍符�
     const member = (userId: number, overrides: Partial<GroupActivityMember> = {}) => ({ ...bot, userId, ...overrides });
     let rows = [bot, ...[43, 44, 45, 46, 47, 48, 49, 50].map((id) => member(id))];
     let reads = 0, permissionChecks = 0;
-    const calls: [number, boolean][] = [];
+    const calls: [number, { joinTime: number; lastSentTime: number }][] = [];
     const scope: GroupActivityContext = { ...context, groupActivitySignal: groupSession.signal,
       isBotMaster: (id) => id === 50,
       async groupManageBlacklist() { permissionChecks++; return true; },
       async groupActivityRoster() { reads++; return rows; },
-      async groupKick(id, block) { calls.push([id, block]);
+      async groupKickInactive(id, activity) { calls.push([id, activity]);
         if (id === 47) return "unknown";
         if (id === 48) return "rejected";
         return "confirmed";
@@ -160,7 +160,7 @@ test("清理按同群确认且重读完整名单，只操作首次选中仍符�
     expect(details).toContain("以下成员受保护\n1、46");
     expect(details).toContain("1、44\n2、45");
     expect(await command(confirm)).toBeUndefined();
-    expect(calls).toEqual([[43, false], [47, false], [48, false]]);
+    expect(calls).toEqual([43, 47, 48].map(id => [id, { joinTime: time, lastSentTime: time }]));
     expect(reads).toBe(2);
     expect(permissionChecks).toBe(3);
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -176,7 +176,7 @@ test("清理待确认有效 120 秒，明确取消、撤销权限或换连接时
     const scope: GroupActivityContext = { ...context, groupActivitySignal: original.signal,
       async groupManageBlacklist() { return true; },
       async groupActivityRoster() { reads++; return [bot, { ...bot, userId: 43 }]; },
-      async groupKick() { kicks++; return "confirmed"; },
+      async groupKickInactive() { kicks++; return "confirmed"; },
     };
     const plan = { ...scope, normalizedMessage: "#清理从未发言的人", message_id: 1 };
     const confirm = { ...scope, normalizedMessage: "#确认清理", message_id: 2 };
@@ -242,7 +242,7 @@ test("按时长清理分页只展示一页，确认按原截止和全量安全�
     let rows = [bot, ...original, member(43, 0), member(44, startCutoff - 20, startCutoff + 1), member(45, startCutoff)];
     const calls: number[] = [];
     const scope = { ...context, groupActivitySignal: session.signal, async groupManageBlacklist() { return true; },
-      async groupActivityRoster() { return rows; }, async groupKick(id: number, block: boolean) { expect(block).toBe(false); calls.push(id); return "confirmed" as const; } };
+      async groupActivityRoster() { return rows; }, async groupKickInactive(id: number) { calls.push(id); return "confirmed" as const; } };
     expect(await command({ ...scope, normalizedMessage: "#清理一天没发言的人第三页", message_id: 1 })).toContain("共 2 页");
     expect(await command({ ...scope, normalizedMessage: "#确认清理", message_id: 2 })).toBeUndefined();
     const preview = await command({ ...scope, normalizedMessage: "#清理1天没发言的人第二页", message_id: 3 });
@@ -275,7 +275,7 @@ test("旧带页码从未发言清理明确预览一页，确认前说明全候�
     const scope: GroupActivityContext = { ...context, groupActivitySignal: session.signal,
       async groupManageBlacklist() { return true; },
       async groupActivityRoster() { reads++; return [bot, ...members]; },
-      async groupKick(id, block) { expect(block).toBe(false); kicked.push(id); return "confirmed"; },
+      async groupKickInactive(id) { kicked.push(id); return "confirmed"; },
     };
     const invocation = "#清理从未发言过的人第二页";
     expect(isGroupActivityCleanupCommand(invocation)).toBe(true);
