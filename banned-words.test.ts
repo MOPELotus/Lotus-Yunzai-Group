@@ -347,8 +347,13 @@ test("自助群头衔按旧模式匹配，1 使用字面包含，现有违禁词
   expect(await runTitle("#切换头衔屏蔽词匹配", ordinary)).toContain("精确匹配");
   expect(await runTitle("#申请头衔包含原名", ordinary)).toContain("包含原名");
   expect(await runTitle("#申请头衔原名", ordinary)).toContain("包含屏蔽词");
+  expect(await runTitle("#设置头衔 原名", ordinary)).toContain("包含屏蔽词");
+  expect(await runTitle("#设置头衔 旅人", { ...ordinary, message: [{ type: "at", qq: 99 }] })).toContain("旅人");
+  expect(await runTitle("#设置头衔", ordinary)).toContain("请填写");
+  expect(await runTitle("#设置头衔 旅人", { ...ordinary, message: [{ type: "mention_all" }] })).toContain("@ 一位");
+  expect(await runTitle("#设置头衔 旅人", { ...ordinary, message: [{ type: "at", qq: 0 }] })).toContain("@ 一位");
   expect(await runTitle("#申请头衔原名", { ...ordinary, isBotMaster: () => true })).toContain("更换");
-  expect(calls).toEqual([[42, "xxaxbyy"], [42, ""], [42, "包含原名"], [42, "原名"]]);
+  expect(calls).toEqual([[42, "xxaxbyy"], [42, ""], [42, "包含原名"], [42, "旅人"], [42, "原名"]]);
   expect(await readFile(legacy, "utf8")).toBe(original);
   expect(JSON.parse(await readFile(canonical, "utf8"))).toMatchObject({ TitleFilterModeChange: 0, bannedWords: { "例": { matchType: 1, penaltyType: 2 } } });
 });

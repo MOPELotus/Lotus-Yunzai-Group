@@ -41,15 +41,15 @@ export function groupTitleCommandFeature(message: string): string | undefined {
 
 function positive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 
-function titleTarget(message: GroupTitleContext["message"], bot: number): number | undefined {
+function titleTarget(message: GroupTitleContext["message"], bot: number): number | null | undefined {
   if (!message || typeof message === "string") return;
   let target: number | undefined;
   for (const segment of message) {
-    if (segment.type === "mention_all") return;
+    if (segment.type === "mention_all") return null;
     if (segment.type !== "at") continue;
     const id = typeof segment.qq === "string" && /^[1-9]\d*$/u.test(segment.qq) ? Number(segment.qq) : segment.qq;
     if (id === bot) continue;
-    if (!positive(id) || target !== undefined) return;
+    if (!positive(id) || target !== undefined) return null;
     target = id;
   }
   return target;
@@ -130,13 +130,17 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
 
     const self = selfTitle.exec(message), other = otherTitle.exec(message);
     if (!self && !other) return;
-    const target = self ? user_id : titleTarget(context.message, self_id);
+    const mentioned = other ? titleTarget(context.message, self_id) : undefined;
+    const legacySelf = mentioned === undefined && message.startsWith("#设置头衔");
+    const changesOwnTitle = !!self || legacySelf;
+    const target = changesOwnTitle ? user_id : mentioned;
     if (!target) return "请 @ 一位要修改头衔的群成员。";
     const requested = (self?.[1] ?? other?.[1] ?? "").trimStart();
+    if (legacySelf && !requested) return "请填写要设置的头衔。";
     if (requested.length > maxTitleLength || !requested.isWellFormed() || controls.test(requested)) return "请输入有效的群头衔。";
-    if (!context.groupSetSpecialTitle || other && !context.isBotMaster(user_id)) return "当前会话没有设置该群头衔的权限。";
+    if (!context.groupSetSpecialTitle || !changesOwnTitle && !context.isBotMaster(user_id)) return "当前会话没有设置该群头衔的权限。";
 
-    const verify = self ? async () => {
+    const verify = changesOwnTitle ? async () => {
       if (signal.aborted) return false;
       if (!requested || context.isBotMaster(user_id)) return true;
       const current = await store.read(group_id);
@@ -150,15 +154,15 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
     if (signal.aborted) return;
     let result: GroupSpecialTitleResult;
     let name: string | undefined;
-    try { result = await context.groupSetSpecialTitle(target, requested, verify, other ? value => { name = value; } : undefined); }
+    try { result = await context.groupSetSpecialTitle(target, requested, verify, changesOwnTitle ? undefined : value => { name = value; }); }
     catch { result = "unknown"; }
     switch (result) {
       case "confirmed": {
-        if (self) return requested ? `已将你的头衔更换为「${requested}」。` : "已清空你的群头衔。";
+        if (changesOwnTitle) return requested ? `已将你的头衔更换为「${requested}」。` : "已清空你的群头衔。";
         const member = formatGroupModerationMember(target, name);
         return requested ? `已将 ${member} 的头衔设置为「${requested}」。` : `已清空 ${member} 的群头衔。`;
       }
-      case "protected": return self ? "头衔包含屏蔽词，或该成员受群管保护。" : "该成员受群管保护。";
+      case "protected": return changesOwnTitle ? "头衔包含屏蔽词，或该成员受群管保护。" : "该成员受群管保护。";
       case "unavailable": return "当前无法设置群头衔，请核对群成员和群主权限。";
       case "rejected": return "协议端拒绝设置群头衔。";
       default: return "设置群头衔的结果未确认，请在群内核对。";
