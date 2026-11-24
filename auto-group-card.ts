@@ -82,6 +82,7 @@ async function readSettings(root: URL): Promise<Settings | undefined> {
 
     return parseAutoGroupCardSettings(Bun.YAML.parse(source) ?? {});
   }
+  return parseAutoGroupCardSettings({});
 }
 
 export function parseAutoGroupCardSettings(input: unknown): Settings {
@@ -98,7 +99,7 @@ export function parseAutoGroupCardSettings(input: unknown): Settings {
   if (notGroup != null && !Array.isArray(notGroup)) throw new TypeError("notGroup 应为群号列表。");
   if (suffixes != null && !Array.isArray(suffixes)) throw new TypeError("suffixes 应为文案列表。");
   return {
-    enabled: enable !== false, cron: expression, nickname: cardPart(nickname),
+    enabled: enable === true, cron: expression, nickname: cardPart(nickname),
     notGroup: new Set((notGroup as unknown[] | undefined)?.map(groupId)),
     suffixes: suffixes === undefined ? originalSuffixes : (suffixes as unknown[] | null)?.map((value) => {
       const text = cardPart(value);
