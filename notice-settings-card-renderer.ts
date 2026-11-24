@@ -1,3 +1,4 @@
+import { builtinResourceDirectory } from "../../lib/builtin-resources.ts";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { drawInfoText, infoCardColors as colors, measureInfoText, renderInfoCard, type InfoCardOptions } from "@lotus-yunzai/skia/info-card";
@@ -28,10 +29,10 @@ async function readThemeAvailability(resourceDirectories: readonly string[]) {
           const info = await stat(path).catch(() => undefined);
           return !!info?.isFile() && info.size > 0 && info.size <= 24 * 1024 ** 2;
         }));
-      if (available.every(Boolean)) return true;
+      if (available.every(Boolean)) return theme;
     }
   }
-  return false;
+  return undefined;
 }
 
 export function createAdminSettingsCardRenderer({ resourceDirectories = [], mode, label = "#通知设置" }: {
@@ -39,19 +40,20 @@ export function createAdminSettingsCardRenderer({ resourceDirectories = [], mode
   readonly mode?: Mode;
   readonly label?: Label;
 } = {}): NoticeSettingsCardRenderer {
-  let theme: Promise<boolean> | undefined;
+  let theme: Promise<string | undefined> | undefined;
   return async (model, signal) => {
     if (signal?.aborted) return;
-    theme ??= readThemeAvailability(resourceDirectories);
-    if (!await theme || signal?.aborted) return;
-    const { png, engine } = await renderNoticeSettingsCard(model, mode, label);
+    theme ??= readThemeAvailability([...resourceDirectories, builtinResourceDirectory("social/group")]);
+    const directory = await theme;
+    if (!directory || signal?.aborted) return;
+    const { png, engine } = await renderNoticeSettingsCard(model, mode, label, { backgroundPath: join(directory, "admin/imgs/bg/default.jpg"), bodyFontPath: join(directory, "common/font/FZB.ttf"), titleFontPath: join(directory, "common/font/NZBZ.ttf") });
     if (signal?.aborted) return;
     console.log(`[渲染] ${label.slice(1)} ${engine.renderer} ${engine.api} ${engine.device}`);
     return png;
   };
 }
 
-export function renderNoticeSettingsCard(model: NoticeSettingsCardModel, mode: Mode = "gpu", label: Label = "#通知设置") {
+export function renderNoticeSettingsCard(model: NoticeSettingsCardModel, mode: Mode = "gpu", label: Label = "#通知设置", assets: Pick<InfoCardOptions, "backgroundPath" | "bodyFontPath" | "titleFontPath"> = {}) {
   return renderInfoCard({ title: label.slice(1), metadata: label === "#通知设置" ? "群管配置" : undefined, width: 800 }, ({ x, y, width, measure }) => {
     const valueWidth = 170;
     const leftWidth = width - valueWidth - 54;
@@ -97,5 +99,5 @@ export function renderNoticeSettingsCard(model: NoticeSettingsCardModel, mode: M
         }
       },
     };
-  }, { mode });
+  }, { mode, ...assets });
 }
