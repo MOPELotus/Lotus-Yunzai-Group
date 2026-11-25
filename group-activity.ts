@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { groupTimeUnits, parseGroupInteger } from "./group-mute.ts";
 import type { GroupKickResult } from "./group-mute.ts";
 import { readManagedWhitelist } from "./managed-blacklist.ts";
@@ -40,7 +43,7 @@ const inactivityUnits = [...groupTimeUnits.keys()].join("|");
 const integerPattern = String.raw`[零一壹二两三四五六七八九十百千万亿\d]+`;
 const timedPattern = new RegExp(`^#(查看|获取|清理)(${integerPattern})个?(${inactivityUnits})(?:没|未)发言的人(?:第(${integerPattern})页)?$`, "u");
 const pageSize = 30;
-const unavailable = "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。";
+const unavailable = $t("group-activity.text_e8ca51f84e");
 const maxDateTimestamp = 8_640_000_000_000;
 
 type Entry = string | { readonly type: "image"; readonly file: string };
@@ -82,7 +85,7 @@ function memberAvatar(userId: number): Entry {
 
 function memberLabel({ userId, name }: GroupActivityMember): string {
   const nickname = typeof name === "string" ? name.replace(/[\p{Cc}\p{Cf}]/gu, "").trim().slice(0, 128).toWellFormed() : "";
-  return `\nQQ：${userId}\n昵称：${nickname || userId}\n`;
+  return $t("group-activity.text_fdfcb48138", { "userId": userId, "value2": nickname || userId });
 }
 
 export async function readGroupActivityRoster(context: Pick<GroupActivityContext, "groupActivityRoster">, bot: number,
@@ -100,9 +103,9 @@ function inactivityWindow(match: RegExpExecArray, epochMillis: number): Inactivi
   const unit = match[3] ?? "";
   const unitSeconds = groupTimeUnits.get(unit);
   const seconds = amount !== undefined && unitSeconds !== undefined ? amount * unitSeconds : NaN;
-  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > maxDateTimestamp) return "请输入有效的未发言时长。";
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > maxDateTimestamp) return $t("group-activity.text_54c9a615a8");
   const page = match[4] === undefined ? 1 : parseGroupInteger(match[4]);
-  if (!page) return "请输入有效页码。";
+  if (!page) return $t("group-activity.text_bab538b87f");
   return { label: `${amount}${unit}`, cutoff: Math.floor(epochMillis / 1000) - seconds, page };
 }
 
@@ -119,16 +122,16 @@ function activityRanking(roster: readonly GroupActivityMember[], recent: boolean
   const sorted = [...roster].sort(recent
     ? (left, right) => right.joinTime - left.joinTime
     : (left, right) => left.lastSentTime - right.lastSentTime).slice(0, count);
-  const nodes: Entry[][] = [[recent ? `最近的${sorted.length}条入群记录` : `不活跃排行榜top1 - top${sorted.length}`]];
+  const nodes: Entry[][] = [[recent ? $t("group-activity.text_7f9002261f", { "length": sorted.length }) : $t("group-activity.text_195d0c23ba", { "length": sorted.length })]];
   const perNode = Math.max(1, Math.ceil(sorted.length / 99));
   for (let start = 0; start < sorted.length; start += perNode) {
     const node: Entry[] = [];
     for (const [index, entry] of sorted.slice(start, start + perNode).entries()) {
       if (node.length) node.push("\n\n");
-      if (!recent) node.push(`第${start + index + 1}名：\n`);
+      if (!recent) node.push($t("group-activity.text_3ac49b343f", { "value1": start + index + 1 }));
       node.push(memberAvatar(entry.userId), memberLabel(entry));
-      if (recent) node.push(`入群时间：${formattedDate(entry.joinTime)}\n`);
-      node.push(`最后发言时间：${entry.lastSentTime === 0 ? "未记录" : formattedDate(entry.lastSentTime)}`);
+      if (recent) node.push($t("group-activity.text_da6f627ab3", { "value1": formattedDate(entry.joinTime) }));
+      node.push($t("group-activity.text_f2cdfe21b1", { "value1": entry.lastSentTime === 0 ? $t("group-activity.text_7450cc5b16") : formattedDate(entry.lastSentTime) }));
     }
     nodes.push(node);
   }
@@ -140,18 +143,18 @@ async function managementAllowed(context: GroupActivityContext): Promise<boolean
 }
 
 function activityPage(members: readonly GroupActivityMember[], page: number, window?: InactivityWindow): ActivityReply {
-  if (!members.length) return window ? `本群暂无${window.label}没发言的成员。` : "本群暂无从未发言的成员。";
+  if (!members.length) return window ? $t("group-activity.text_0c88f66347", { "label": window.label }) : $t("group-activity.text_97a7a7cd47");
   const pages = Math.ceil(members.length / pageSize);
-  if (page > pages) return `没有第 ${page} 页。本群共 ${pages} 页。`;
+  if (page > pages) return $t("group-activity.text_8c42f26d5d", { "page": page, "pages": pages });
   const shown = members.slice((page - 1) * pageSize, page * pageSize);
   const nodes: Entry[][] = [[
-    window ? `以下为${window.label}没发言的人\n` : "以下为进群后从未发言过的人\n",
-    `当前为第 ${page} 页，共 ${pages} 页，本页共 ${shown.length} 人，总共 ${members.length} 人。`,
+    window ? $t("group-activity.text_98437fb742", { "label": window.label }) : $t("group-activity.text_c6cb9397aa"),
+    $t("group-activity.text_461a50b127", { "page": page, "pages": pages, "length": shown.length, "value4": members.length }),
   ]];
   const next = window ? `#查看${window.label}没发言的人第${page + 1}页` : `#查看从未发言过的人第${page + 1}页`;
-  if (page < pages) nodes[0]!.push(`\n可用「${next}」翻页。`);
+  if (page < pages) nodes[0]!.push($t("group-activity.text_9c24bfc568", { "next": next }));
   for (const entry of shown) {
-    const time = window ? `最后发言时间：${entry.lastSentTime ? formattedDate(entry.lastSentTime) : "未记录"}` : `进群时间：${formattedDate(entry.joinTime)}`;
+    const time = window ? $t("group-activity.text_f2cdfe21b1", { "value1": entry.lastSentTime ? formattedDate(entry.lastSentTime) : $t("group-activity.text_7450cc5b16") }) : $t("group-activity.text_98d70da306", { "value1": formattedDate(entry.joinTime) });
     nodes.push([memberAvatar(entry.userId), memberLabel(entry) + time]);
   }
   return { type: "forward", nodes };
@@ -165,16 +168,16 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
       !positive(context.group_id) || !positive(context.user_id) || !positive(context.self_id)) return;
   if (rank) {
     const count = rank[2] === undefined ? 10 : parseGroupInteger(rank[2]);
-    if (!count) return "请输入有效的成员数量。";
+    if (!count) return $t("group-activity.text_946b6fe8dd");
     const roster = await readGroupActivityRoster(context, context.self_id, "member");
     if (signal?.aborted || context.groupActivitySignal?.aborted) return;
-    if (!roster) return "当前无法读取完整的群成员发言数据，请核对当前群会话和协议端支持。";
+    if (!roster) return $t("group-activity.text_9d921ef563");
     return activityRanking(roster, rank[1]?.startsWith("最近") === true, count);
   }
   if (timed) {
     const window = inactivityWindow(timed, wallNow());
     if (typeof window === "string") return window;
-    if (timed[1] === "获取" && !await managementAllowed(context)) return "当前会话没有获取群活跃名单的权限。";
+    if (timed[1] === "获取" && !await managementAllowed(context)) return $t("group-activity.text_432210226a");
     if (signal?.aborted || context.groupActivitySignal?.aborted) return;
     const members = await readMembers(context, context.self_id, window);
     if (signal?.aborted || context.groupActivitySignal?.aborted) return;
@@ -182,7 +185,7 @@ export async function groupActivityCommand(context: GroupActivityContext, signal
   }
   if (!match) return;
   const page = match[1] === undefined ? 1 : parseGroupInteger(match[1]);
-  if (!page) return "请输入有效页码。";
+  if (!page) return $t("group-activity.text_bab538b87f");
   const members = await readMembers(context, context.self_id);
   if (signal?.aborted || context.groupActivitySignal?.aborted) return;
   return members ? activityPage(members, page) : unavailable;
@@ -196,12 +199,12 @@ interface PendingCleanup {
 }
 
 function cleanupResult(outcomes: ReadonlyMap<GroupKickResult | "skipped", readonly number[]>): ActivityReply {
-  const nodes: Entry[][] = [["以下为每次清理的结果"]];
+  const nodes: Entry[][] = [[$t("group-activity.text_d0abdaf029")]];
   const total = [...outcomes.values()].reduce((count, ids) => count + ids.length, 0);
   const perNode = Math.max(40, Math.ceil(total / 94));
-  for (const [outcome, label] of [["confirmed", "成功清理如下人员"], ["rejected", "协议端拒绝清理"],
-    ["unknown", "清理结果未确认，请在群内核对"], ["protected", "以下成员受保护"],
-    ["unavailable", "以下成员未能清理，请核对权限和成员活动数据"], ["skipped", "以下成员已不符合首次确认条件，已跳过"]] as const) {
+  for (const [outcome, label] of [["confirmed", $t("group-activity.text_dd5f4239c3")], ["rejected", $t("group-activity.text_e5ffa04ac7")],
+    ["unknown", $t("group-activity.text_6437e93806")], ["protected", $t("group-activity.text_3106a179e3")],
+    ["unavailable", $t("group-activity.text_7dab13a1c4")], ["skipped", $t("group-activity.text_39c93849a3")]] as const) {
     const ids = outcomes.get(outcome);
     if (!ids?.length) continue;
     for (let start = 0; start < ids.length; start += perNode) {
@@ -250,22 +253,22 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
     if (!claim(key, message_id)) return [];
     if (response?.[1] === "取消") {
       pending.delete(key);
-      return "已取消清理。";
+      return $t("group-activity.text_d51fdbeb98");
     }
-    if (busy.has(group_id)) return "本群已有清理正在执行，请等待结果。";
+    if (busy.has(group_id)) return $t("group-activity.text_c6b25cf6eb");
 
     const active = () => !signal.aborted && !groupActivitySignal.aborted;
     const authorized = async () => !!groupKickInactive && active() && await managementAllowed(context) && active();
     const protectedId = (id: number, whitelist: ReadonlySet<number>) => id === user_id || context.isBotMaster?.(id) || whitelist.has(id);
-    const denied = "当前会话没有清理群成员的权限。";
+    const denied = $t("group-activity.text_fae6a701c4");
 
     if (preview) {
       const window = timed ? inactivityWindow(timed, wallNow()) : undefined;
       if (typeof window === "string") return window;
       const paged = never?.[1];
       const page = paged === undefined ? window?.page : parseGroupInteger(paged);
-      if (paged !== undefined && !page) return "请输入有效页码。";
-      if (preparing.has(key)) return "正在核对本群成员，请稍候。";
+      if (paged !== undefined && !page) return $t("group-activity.text_bab538b87f");
+      if (preparing.has(key)) return $t("group-activity.text_a0e16a077a");
       pending.delete(key);
       preparing.add(key);
       try {
@@ -273,10 +276,10 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
         const members = await readMembers(context, self_id, window, true);
         if (!members || !active()) return unavailable;
         let whitelist: ReadonlySet<number>;
-        try { whitelist = await readManagedWhitelist(root); } catch { return "群管白名单暂不可用。"; }
+        try { whitelist = await readManagedWhitelist(root); } catch { return $t("group-activity.text_4f2209b12b"); }
         if (!active()) return;
         const eligible = members.filter(({ userId }) => !protectedId(userId, whitelist));
-        if (!eligible.length) return window ? `本群暂无符合清理条件的${window.label}没发言成员。` : "本群暂无符合清理条件的从未发言成员。";
+        if (!eligible.length) return window ? $t("group-activity.text_4995b77877", { "label": window.label }) : $t("group-activity.text_584770450a");
         const rosterPage = page === undefined ? undefined : activityPage(eligible, page, window);
         if (typeof rosterPage === "string") return rosterPage;
         const selected = new Map(eligible.map(({ userId, joinTime, lastSentTime }) => [userId, { joinTime, lastSentTime }]));
@@ -285,8 +288,8 @@ export function createGroupActivityCleanup(root: URL, signal: AbortSignal, now: 
           if (!first.done) pending.delete(first.value);
         }
         pending.set(key, { members: selected, window, expires: now() + 120_000, signal: groupActivitySignal });
-        const prompt = `本次共需清理 ${selected.size} 人。请在 120 秒内发送「#确认清理」开始清理，或发送「#取消清理」。`;
-        return rosterPage ? { type: "forward", nodes: [[prompt + "确认范围为全部预览页。"], ...rosterPage.nodes] } : prompt;
+        const prompt = $t("group-activity.text_45778d51bc", { "size": selected.size });
+        return rosterPage ? { type: "forward", nodes: [[prompt + $t("group-activity.text_6f047dd795")], ...rosterPage.nodes] } : prompt;
       } finally {
         preparing.delete(key);
       }

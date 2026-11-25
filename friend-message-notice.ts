@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { formatNoticeBodyText, readMessageNoticeParts, type MessageNoticePart, type ReadMessageNoticeParts } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
@@ -38,14 +41,14 @@ export function createFriendMessageNotice(options: PrivateNoticeOptions): Friend
 
     const parts: FriendMessageNoticePart[] = [
       { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-      `[消息(${botId}) - 好友消息]\n`,
-      `好友账号：${userId}\n`,
-      `好友昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
-      "消息内容：", ...content,
+      $t("friend-message-notice.text_75c5a94f41", { "botId": botId }),
+      $t("friend-message-notice.text_36000fb53f", { "userId": userId }),
+      $t("friend-message-notice.text_7b0771ce1d", { "value1": displayRequestField(nickname, 128) || $t("friend-message-notice.text_4d8c1c5b42") }),
+      $t("friend-message-notice.text_34c8fc816b"), ...content,
     ];
     if (includeHint) {
-      const quoteHint = canQuote === true ? "引用该消息：回复 <内容>\n" : "";
-      parts.push(`\n-------------\n${quoteHint}可发送：回复 ${userId} <内容>`);
+      const quoteHint = canQuote === true ? $t("friend-message-notice.text_842e677d46") : "";
+      parts.push($t("friend-message-notice.text_8a28439754", { "quoteHint": quoteHint, "userId": userId }));
     }
     return parts;
   };

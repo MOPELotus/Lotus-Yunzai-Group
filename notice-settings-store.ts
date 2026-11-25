@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { link, lstat, mkdir, mkdtemp, open, realpath, rename, rm } from "node:fs/promises";
@@ -17,7 +20,7 @@ type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;
 const maxBytes = 1_048_576;
 const canonical = "config/group-notice.yaml";
 const legacy = "plugins/yenai-plugin/config/config/notice.yaml";
-const unsafe = () => new Error("无法安全定位通知设置的 YAML 字段。");
+const unsafe = () => new Error($t("notice-settings-store.text_5202f84bbd"));
 
 interface Edit { start: number; end: number; value: string }
 interface ConfigBytes { readonly source: string; readonly file: string; readonly bytes: Buffer }
@@ -224,7 +227,7 @@ export function createNoticeSettingsStore(root: URL, lockFile: LockFile, moduleS
     }
     await assertPermission();
     await mkdir(dirname(primary), { recursive: true, mode: 0o700 });
-    const lock = await lockFile(join(dirname(primary), ".lotus-group-notice.sqlite"), "通知设置");
+    const lock = await lockFile(join(dirname(primary), ".lotus-group-notice.sqlite"), $t("notice-settings-store.text_247ca01ae2"));
     try {
       active();
       const before = await read();

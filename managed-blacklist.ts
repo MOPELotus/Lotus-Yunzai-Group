@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { constants } from "node:fs";
 import { link, lstat, mkdir, mkdtemp, open, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
@@ -54,7 +57,7 @@ export class ManagedBlacklistPermissionError extends Error {}
 const legacy = "plugins/yenai-plugin/config/config/groupAdmin.yaml";
 const canonical = "config/groupAdmin.yaml";
 const maxBytes = 256 * 1024;
-const groupAddNoticeDefault = "有一个加群通知，管理员快去看看吧~";
+const groupAddNoticeDefault = $t("managed-blacklist.text_7f6d605eae");
 const groupAddNoticeSection = "groupAddNotice";
 const noticeGroups = "groupAddNotice.openGroup";
 const noticeMessage = "groupAddNotice.msg";
@@ -82,7 +85,7 @@ function voteSettings(primary?: ReturnType<typeof decode>, previous?: ReturnType
   function get<K extends keyof GroupVoteSettings>(field: K): GroupVoteSettings[K] {
     const source = primary?.doc.has(field) ? primary : previous?.doc.has(field) ? previous : undefined;
     const value = source ? groupVoteSetting(field, source.values.get(field)) : field === "VoteBan" && previous ? true : defaultGroupVote[field];
-    if (value === undefined) throw new Error(`群投票 ${field} 配置无效。`);
+    if (value === undefined) throw new Error($t("managed-blacklist.text_1014170db4", { "field": field }));
     return value as GroupVoteSettings[K];
   }
   return { VoteBan: get("VoteBan"), VoteKick: get("VoteKick"), outTime: get("outTime"), minNum: get("minNum"),
@@ -93,7 +96,7 @@ function codeOf(error: unknown) { return (error as NodeJS.ErrnoException | undef
 
 function id(value: unknown): number {
   const qq = typeof value === "string" && /^\d+$/u.test(value) ? Number(value) : value;
-  if (typeof qq !== "number" || !Number.isSafeInteger(qq) || qq < 1) throw new TypeError("群管名单包含无效 QQ 号。");
+  if (typeof qq !== "number" || !Number.isSafeInteger(qq) || qq < 1) throw new TypeError($t("managed-blacklist.text_2f5b4c164c"));
   return qq;
 }
 
@@ -104,7 +107,7 @@ async function snapshot(path: string) {
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > maxBytes) throw new Error("群管名单配置文件无效。");
+    if (!stat.isFile() || stat.size > maxBytes) throw new Error($t("managed-blacklist.text_d22036798f"));
     const bytes = Buffer.alloc(stat.size + 1);
     let size = 0;
     while (size < bytes.length) {
@@ -112,7 +115,7 @@ async function snapshot(path: string) {
       if (!bytesRead) break;
       size += bytesRead;
     }
-    if (size !== stat.size) throw new Error("群管名单配置正由其他程序修改。");
+    if (size !== stat.size) throw new Error($t("managed-blacklist.text_8a4766fad5"));
     return { file, bytes: bytes.subarray(0, size), stat };
   } finally {
     await handle.close();
@@ -122,9 +125,9 @@ async function snapshot(path: string) {
 function decode(bytes?: Buffer) {
   const text = bytes ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes) : "";
   const doc = parseDocument(text, { merge: true, strict: true, uniqueKeys: true });
-  if (doc.errors.length) throw new Error("群管名单 YAML 无效。");
+  if (doc.errors.length) throw new Error($t("managed-blacklist.text_f4267c8c8c"));
   const values = doc.toJS({ mapAsMap: true }) ?? new Map();
-  if (!(values instanceof Map)) throw new Error("群管名单配置须为映射。");
+  if (!(values instanceof Map)) throw new Error($t("managed-blacklist.text_349a434b43"));
   return { text, doc, values };
 }
 
@@ -133,7 +136,7 @@ function fieldPath(field: ReadField): readonly string[] { return field.split("."
 function yamlSection(values: Map<unknown, unknown>, key: string): Map<unknown, unknown> | undefined {
   const section: unknown = values.get(key);
   if (section == null) return;
-  if (!(section instanceof Map)) throw new Error(`${key} 须为映射。`);
+  if (!(section instanceof Map)) throw new Error($t("managed-blacklist.text_28347b513c", { "key": key }));
   return section;
 }
 
@@ -148,7 +151,7 @@ function listOf(values: Map<unknown, unknown>, field: ListField): number[] {
   const key = nestedGroupField(field);
   const list = key ? yamlSection(values, key[0])?.get(key[1]) : values.get(field);
   if (list == null) return [];
-  if (!Array.isArray(list)) throw new Error(`${field} 须为 QQ 号列表。`);
+  if (!Array.isArray(list)) throw new Error($t("managed-blacklist.text_904778f769", { "field": field }));
   return list.map(id);
 }
 
@@ -161,30 +164,30 @@ function verificationSettings(group: number, primary?: ReturnType<typeof decode>
   const groups = primary?.doc.hasIn(fieldPath(verifyGroups)) ? primary : previous;
   const enabled = !!groups && listOf(groups.values, verifyGroups).includes(group);
   const defaults: GroupVerificationSettings = { enabled, mode: "精确", times: 7, time: 300, delay: 2, min: 10, max: 100,
-    remind: true, success: "✅ 验证成功，欢迎入群" };
+    remind: true, success: $t("managed-blacklist.text_6d60b91058") };
   if (!enabled && !readDisabled) return defaults;
 
   const number = (value: unknown, fallback: number, min: number, max: number): number => {
     if (value === undefined) return fallback;
     const normalized = typeof value === "string" && /^-?\d+$/u.test(value) ? Number(value) : value;
     if (typeof normalized !== "number" || !Number.isSafeInteger(normalized) || normalized < min || normalized > max) {
-      throw new Error("入群验证时间或运算范围无效。");
+      throw new Error($t("managed-blacklist.text_c340a9586a"));
     }
     return normalized;
   };
   const mode = configured("mode") ?? defaults.mode;
   const remind = configured("remindAtLastMinute") ?? defaults.remind;
-  if ((mode !== "精确" && mode !== "模糊") || typeof remind !== "boolean") throw new Error("入群验证模式无效。");
+  if ((mode !== "精确" && mode !== "模糊") || typeof remind !== "boolean") throw new Error($t("managed-blacklist.text_2c6226549d"));
   const currentRange = current && yamlSection(current, "range");
   const oldRange = legacy && yamlSection(legacy, "range");
   const min = number(currentRange?.get("min") ?? oldRange?.get("min"), defaults.min, -1_000_000, 1_000_000);
   const max = number(currentRange?.get("max") ?? oldRange?.get("max"), defaults.max, -1_000_000, 1_000_000);
-  if (min >= max) throw new Error("入群验证需要两个不同的可用整数。");
+  if (min >= max) throw new Error($t("managed-blacklist.text_f4881fc2e9"));
   const currentMessages = current && yamlSection(current, "SuccessMsgs");
   const oldMessages = legacy && yamlSection(legacy, "SuccessMsgs");
   const messageFor = (id: number) => currentMessages?.get(id) ?? currentMessages?.get(String(id)) ?? oldMessages?.get(id) ?? oldMessages?.get(String(id));
   const success = messageFor(group) || messageFor(0) || defaults.success;
-  if (typeof success !== "string" || success.length > 2048) throw new Error("入群验证成功消息无效。");
+  if (typeof success !== "string" || success.length > 2048) throw new Error($t("managed-blacklist.text_019ec861ae"));
   return { enabled, mode, remind, min, max, success, times: number(configured("times"), defaults.times, 1, 100),
     time: number(configured("time"), defaults.time, 1, maxGroupVerificationSeconds), delay: number(configured("DelayTime"), defaults.delay, 0, maxGroupVerificationSeconds) };
 }
@@ -196,7 +199,7 @@ export async function readGroupManagementPanelValues(root: URL) {
   const pick = (field: ReadField) => modern?.doc.hasIn(fieldPath(field)) ? modern : old;
   const groups = (field: ListField) => [...new Set(listOf(pick(field)?.values ?? new Map(), field))];
   const notice = yamlSection(pick(noticeMessage)?.values ?? new Map(), groupAddNoticeSection)?.get("msg") ?? groupAddNoticeDefault;
-  if (typeof notice !== "string" || notice.length > 2048) throw new Error("加群通知文案无效。");
+  if (typeof notice !== "string" || notice.length > 2048) throw new Error($t("managed-blacklist.text_86a479b541"));
   const verification = verificationSettings(0, modern, old, true);
   const messageMap = (document?: ReturnType<typeof decode>) => yamlSection(yamlSection(document?.values ?? new Map(), verifySection) ?? new Map(), "SuccessMsgs");
   const messages = new Map<string, string>();
@@ -208,7 +211,7 @@ export async function readGroupManagementPanelValues(root: URL) {
       if (!/^(?:0|[1-9]\d*)$/u.test(key) || !Number.isSafeInteger(Number(key))) continue;
       const message = entries.get(Number(key)) ?? entries.get(key);
       if (message == null) continue;
-      if (typeof message !== "string" || message.length > 2048) throw new Error("入群验证成功消息无效。");
+      if (typeof message !== "string" || message.length > 2048) throw new Error($t("managed-blacklist.text_019ec861ae"));
       messages.set(key, message);
     }
   }
@@ -229,7 +232,7 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
   const parent = nested ? doc.get(nested[0], true) : undefined;
   const insertParent = nested !== undefined && !isMap(parent);
   if (insertParent && parent !== undefined && parent !== null && !(isScalar(parent) && parent.value === null)) {
-    throw new Error(`无法安全定位 ${field} 的 YAML 源码范围。`);
+    throw new Error($t("managed-blacklist.text_7d19566e54", { "field": field }));
   }
   const contents = nested && !insertParent ? parent : doc.contents;
   const keyName = nested ? (insertParent ? nested[0] : nested[1]) : field;
@@ -238,7 +241,7 @@ function patchField({ text, doc, values }: ReturnType<typeof decode>, field: Fie
   const encoded = typeof next === "object" ? `[${next.join(", ")}]` : String(next);
   const inline = insertParent ? `{${nested[1]}: ${encoded}}` : encoded;
   const splice = (start: number, end: number, value: string) => text.slice(0, start) + value + text.slice(end);
-  const unsafe = () => new Error(`无法安全定位 ${field} 的 YAML 源码范围。`);
+  const unsafe = () => new Error($t("managed-blacklist.text_7d19566e54", { "field": field }));
   const lineStart = (index: number) => text.lastIndexOf("\n", index - 1) + 1;
   if (isNode(node) && node.range) {
     const [start, end, trailing] = node.range;
@@ -347,7 +350,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
     signal?: AbortSignal, authorize?: () => Promise<boolean>): Promise<boolean> {
     signal?.throwIfAborted();
     await mkdir(dirname(primary), { recursive: true, mode: 0o700 });
-    const lock = await lockFile(join(dirname(primary), ".lotus-group-admin.sqlite"), "群管名单");
+    const lock = await lockFile(join(dirname(primary), ".lotus-group-admin.sqlite"), $t("managed-blacklist.text_9f7805a87f"));
     try {
       signal?.throwIfAborted();
       const before = await read(field);
@@ -356,7 +359,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       if (next === undefined) return false;
       const yaml = patchField(current, field, next);
       const bytes = Buffer.from(yaml);
-      if (bytes.length > maxBytes) throw new Error("群管名单超过文件大小上限。");
+      if (bytes.length > maxBytes) throw new Error($t("managed-blacklist.text_fa7db96f41"));
       const check = decode(bytes);
       const nested = nestedGroupField(field);
       const value = isListField(field) ? listOf(check.values, field) : nested ? yamlSection(check.values, nested[0])?.get(nested[1]) : check.values.get(field);
@@ -382,7 +385,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
         current.values.delete(field);
       }
       if (!isDeepStrictEqual(check.values, current.values) || !isDeepStrictEqual(value, next)) {
-        throw new Error("保存将改变其他 YAML 字段，请检查配置引用。");
+        throw new Error($t("managed-blacklist.text_aa82a8ac77"));
       }
 
       const file = before?.file ?? primary;
@@ -405,7 +408,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
         const latest = await read(field);
         if (before ? !latest || latest.file !== file || latest.stat.ino !== before.stat.ino ||
             latest.stat.dev !== before.stat.dev || !latest.bytes.equals(before.bytes) : latest !== undefined) {
-          throw new Error("群管名单配置已变更，请重试。");
+          throw new Error($t("managed-blacklist.text_358b92f4b8"));
         }
         signal?.throwIfAborted();
         if (before) await rename(staged, file);
@@ -450,7 +453,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       const template = await read(noticeMessage);
       const message: unknown = yamlSection(decode(template?.bytes).values, groupAddNoticeSection)?.get("msg");
       if (message == null) return groupAddNoticeDefault;
-      if (typeof message !== "string" || message.length > 2048) throw new Error("groupAddNotice.msg 无效。");
+      if (typeof message !== "string" || message.length > 2048) throw new Error($t("managed-blacklist.text_bfdcad1d78"));
       return message;
     },
     setGroupAddNotice: (groupId, enabled, signal, authorize) => updateList(noticeGroups, [groupId], enabled, signal, authorize),
@@ -463,14 +466,14 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
       let next: GroupVerificationSettings["mode"] = "模糊";
       await write(verifyMode, ({ values }) => {
         const current = yamlSection(values, verifySection)?.get("mode");
-        if (current != null && current !== "精确" && current !== "模糊") throw new Error("入群验证模式无效。");
+        if (current != null && current !== "精确" && current !== "模糊") throw new Error($t("managed-blacklist.text_2c6226549d"));
         next = current === "模糊" ? "精确" : "模糊";
         return next;
       }, signal, authorize);
       return next;
     },
     setGroupVerificationTime(seconds, signal, authorize) {
-      if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > maxGroupVerificationSeconds) throw new Error("入群验证超时时间无效。");
+      if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > maxGroupVerificationSeconds) throw new Error($t("managed-blacklist.text_b2ed6da695"));
       return write(verifyTime, ({ values }) => {
         const current = yamlSection(values, verifySection)?.get("time");
         const numeric = typeof current === "string" && /^\d+$/u.test(current) ? Number(current) : current;
@@ -484,7 +487,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
     },
     setGroupVoteSetting(field, value, signal, authorize) {
       const next = groupVoteSetting(field, value);
-      if (next === undefined) throw new Error(`群投票 ${field} 配置无效。`);
+      if (next === undefined) throw new Error($t("managed-blacklist.text_1014170db4", { "field": field }));
       return write(field, ({ doc, values }) => {
         if (doc.has(field) && groupVoteSetting(field, values.get(field)) === next) return;
         return next;
@@ -493,7 +496,7 @@ export function createManagedBlacklist(root: URL, lockFile: LockFile): ManagedBl
     setAutoUnmute(enabled, signal, authorize) {
       return write("noBan", ({ values }) => {
         const current = values.get("noBan");
-        if (current != null && typeof current !== "boolean") throw new Error("noBan 须为布尔值。");
+        if (current != null && typeof current !== "boolean") throw new Error($t("managed-blacklist.text_6a0329f3dc"));
         if ((current ?? false) === enabled) return;
         return enabled;
       }, signal, authorize);

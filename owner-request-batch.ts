@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 export type OwnerRequestBatchStatus = "confirmed" | "submitted" | "rejected" | "unknown" | "unavailable" | "not-found" | "ambiguous" | "risk";
 
 export interface OwnerRequestBatchEntry {
@@ -14,22 +17,22 @@ export interface OwnerRequestBatchReply {
   readonly nodes: readonly (readonly string[])[];
 }
 
-export function ownerRequestBatchReply(result: OwnerRequestBatchResult, kind: "好友申请" | "群邀请", verb: string): OwnerRequestBatchReply | string {
-  if (result.status === "unavailable") return `当前无法核验可批量审核的${kind}，请在 QQ 中处理。`;
-  if (result.status === "not-found") return `本次查询范围内未发现待处理的${kind}，请在 QQ 中查看完整列表。`;
-  if (result.status !== "processed" || !result.entries.length) return `${kind}批量审核结果未确认，请先在 QQ 中核对。`;
+export function ownerRequestBatchReply(result: OwnerRequestBatchResult, kind: string, verb: string): OwnerRequestBatchReply | string {
+  if (result.status === "unavailable") return $t("owner-request-batch.text_bf241ef309", { "kind": kind });
+  if (result.status === "not-found") return $t("owner-request-batch.text_5a5ce4e708", { "kind": kind });
+  if (result.status !== "processed" || !result.entries.length) return $t("owner-request-batch.text_b39b248297", { "kind": kind });
 
   const labels: Record<OwnerRequestBatchStatus, string> = {
-    confirmed: `已${verb}`, submitted: "已受理，待核对", rejected: "失败", unknown: "结果未知",
-    unavailable: "未处理", "not-found": "已离开待审列表", ambiguous: "多条待审，请手动处理", risk: "风险",
+    confirmed: $t("owner-request-batch.text_597ee8e766", { "verb": verb }), submitted: $t("owner-request-batch.text_b0be616a4b"), rejected: $t("owner-request-batch.text_28384d7afd"), unknown: $t("owner-request-batch.text_fb7e71452c"),
+    unavailable: $t("owner-request-batch.text_83fbf42f9e"), "not-found": $t("owner-request-batch.text_18cf61afbd"), ambiguous: $t("owner-request-batch.text_7d7c402c04"), risk: $t("owner-request-batch.text_af75e78cac"),
   };
   const rows = new Map(Object.values(labels).map(label => [label, [] as number[]]));
   for (const entry of result.entries) rows.get(labels[entry.status])?.push(entry.id);
   const summary = [
-    `本次共核对 ${result.entries.length} 条${kind}。审核仅覆盖本次可核验的范围，完整列表请在 QQ 中查看。`,
-    ...[...rows].filter(([, ids]) => ids.length).map(([label, ids]) => `${label}：${ids.length} 条`),
+    $t("owner-request-batch.text_e36a329356", { "length": result.entries.length, "kind": kind }),
+    ...[...rows].filter(([, ids]) => ids.length).map(([label, ids]) => $t("owner-request-batch.text_f8a770e14e", { "label": label, "length": ids.length })),
   ];
   const nodes = [...rows].filter(([, ids]) => ids.length).map(([label, ids]) =>
-    [`${label}名单\n${ids.map((id, index) => `${index + 1}、${id}`).join("\n")}`]);
+    [$t("owner-request-batch.text_e9339d3412", { "label": label, "value2": ids.map((id, index) => `${index + 1}、${id}`).join("\n") })]);
   return { type: "forward", nodes: [summary, ...nodes] };
 }

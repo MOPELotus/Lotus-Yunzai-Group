@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { randomInt } from "node:crypto";
 import { ManagedBlacklistPermissionError, maxGroupVerificationSeconds, type GroupVerificationSettings, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 import type { GroupVotePart, GroupVoteResult } from "./group-vote.ts";
@@ -212,7 +215,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     return true;
   }
 
-  async function end(challenge: Challenge, reason: "验证超时" | "验证失败", replyEvent: GroupVerificationJoin | GroupVerificationAnswer = challenge.event) {
+  async function end(challenge: Challenge, reason: string, replyEvent: GroupVerificationJoin | GroupVerificationAnswer = challenge.event) {
     if (!available(challenge) || challenge.settling) return;
     challenge.settling = true;
     try {
@@ -223,24 +226,24 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       catch { result = "unknown"; }
       finally { challenge.kickInFlight = false; }
       if (!available(challenge)) return;
-      const message = result === "confirmed" ? `\n${reason}，已移出群聊，请重新申请。`
-        : result === "unknown" ? `\n${reason}，移出结果未确认，请在 QQ 核对。`
-        : `\n${reason}，未能移出该成员。`;
+      const message = result === "confirmed" ? $t("group-verification.text_4107228f80", { "reason": reason })
+        : result === "unknown" ? $t("group-verification.text_f5860f6479", { "reason": reason })
+        : $t("group-verification.text_d1a181432c", { "reason": reason });
       await announce(replyEvent, message);
     } finally { remove(challenge); }
   }
 
   async function ask(challenge: Challenge): Promise<string | undefined> {
-    const unavailable = "无法确认目标群成员或验证权限。";
+    const unavailable = $t("group-verification.text_36288ef37d");
     if (!available(challenge)) return unavailable;
     const { event } = challenge;
     const config = await settings(event.groupId);
-    if (!config?.enabled) { remove(challenge); return "当前群未开启验证哦~"; }
+    if (!config?.enabled) { remove(challenge); return $t("group-verification.text_99467feff8"); }
     const permission = await authorized(challenge, true);
     if (permission !== true || !available(challenge)) {
       remove(challenge);
-      if (permission === "management") return "❎ 该命令对群主或管理员无效";
-      if (permission === "protected") return "❎ 该命令对机器人主人无效";
+      if (permission === "management") return $t("group-verification.text_a355ca5356");
+      if (permission === "protected") return $t("group-verification.text_81d923cd3c");
       return unavailable;
     }
     const first = clock.random(config.min, config.max + 1);
@@ -249,17 +252,17 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     const [larger, smaller] = first > second ? [first, second] : [second, first];
     const plus = clock.random(0, 2) === 0;
     const expression = `${larger} ${plus ? "+" : "-"} ${smaller}`;
-    const question = ` 欢迎！\n请在「${config.time}」秒内发送\n「${expression}」的运算结果\n否则将会被移出群聊`;
-    if (!await announce(event, question) || !available(challenge)) { remove(challenge); return "验证通知未获确认，未启动计时。"; }
+    const question = $t("group-verification.text_fb16ef8ee0", { "time": config.time, "expression": expression });
+    if (!await announce(event, question) || !available(challenge)) { remove(challenge); return $t("group-verification.text_2df1e7f3a3"); }
     challenge.expression = expression;
     challenge.answer = String(plus ? larger + smaller : larger - smaller);
     challenge.remaining = config.times;
     challenge.deadline = clock.now() + config.time * 1000;
-    challenge.cleanups.push(clock.schedule(config.time * 1000, () => inBackground(() => end(challenge, "验证超时"))));
+    challenge.cleanups.push(clock.schedule(config.time * 1000, () => inBackground(() => end(challenge, $t("group-verification.text_a438e77214")))));
     if (config.remind && config.time >= 120) challenge.cleanups.push(clock.schedule((config.time - 60) * 1000, () => inBackground(async () => {
       if (!available(challenge) || challenge.settling || !challenge.deadline || clock.now() >= challenge.deadline) return;
       if (!(await settings(event.groupId))?.enabled || await authorized(challenge) !== true || !available(challenge) || challenge.settling) return;
-      await announce(event, `\n验证仅剩最后一分钟\n请发送「${expression}」的运算结果\n否则将会被移出群聊`);
+      await announce(event, $t("group-verification.text_b371f710cd", { "expression": expression }));
     })));
   }
 
@@ -301,7 +304,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       const announceLeave = available(challenge) && !challenge.settling && challenge.deadline !== undefined && event.voluntary === true;
       remove(challenge);
       if (announceLeave) inBackground(async () => {
-        if ((await settings(event.groupId))?.enabled && live(event)) await announce(challenge.event, `「${event.userId}」主动退群，验证流程结束`, false);
+        if ((await settings(event.groupId))?.enabled && live(event)) await announce(challenge.event, $t("group-verification.text_127d0eacd6", { "userId": event.userId }), false);
       });
     },
     async answer(event) {
@@ -323,11 +326,11 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
         if (config.mode === "精确" ? event.text === value : event.text.includes(value)) {
           remove(challenge);
           await announce(event, config.success, false);
-        } else if (--challenge.remaining <= 0) await end(challenge, "验证失败", event);
+        } else if (--challenge.remaining <= 0) await end(challenge, $t("group-verification.text_105f55aa14"), event);
         else {
           try { await event.recall(); } catch { /* A denied recall should not remove the remaining chances. */ }
           if (available(challenge) && !challenge.settling) await announce(event,
-            `\n❎ 验证失败\n你还有「${challenge.remaining}」次机会\n请发送「${challenge.expression}」的运算结果`);
+            $t("group-verification.text_f6198138e2", { "remaining": challenge.remaining, "expression": challenge.expression }));
         }
         return true;
       });
@@ -339,14 +342,14 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
   type Prepare = NonNullable<GroupVerificationContext["groupVerification"]>["prepare"];
   async function repeatMember(scope: VerificationScope, prepare: Prepare, expected?: GroupVerificationExpectedActivity): Promise<string | undefined> {
     const key = position(scope);
-    if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
-    if (challenges.size >= 4096) return "当前待验证成员过多，请稍后再试。";
+    if (challenges.has(key)) return $t("group-verification.text_847c1ab4bc");
+    if (challenges.size >= 4096) return $t("group-verification.text_fb6e77bc5e");
     const event = await prepare(scope.userId, expected).catch(() => undefined);
     if (!event || event.botId !== scope.botId || event.groupId !== scope.groupId || event.userId !== scope.userId || event.adapter !== scope.adapter ||
         event.connection !== scope.connection || !live(event) || !live(scope) || stopped || signal.aborted) {
-      return "无法确认目标群成员或验证权限。";
+      return $t("group-verification.text_36288ef37d");
     }
-    if (challenges.has(key)) return "❎ 目标群成员处于验证状态";
+    if (challenges.has(key)) return $t("group-verification.text_847c1ab4bc");
     const prepared = { ...event, signal: AbortSignal.any([event.signal, scope.signal]) };
     return ask(createChallenge(prepared, undefined, expected));
   }
@@ -365,7 +368,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
   }
 
   async function repeatNeverSpoken(context: GroupVerificationContext, scope: VerificationScope, prepare: Prepare, authorize: () => Promise<boolean>) {
-    if (batches.has(scope.groupId)) return "本群已有批量验证正在进行。";
+    if (batches.has(scope.groupId)) return $t("group-verification.text_8ea5c6551d");
     const batch = new AbortController();
     batches.set(scope.groupId, { scope, controller: batch });
     const active = AbortSignal.any([scope.signal, batch.signal]);
@@ -374,9 +377,9 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     try {
       const roster = await readGroupActivityRoster(context, scope.botId);
       if (!current()) return [] as const;
-      if (!roster) return "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。";
+      if (!roster) return $t("group-verification.text_e8ca51f84e");
       const candidates = roster.filter(member => member.userId !== scope.botId && member.role === "member" && member.joinTime === member.lastSentTime);
-      if (!candidates.length) return "✅ 本群暂无从未发言的人";
+      if (!candidates.length) return $t("group-verification.text_abebe24d28");
       let pace = false;
       for (const { userId, joinTime, lastSentTime } of candidates) {
         if (!current()) return [] as const;
@@ -389,7 +392,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
         }
         if (!current()) return [] as const;
         if (!await authorize() || !(await settings(scope.groupId))?.enabled) {
-          return `批量验证已停止，已确认向 ${sent} 人发送题目。`;
+          return $t("group-verification.text_e287fbee75", { "sent": sent });
         }
         if (current() && !await protectedMember() && current()) {
           pace = true;
@@ -398,7 +401,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
         }
       }
       if (!current()) return [] as const;
-      return `批量验证结束，已确认向 ${sent} 人发送题目，跳过或未确认 ${candidates.length - sent} 人。`;
+      return $t("group-verification.text_04f071ff72", { "sent": sent, "value2": candidates.length - sent });
     } finally { batches.delete(scope.groupId); }
   }
 
@@ -407,7 +410,7 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
     const { group_id: group, self_id: bot, user_id: user, groupVerification: session, message_id } = context;
     const timed = timeCommand.exec(text);
     const ownerCommand = text === modeCommand || timed !== null;
-    const permission = ownerCommand ? "仅当前机器人主人可以设置入群验证模式和时限。" : "当前会话没有管理入群验证的权限。";
+    const permission = ownerCommand ? $t("group-verification.text_20517ddc60") : $t("group-verification.text_e7428cef88");
     if (stopped || signal.aborted || context.isDelegated || !session || !live(session) || !id(group) || !id(bot) || !id(user)) return permission;
     const authorize = async () => {
       try {
@@ -430,14 +433,14 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       const commandSignal = AbortSignal.any([signal, session.signal, session.connection]);
       if (text === modeCommand) {
         const mode = await store.toggleGroupVerificationMode(commandSignal, authorize);
-        return `✅ 已切换验证模式为${mode}验证`;
+        return $t("group-verification.text_3387b4c8d3", { "mode": mode });
       }
       if (timed) {
         const seconds = Number(timed[1]);
-        if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > maxGroupVerificationSeconds) return "请填写有效的正整数验证秒数。";
+        if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > maxGroupVerificationSeconds) return $t("group-verification.text_ce393b5736");
         const changed = await store.setGroupVerificationTime(seconds, commandSignal, authorize);
-        const reply = changed ? `✅ 已将验证超时时间设置为${seconds}秒` : `验证超时时间已是${seconds}秒。`;
-        return seconds < 60 ? `${reply}\n建议至少一分钟（60秒）` : reply;
+        const reply = changed ? $t("group-verification.text_1c0934668c", { "seconds": seconds }) : $t("group-verification.text_63ca8c6eab", { "seconds": seconds });
+        return seconds < 60 ? $t("group-verification.text_4119067e43", { "reply": reply }) : reply;
       }
       const toggle = switchPattern.exec(text);
       if (toggle) {
@@ -447,11 +450,11 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
           batches.get(group)?.controller.abort();
           for (const challenge of challenges.values()) if (challenge.event.groupId === group) remove(challenge);
         }
-        if (!changed) return enabled ? "❎ 本群验证已处于开启状态" : "❎ 本群暂未开启验证";
-        return `✅ 已${toggle[1]}本群验证`;
+        if (!changed) return enabled ? $t("group-verification.text_9b57faebdb") : $t("group-verification.text_a1a906e9eb");
+        return $t("group-verification.text_bef545b91f", { "value1": toggle[1] });
       }
       const config = await settings(group);
-      if (!config?.enabled) return "当前群未开启验证哦~";
+      if (!config?.enabled) return $t("group-verification.text_99467feff8");
       if (!await authorize()) return permission;
       const adapter = context.adapter ?? "onebot";
       const scope = { adapter, botId: bot, groupId: group, userId: user, signal: commandSignal, connection: session.connection };
@@ -459,17 +462,17 @@ export function createGroupVerification(store: Pick<ManagedBlacklistStore, "read
       if (text === batchCommand) return await repeatNeverSpoken(context, scope, prepare, authorize);
       const repeat = repeatPattern.exec(text);
       const target = commandTarget(context.message, (repeat ?? bypassPattern.exec(text))?.[1], bot);
-      if (!target || target === bot) return "❎ 请输入正确的 QQ 号或艾特一位群成员";
+      if (!target || target === bot) return $t("group-verification.text_33e836986e");
       const key = position({ botId: bot, groupId: group, userId: target });
       if (repeat) return (await repeatMember({ ...scope, userId: target }, prepare)) ?? [];
       const challenge = challenges.get(key);
       if (!challenge || !available(challenge) || challenge.event.adapter !== adapter || challenge.event.connection !== session.connection || challenge.settling) {
-        return "❎ 目标群成员当前无需验证";
+        return $t("group-verification.text_c1c102ec4b");
       }
       remove(challenge);
       return config.success;
     } catch (error) {
-      return error instanceof ManagedBlacklistPermissionError ? permission : "暂无法保存入群验证配置。";
+      return error instanceof ManagedBlacklistPermissionError ? permission : $t("group-verification.text_5c7ea2c2b9");
     }
   }
 

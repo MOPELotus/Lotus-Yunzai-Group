@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { GroupInvitationListContext } from "./group-invitation-list.ts";
 import { ownerRequestBatchReply, type OwnerRequestBatchReply, type OwnerRequestBatchResult } from "./owner-request-batch.ts";
 import { groupRequestReview } from "./request-review.ts";
@@ -27,8 +30,8 @@ export const groupInvitationReviewFeature = "[group] 群邀请审核";
 const review = /^#?(同意|拒绝)群邀请(\d+)$/u;
 const reviewAll = /^#?(同意|拒绝)全部群邀请$/u;
 const quotedReview = /^#?(同意|拒绝)$/u;
-const unavailable = "当前无法按群号核实并处理这条群邀请，请在 QQ 中处理。";
-const unknown = "群邀请处理结果未确认，请先在 QQ 中核对。";
+const unavailable = $t("group-invitation-review.text_5719bde29d");
+const unknown = $t("group-invitation-review.text_763e26c60d");
 const maxRememberedMessages = 2048;
 
 export function isGroupInvitationReviewCommand(command: string): boolean {
@@ -57,12 +60,12 @@ function positiveId(value: number | undefined): value is number {
 function receipt(result: PendingGroupInvitationReviewResult | QuotedGroupInvitationReviewResult,
   groupId: number | undefined, verb: string, quoted: boolean): string {
   switch (result.status) {
-    case "confirmed": return `✅ 已${verb}${positiveId(groupId) ? `群 ${groupId} 的邀请` : "这条群邀请"}`;
-    case "rejected": return "❎ 协议端拒绝了这次群邀请审核。";
-    case "not-found": return "本次查询范围内未找到这个群的待处理邀请，请在 QQ 中查看。";
-    case "ambiguous": return "这个群有多条待处理的邀请，请在 QQ 中处理。";
-    case "expired": return "原群邀请通知已过期或已处理，请在 QQ 中核对。";
-    case "unavailable": return quoted ? "当前无法核实并处理原群邀请，请在 QQ 中处理。" : unavailable;
+    case "confirmed": return $t("group-invitation-review.text_9db598325f", { "verb": verb, "value2": positiveId(groupId) ? $t("group-invitation-review.text_ad1f34e8f4", { "groupId": groupId }) : $t("group-invitation-review.text_49e6850c67") });
+    case "rejected": return $t("group-invitation-review.text_33eb74d355");
+    case "not-found": return $t("group-invitation-review.text_bf5a701669");
+    case "ambiguous": return $t("group-invitation-review.text_22dd4ecc3b");
+    case "expired": return $t("group-invitation-review.text_8589b7b0c6");
+    case "unavailable": return quoted ? $t("group-invitation-review.text_68e69b986a") : unavailable;
     default: return unknown;
   }
 }
@@ -82,12 +85,12 @@ export function createGroupInvitationReview(signal?: AbortSignal, completeInvita
       reviewQuotedGroupInvitation, isBotMaster } = context;
     if (reply && (adapter !== "milky" || !reviewQuotedGroupInvitation)) return;
     if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) {
-      return direct ? "请由当前机器人的主人私聊处理群邀请。" : undefined;
+      return direct ? $t("group-invitation-review.text_d0d3b81db8") : undefined;
     }
-    const verb = match[1] === "同意" ? "同意" : "拒绝";
-    const approve = verb === "同意";
+    const verb = match[1] === "同意" ? $t("group-invitation-review.text_905819e2e3") : $t("group-invitation-review.text_136de7a8c4");
+    const approve = match[1] === "同意";
     if (batch && (!nativeId(message_id) || !reviewAllPendingGroupInvitations)) {
-      return ownerRequestBatchReply({ status: "unavailable" }, "群邀请", verb);
+      return ownerRequestBatchReply({ status: "unavailable" }, $t("group-invitation-review.text_ad3e7e8fd5"), verb);
     }
     if (!nativeId(message_id)) return direct ? unavailable : undefined;
 
@@ -96,7 +99,7 @@ export function createGroupInvitationReview(signal?: AbortSignal, completeInvita
     if (direct && !batch) {
       if (!reviewPendingGroupInvitation) return unavailable;
       const target = Number(direct[2]);
-      if (!positiveId(target)) return "请填写有效的群号。";
+      if (!positiveId(target)) return $t("group-invitation-review.text_9c48f6c70c");
       groupId = target;
       submit = () => reviewPendingGroupInvitation(target, approve);
     } else if (reply) {
@@ -119,7 +122,7 @@ export function createGroupInvitationReview(signal?: AbortSignal, completeInvita
               if (entry.status === "confirmed" && entry.resolvedFlag) completeInvitation(self_id, entry.resolvedFlag, adapter ?? "onebot");
             }
           }
-          return !signal?.aborted && isBotMaster(user_id) ? { reply: ownerRequestBatchReply(result, "群邀请", verb) } : {};
+          return !signal?.aborted && isBotMaster(user_id) ? { reply: ownerRequestBatchReply(result, $t("group-invitation-review.text_ad3e7e8fd5"), verb) } : {};
         }
         if (!submit) return {};
         const result = await submit();

@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { formatNoticeBodyText, readMessageNoticeParts, type MessageNoticePart, type ReadMessageNoticeParts } from "./message-notice-content.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
@@ -29,13 +32,13 @@ export function createTemporaryMessageNotice(options: PrivateNoticeOptions): Tem
     const content = readParts ? await readMessageNoticeParts(readParts) : [textOnly];
     if (!content || options.signal?.aborted || signal?.aborted) return;
 
-    const source = group ?? (positiveId(reportedGroupId) ? `未核实（协议报告 ${reportedGroupId}）` : "未核实");
+    const source = group ?? (positiveId(reportedGroupId) ? $t("temporary-message-notice.text_0c4d421224", { "reportedGroupId": reportedGroupId }) : $t("temporary-message-notice.text_433b841fe3"));
     return [
       { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-      `[消息(${botId}) - 群临时消息]\n`,
-      `来源群号：${source}\n`,
-      `发送人账号：${userId}\n`,
-      "消息内容：", ...content,
+      $t("temporary-message-notice.text_0d8ac3f352", { "botId": botId }),
+      $t("temporary-message-notice.text_eaae0032b0", { "source": source }),
+      $t("temporary-message-notice.text_4f25f2b199", { "userId": userId }),
+      $t("temporary-message-notice.text_34c8fc816b"), ...content,
     ];
   };
 }

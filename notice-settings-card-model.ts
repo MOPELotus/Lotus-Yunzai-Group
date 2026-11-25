@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { configuredOwnerNoticeRecipients } from "./owner-notice-recipients.ts";
 import { configuredPrivateNotice, privateNoticeSetting } from "./private-notice-config.ts";
 import { recallRetentionSeconds } from "./recall-notice.ts";
@@ -21,25 +24,25 @@ export type NoticeSettingsCardRenderer = (model: NoticeSettingsCardModel, signal
   Promise<Uint8Array | undefined>;
 
 const eventGroups = [
-  { title: "消息相关", rows: [
-    ["privateMessage", "好友消息", "已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
-    ["groupMessage", "群消息", "转发文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
-    ["grouptemporaryMessage", "群临时消息", "转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4"],
-    ["groupRecall", "群撤回", "图文表情可混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4"],
-    ["PrivateRecall", "好友撤回", "图文表情可混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4"],
+  { title: $t("notice-settings-card-model.text_39611933bd"), rows: [
+    ["privateMessage", $t("notice-settings-card-model.text_fc0b8c0305"), $t("notice-settings-card-model.text_5b7b0b6660")],
+    ["groupMessage", $t("notice-settings-card-model.text_9a82c8965f"), $t("notice-settings-card-model.text_39e190a823")],
+    ["grouptemporaryMessage", $t("notice-settings-card-model.text_0d3b7c33ec"), $t("notice-settings-card-model.text_2230f0c4ce")],
+    ["groupRecall", $t("notice-settings-card-model.text_607c6db0f1"), $t("notice-settings-card-model.text_c36946d1cf")],
+    ["PrivateRecall", $t("notice-settings-card-model.text_12accaff01"), $t("notice-settings-card-model.text_c36946d1cf")],
   ] },
-  { title: "申请通知", rows: [
-    ["friendRequest", "好友申请", "通知主人有新的好友申请"],
-    ["addGroupApplication", "加群申请", "在原编号通知内展示申请详情"],
-    ["groupInviteRequest", "群邀请", undefined, "群聊邀请"],
+  { title: $t("notice-settings-card-model.text_9944b52ac0"), rows: [
+    ["friendRequest", $t("notice-settings-card-model.text_74d9ad48d6"), $t("notice-settings-card-model.text_50da84eb96")],
+    ["addGroupApplication", $t("notice-settings-card-model.text_e4a8f9e3f9"), $t("notice-settings-card-model.text_deaef003cb")],
+    ["groupInviteRequest", $t("notice-settings-card-model.text_ad3e7e8fd5"), undefined, $t("notice-settings-card-model.text_79b8844595")],
   ] },
-  { title: "列表变动", rows: [
-    ["friendNumberChange", "好友列表变动", "目前支持 NapCat 好友新增"],
-    ["groupNumberChange", "群聊列表变动", "机器人进退群、被移出及群解散"],
-    ["groupMemberNumberChange", "群成员变动", "向主人通知群成员的增减"],
-    ["groupAdminChange", "群管理变动"],
+  { title: $t("notice-settings-card-model.text_b5cf3ca16f"), rows: [
+    ["friendNumberChange", $t("notice-settings-card-model.text_59201b4531"), $t("notice-settings-card-model.text_84b70f61fe")],
+    ["groupNumberChange", $t("notice-settings-card-model.text_c3afaed55e"), $t("notice-settings-card-model.text_87cc45deac")],
+    ["groupMemberNumberChange", $t("notice-settings-card-model.text_9db9d0d6ea"), $t("notice-settings-card-model.text_19e250f99e")],
+    ["groupAdminChange", $t("notice-settings-card-model.text_17a8c31791")],
   ] },
-  { title: "其他通知", rows: [["botBeenBanned", "禁言", undefined, "Bot被禁言"]] },
+  { title: $t("notice-settings-card-model.text_9488665fb4"), rows: [["botBeenBanned", $t("notice-settings-card-model.text_f76935bcd9"), undefined, $t("notice-settings-card-model.text_0e0138610a")]] },
 ] as const;
 type EventRow = (typeof eventGroups)[number]["rows"][number];
 const accountEvents = new Set(["privateMessage", "PrivateRecall", "friendRequest", "friendNumberChange"]);
@@ -50,16 +53,16 @@ function object(value: unknown): Record<string, unknown> | undefined {
 }
 
 function booleanValue(enabled: boolean): Pick<NoticeSettingsCardRow, "value" | "off"> {
-  return { value: enabled ? "已开启" : "已关闭", off: !enabled };
+  return { value: enabled ? $t("notice-settings-card-model.text_8a4ef3e48e") : $t("notice-settings-card-model.text_6744b4c6a9"), off: !enabled };
 }
 
 function recipientValue(all: boolean | undefined): string {
-  return all === false ? "首位主人" : all === true ? "全部主人" : "全部主人（默认）";
+  return all === false ? $t("notice-settings-card-model.text_5fa03850e5") : all === true ? $t("notice-settings-card-model.text_0515a3fbfc") : $t("notice-settings-card-model.text_50fe8a519c");
 }
 
 function retentionValue(raw: unknown): string {
   const seconds = recallRetentionSeconds(raw);
-  return seconds === undefined ? "无效" : `${seconds} 秒`;
+  return seconds === undefined ? $t("notice-settings-card-model.text_2c1bdb2ae6") : $t("notice-settings-card-model.text_622b117f29", { "seconds": seconds });
 }
 
 function overrideRows(section: unknown, groupScope: boolean): NoticeSettingsCardRow[] {
@@ -72,10 +75,10 @@ function overrideRows(section: unknown, groupScope: boolean): NoticeSettingsCard
     if (typeof enabled === "boolean") rows.push({ label: label ?? command, ...booleanValue(enabled) });
   }
   if (!groupScope && Object.hasOwn(values, "notificationsAll") && typeof values.notificationsAll === "boolean") {
-    rows.push({ label: "通知收件人", value: recipientValue(values.notificationsAll) });
+    rows.push({ label: $t("notice-settings-card-model.text_b836608abe"), value: recipientValue(values.notificationsAll) });
   }
   if (Object.hasOwn(values, "msgSaveDeltime") && values.msgSaveDeltime !== undefined) {
-    rows.push({ label: "删除缓存时间", value: retentionValue(values.msgSaveDeltime) });
+    rows.push({ label: $t("notice-settings-card-model.text_2f971f0a42"), value: retentionValue(values.msgSaveDeltime) });
   }
   return rows;
 }
@@ -85,24 +88,24 @@ export function buildNoticeSettingsCard(config: Record<string, unknown>, botId: 
   const groups: NoticeSettingsCardGroup[] = [];
   for (const { title, rows } of eventGroups) {
     groups.push({ title, rows: rows.map(([field, command, description, label]) => ({
-      label: label ?? command, hint: `#通知设置${command} + 开启/关闭`, description,
+      label: label ?? command, hint: $t("notice-settings-card-model.text_bb69cc6e13", { "command": command }), description,
       ...booleanValue(configuredPrivateNotice(defaults, botId, field)),
     })) });
   }
   groups.push({
-    title: "系统设置", rows: [
-      { label: "通知全部主人", hint: "#通知设置全部通知 + 开启/关闭",
+    title: $t("notice-settings-card-model.text_68ea5dd4d7"), rows: [
+      { label: $t("notice-settings-card-model.text_ca167017c5"), hint: $t("notice-settings-card-model.text_be4344dee7"),
         value: recipientValue(configuredOwnerNoticeRecipients(defaults, botId)),
-        description: "开启通知全部主人，关闭只通知配置中的首位主人" },
-      { label: "删除缓存时间", hint: "#通知设置删除缓存时间 + 时间(秒)",
+        description: $t("notice-settings-card-model.text_2a70cd3b6b") },
+      { label: $t("notice-settings-card-model.text_2f971f0a42"), hint: $t("notice-settings-card-model.text_103aee1983"),
         value: retentionValue(privateNoticeSetting(defaults, botId, "msgSaveDeltime")),
-        description: "好友和群撤回消息的缓存保留时间" },
+        description: $t("notice-settings-card-model.text_32e1d0b4cd") },
     ],
   });
   const bot = `bot:${botId}`;
-  const sections: [string, string][] = [[bot, `Bot:${botId} 单独配置`]];
+  const sections: [string, string][] = [[bot, $t("notice-settings-card-model.text_b26f5571c3", { "botId": botId })]];
   if (groupId !== undefined) {
-    sections.push([String(groupId), `群:${groupId} 单独配置`], [`${bot}:${groupId}`, `Bot:${botId} & 群:${groupId} 单独配置`]);
+    sections.push([String(groupId), $t("notice-settings-card-model.text_7b00210c8e", { "groupId": groupId })], [`${bot}:${groupId}`, $t("notice-settings-card-model.text_d1fdf073e6", { "botId": botId, "groupId": groupId })]);
   }
   for (const [scope, title] of sections) {
     const rows = overrideRows(Object.hasOwn(config, scope) ? config[scope] : undefined, scope !== bot);

@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
@@ -27,12 +30,12 @@ export function createGroupOwnerJoinRequestNotice(options: PrivateNoticeOptions)
 
     return [
       { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/0` },
-      `[通知(${botId}) - 加群申请]\n`,
-      `群号：${groupId}\n`,
-      `群名：${displayRequestField(groupName, 128) || "未知"}\n`,
-      `账号：${userId}\n`,
-      `昵称：${displayRequestField(nickname, 128) || "未知"}`,
-      `\n附言：${displayRequestField(comment, 512) || "无附加信息"}`,
+      $t("group-owner-join-request-notice.text_89d5765416", { "botId": botId }),
+      $t("group-owner-join-request-notice.text_94afa695be", { "groupId": groupId }),
+      $t("group-owner-join-request-notice.text_fd113754ab", { "value1": displayRequestField(groupName, 128) || $t("group-owner-join-request-notice.text_4d8c1c5b42") }),
+      $t("group-owner-join-request-notice.text_57f576fae6", { "userId": userId }),
+      $t("group-owner-join-request-notice.text_7c16f27f89", { "value1": displayRequestField(nickname, 128) || $t("group-owner-join-request-notice.text_4d8c1c5b42") }),
+      $t("group-owner-join-request-notice.text_5d779b4638", { "value1": displayRequestField(comment, 512) || $t("group-owner-join-request-notice.text_d67cd0210e") }),
     ];
   };
 }

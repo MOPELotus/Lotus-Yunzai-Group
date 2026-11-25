@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 interface ReplyOptions {
   readonly at?: true;
   readonly recallMsg?: number;
@@ -19,11 +22,11 @@ export interface RepeatContexts {
 const repeatContext = "repeatMessage";
 
 export async function startRepeat(event: RepeatEvent, contexts: RepeatContexts) {
-  if (event.isDelegated || !contexts.set(event, repeatContext, false, 120, "操作超时已取消")) {
-    return event.reply("无法建立复读会话。");
+  if (event.isDelegated || !contexts.set(event, repeatContext, false, 120, $t("repeat.text_d3bc98297a"))) {
+    return event.reply($t("repeat.text_71bc7a4052"));
   }
   try {
-    const sent = await event.reply("请发送要复读的内容", false, { at: true });
+    const sent = await event.reply($t("repeat.text_a15949957b"), false, { at: true });
     if (sent === false) contexts.finish(event, repeatContext, false);
     return sent;
   } catch (error) {

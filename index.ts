@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import group, { createGroupPlugin, type ProfileLikeImage } from "./likes.ts";
 import { groupRequestReview } from "./request-review.ts";
 import { groupRuntimeEvents } from "./runtime-events.ts";
@@ -120,7 +123,7 @@ function activeFriendRequestCommand(context: Pick<ModerationContext, "message_ty
 
 function activeFriendRequestReply(context: ModerationContext) {
   if (!context.isDelegated && context.user_id !== undefined && context.isBotMaster(context.user_id)) {
-    return "当前协议端不支持主动发送好友申请。";
+    return $t("index.text_db35009f5d");
   }
 }
 
@@ -209,7 +212,7 @@ export async function createModule({
       const configuration = await updater.configuration();
       if (configuration && !signal.aborted) stopTask = registerAutoGroupCardTask(configuration.cron, updater.scheduled);
     } catch {
-      console.warn("[group] 自动群名片配置无效，未启动定时更新。");
+      console.warn($t("index.text_4e1860cad1"));
     }
   }
   const repeatLifetime = new AbortController();

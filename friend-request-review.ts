@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { FriendRequestListContext } from "./friend-request-list.ts";
 import { ownerRequestBatchReply, type OwnerRequestBatchReply, type OwnerRequestBatchResult } from "./owner-request-batch.ts";
 
@@ -16,8 +19,8 @@ export interface FriendRequestReviewContext extends Pick<FriendRequestListContex
 export const friendRequestReviewFeature = "[group] 好友申请审核";
 const review = /^#?(同意|拒绝)好友申请(\d+)$/u;
 const reviewAll = /^#?(同意|拒绝)全部好友申请$/u;
-const unavailable = "当前无法按 QQ 核实并处理这条好友申请，请在 QQ 中处理。";
-const unknown = "好友申请处理结果未确认，请先在 QQ 中核对。";
+const unavailable = $t("friend-request-review.text_46b6463018");
+const unknown = $t("friend-request-review.text_f19a731cd0");
 const maxRememberedMessages = 2048;
 
 export function isFriendRequestReviewCommand(command: string): boolean {
@@ -30,12 +33,12 @@ function positiveId(value: number | undefined): value is number {
 
 function receipt(result: PendingFriendRequestReviewResult, applicant: number, verb: string): string {
   switch (result.status) {
-    case "confirmed": return `✅ 已${verb} ${applicant} 的好友申请`;
-    case "submitted": return `协议端已受理${verb} ${applicant} 的好友申请，请在 QQ 中核对处理结果。`;
-    case "rejected": return "❎ 协议端拒绝了这次好友申请审核。";
-    case "not-found": return "本次查询范围内未找到这个人的待处理好友申请，请在 QQ 中查看。";
-    case "ambiguous": return "这个 QQ 有多条待处理的好友申请，请在 QQ 中处理。";
-    case "risk": return "该账号为风险账号请在 QQ 中手动处理。";
+    case "confirmed": return $t("friend-request-review.text_9130311e8b", { "verb": verb, "applicant": applicant });
+    case "submitted": return $t("friend-request-review.text_f502a4c980", { "verb": verb, "applicant": applicant });
+    case "rejected": return $t("friend-request-review.text_a5a7d5bd90");
+    case "not-found": return $t("friend-request-review.text_32e3cb3096");
+    case "ambiguous": return $t("friend-request-review.text_f641747f89");
+    case "risk": return $t("friend-request-review.text_33079e0a3b");
     case "unavailable": return unavailable;
     default: return unknown;
   }
@@ -50,24 +53,25 @@ export function createFriendRequestReview(signal?: AbortSignal) {
     const match = batch ?? review.exec(command);
     if (!match || context.message_type !== "private" || context.isDelegated || signal?.aborted) return;
     const { adapter, self_id, user_id, message_id, reviewPendingFriendRequest, reviewAllPendingFriendRequests, isBotMaster } = context;
-    if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) return "请由当前机器人的主人私聊处理好友申请。";
+    if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) return $t("friend-request-review.text_b8b406d9cf");
     const nativeId = typeof message_id === "number" ? Number.isSafeInteger(message_id) :
       typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128;
-    const verb = match[1] === "同意" ? "同意" : "拒绝";
+    const approve = match[1] === "同意";
+    const verb = approve ? $t("friend-request-review.text_905819e2e3") : $t("friend-request-review.text_136de7a8c4");
     const applicant = Number(match[2]);
-    if (batch && (!nativeId || !reviewAllPendingFriendRequests)) return ownerRequestBatchReply({ status: "unavailable" }, "好友申请", verb);
+    if (batch && (!nativeId || !reviewAllPendingFriendRequests)) return ownerRequestBatchReply({ status: "unavailable" }, $t("friend-request-review.text_74d9ad48d6"), verb);
     if (!batch && (!nativeId || !reviewPendingFriendRequest)) return unavailable;
-    if (!batch && !positiveId(applicant)) return "请填写有效的申请人 QQ 号。";
+    if (!batch && !positiveId(applicant)) return $t("friend-request-review.text_d7c9ed2121");
 
     const key = JSON.stringify([adapter ?? "onebot", self_id, user_id, String(message_id)]);
     if (inFlight.has(key) || seen.has(key)) return [];
     inFlight.add(key);
     try {
       if (batch && reviewAllPendingFriendRequests) {
-        const result = await reviewAllPendingFriendRequests(verb === "同意");
-        if (!signal?.aborted && isBotMaster(user_id)) return ownerRequestBatchReply(result, "好友申请", verb);
+        const result = await reviewAllPendingFriendRequests(approve);
+        if (!signal?.aborted && isBotMaster(user_id)) return ownerRequestBatchReply(result, $t("friend-request-review.text_74d9ad48d6"), verb);
       } else if (reviewPendingFriendRequest) {
-        const result = await reviewPendingFriendRequest(applicant, verb === "同意");
+        const result = await reviewPendingFriendRequest(applicant, approve);
         if (!signal?.aborted && isBotMaster(user_id)) return receipt(result, applicant, verb);
       }
     } catch {

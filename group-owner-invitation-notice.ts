@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
@@ -26,12 +29,12 @@ export function createGroupOwnerInvitationNotice(options: PrivateNoticeOptions):
 
     return [
       { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/0` },
-      `[通知(${botId}) - 邀请机器人进群]\n`,
-      `目标群号：${groupId}\n`,
-      `目标群名：${displayRequestField(groupName, 128) || "未知"}\n`,
-      `邀请人账号：${userId}\n`,
-      `邀请人昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
-      "邀请人群身份：未知\n",
+      $t("group-owner-invitation-notice.text_05a49ee594", { "botId": botId }),
+      $t("group-owner-invitation-notice.text_b70105504b", { "groupId": groupId }),
+      $t("group-owner-invitation-notice.text_b031c1acd4", { "value1": displayRequestField(groupName, 128) || $t("group-owner-invitation-notice.text_4d8c1c5b42") }),
+      $t("group-owner-invitation-notice.text_faa7cd8023", { "userId": userId }),
+      $t("group-owner-invitation-notice.text_ea5aeefbc6", { "value1": displayRequestField(nickname, 128) || $t("group-owner-invitation-notice.text_4d8c1c5b42") }),
+      $t("group-owner-invitation-notice.text_91857d9964"),
     ];
   };
 }

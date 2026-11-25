@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { ManagedBlacklistPermissionError, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 import type { GroupMuteContext } from "./group-mute.ts";
 
@@ -60,11 +63,11 @@ export function createGroupAddNotice(store: Pick<ManagedBlacklistStore, "readGro
         }
         const parts: GroupAddNoticePart[] = [
           `${paragraph(title, 2048)}\n`, { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${user}` },
-          `QQ号：${user}\n`, `昵称：${line(event.nickname) || "未知"}\n`,
+          $t("group-add-notice.text_0658d83969", { "user": user }), $t("group-add-notice.text_0fc03b6a51", { "value1": line(event.nickname) || $t("group-add-notice.text_4d8c1c5b42") }),
         ];
         const comment = paragraph(event.comment ?? "", 1024);
         if (comment) parts.push(comment);
-        if (isId(event.inviter_id)) parts.push(`${comment ? "\n" : ""}邀请人：${event.inviter_id}`);
+        if (isId(event.inviter_id)) parts.push($t("group-add-notice.text_a077741442", { "value1": comment ? "\n" : "", "inviter_id": event.inviter_id }));
         if (!signal.aborted && !event.signal.aborted) await event.notifyGroup(parts);
       } catch { /* The existing private review is independent of group delivery. */ }
     },
@@ -74,7 +77,7 @@ export function createGroupAddNotice(store: Pick<ManagedBlacklistStore, "readGro
     const match = commandPattern.exec(message);
     if (!match || context.message_type !== "group") return;
     const { group_id: group, groupManageBlacklist } = context;
-    const permission = "当前会话没有设置加群申请通知的权限。";
+    const permission = $t("group-add-notice.text_0b33340dde");
     if (signal.aborted || context.isDelegated || !isId(group) || !groupManageBlacklist) return permission;
     const authorize = async () => {
       try { return !signal.aborted && await groupManageBlacklist() === true && !signal.aborted; } catch { return false; }
@@ -83,10 +86,10 @@ export function createGroupAddNotice(store: Pick<ManagedBlacklistStore, "readGro
     const enabled = match[1] === "开启";
     try {
       const changed = await store.setGroupAddNotice(group, enabled, signal, authorize);
-      if (!changed) return enabled ? "❎ 本群加群申请通知已处于开启状态" : "❎ 本群暂未开启加群申请通知";
-      return `✅ 已${match[1]}「${group}」的加群申请通知`;
+      if (!changed) return enabled ? $t("group-add-notice.text_d183ccfbbd") : $t("group-add-notice.text_4034f92bbe");
+      return $t("group-add-notice.text_3e42af8964", { "value1": match[1], "group": group });
     } catch (error) {
-      return error instanceof ManagedBlacklistPermissionError ? permission : "暂无法保存加群申请通知配置。";
+      return error instanceof ManagedBlacklistPermissionError ? permission : $t("group-add-notice.text_0cc82e2893");
     }
   }
 

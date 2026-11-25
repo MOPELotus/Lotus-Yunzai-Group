@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { GroupRulesWritePermissionError } from "./banned-words.ts";
 import { formatGroupModerationMember } from "./group-mute.ts";
 
@@ -59,7 +62,7 @@ function titleWords(data: Data): readonly string[] {
   const words = data.TitleBannedWords;
   if (words == null) return [];
   if (!Array.isArray(words) || words.some((word) => word && (typeof word !== "string" || !word.isWellFormed() || controls.test(word)))) {
-    throw new Error("头衔屏蔽词数据无效。");
+    throw new Error($t("group-title.text_fc4cce2240"));
   }
   return words.filter(Boolean);
 }
@@ -68,7 +71,7 @@ function isSubstringMode(data: Data): boolean {
   const mode = data.TitleFilterModeChange;
   if (mode === 1 || mode === "1") return true;
   if (mode == null || mode === 0 || mode === "0") return false;
-  throw new Error("头衔屏蔽词匹配模式无效。");
+  throw new Error($t("group-title.text_8efeafc478"));
 }
 
 export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
@@ -97,34 +100,34 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
       try {
         if (edit?.[1] === "查看") {
           const words = titleWords(await store.read(group_id));
-          return `现有的头衔屏蔽词如下：${words.length ? `\n${words.join("\n")}` : "无"}`;
+          return $t("group-title.text_c4656f6d72", { "value1": words.length ? `\n${words.join("\n")}` : $t("group-title.text_484d556139") });
         }
         const authorize = async () => !signal.aborted && await context.groupManageBlacklist?.() === true && !signal.aborted;
-        if (!await authorize()) return "当前会话没有编辑头衔屏蔽词的权限。";
+        if (!await authorize()) return $t("group-title.text_546058c94e");
         if (!remember(context)) return [];
         if (toggle) return await store.update(group_id, authorize, (data) => {
           const substring = !isSubstringMode(data);
           data.TitleFilterModeChange = substring ? 1 : 0;
-          return `已修改匹配模式为${substring ? "模糊" : "精确"}匹配。`;
+          return $t("group-title.text_eea3407ed7", { "value1": substring ? $t("group-title.text_36bab7a3de") : $t("group-title.text_235532a9c1") });
         });
         const selected = [...new Set((edit?.[2] ?? "").split(/[,，]/u).map((item) => item.trim()).filter(Boolean))];
         if (!selected.length || selected.length > maxWords || selected.some((word) => word.length > maxTitleLength || !word.isWellFormed() || controls.test(word))) {
-          return "请填写有效的头衔屏蔽词，多个词用逗号分隔。";
+          return $t("group-title.text_72aae60c79");
         }
         const adding = edit?.[1] === "增加";
         return await store.update(group_id, authorize, (data) => {
           const current = titleWords(data);
           const existing = selected.filter((word) => current.includes(word));
           const absent = selected.filter((word) => !current.includes(word));
-          if (adding && current.length + absent.length > maxWords) return "本群头衔屏蔽词已达上限。";
+          if (adding && current.length + absent.length > maxWords) return $t("group-title.text_a824fcae29");
           if (adding && absent.length) data.TitleBannedWords = [...current, ...absent];
           if (!adding && existing.length) data.TitleBannedWords = current.filter((word) => !existing.includes(word));
-          return (adding ? [absent.length ? `成功添加：${absent.join("、")}` : "", existing.length ? `以下词已存在：${existing.join("、")}` : ""]
-            : [existing.length ? `成功删除：${existing.join("、")}` : "", absent.length ? `以下词未在屏蔽词中：${absent.join("、")}` : ""])
+          return (adding ? [absent.length ? $t("group-title.text_cc6f47db46", { "value1": absent.join("、") }) : "", existing.length ? $t("group-title.text_555b7d4434", { "value1": existing.join("、") }) : ""]
+            : [existing.length ? $t("group-title.text_74554e8fb2", { "value1": existing.join("、") }) : "", absent.length ? $t("group-title.text_fe8f13b0c6", { "value1": absent.join("、") }) : ""])
             .filter(Boolean).join("\n");
         });
       } catch (error) {
-        return error instanceof GroupRulesWritePermissionError ? "当前会话没有编辑头衔屏蔽词的权限。" : "头衔屏蔽词配置暂不可用。";
+        return error instanceof GroupRulesWritePermissionError ? $t("group-title.text_546058c94e") : $t("group-title.text_1dc0552f31");
       }
     }
 
@@ -134,11 +137,11 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
     const legacySelf = mentioned === undefined && message.startsWith("#设置头衔");
     const changesOwnTitle = !!self || legacySelf;
     const target = changesOwnTitle ? user_id : mentioned;
-    if (!target) return "请 @ 一位要修改头衔的群成员。";
+    if (!target) return $t("group-title.text_cd1111c85e");
     const requested = (self?.[1] ?? other?.[1] ?? "").trimStart();
-    if (legacySelf && !requested) return "请填写要设置的头衔。";
-    if (requested.length > maxTitleLength || !requested.isWellFormed() || controls.test(requested)) return "请输入有效的群头衔。";
-    if (!context.groupSetSpecialTitle || !changesOwnTitle && !context.isBotMaster(user_id)) return "当前会话没有设置该群头衔的权限。";
+    if (legacySelf && !requested) return $t("group-title.text_939d5d690a");
+    if (requested.length > maxTitleLength || !requested.isWellFormed() || controls.test(requested)) return $t("group-title.text_961b67d3da");
+    if (!context.groupSetSpecialTitle || !changesOwnTitle && !context.isBotMaster(user_id)) return $t("group-title.text_2cf05441ba");
 
     const verify = changesOwnTitle ? async () => {
       if (signal.aborted) return false;
@@ -149,8 +152,8 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
     } : undefined;
     if (!remember(context)) return [];
     try {
-      if (verify && !await verify()) return "头衔包含屏蔽词。";
-    } catch { return "头衔屏蔽词配置暂不可用。"; }
+      if (verify && !await verify()) return $t("group-title.text_e002ad88e0");
+    } catch { return $t("group-title.text_1dc0552f31"); }
     if (signal.aborted) return;
     let result: GroupSpecialTitleResult;
     let name: string | undefined;
@@ -158,14 +161,14 @@ export function createGroupTitle(store: GroupTitleStore, signal: AbortSignal) {
     catch { result = "unknown"; }
     switch (result) {
       case "confirmed": {
-        if (changesOwnTitle) return requested ? `已将你的头衔更换为「${requested}」。` : "已清空你的群头衔。";
+        if (changesOwnTitle) return requested ? $t("group-title.text_d92312ffc0", { "requested": requested }) : $t("group-title.text_de30dcf804");
         const member = formatGroupModerationMember(target, name);
-        return requested ? `已将 ${member} 的头衔设置为「${requested}」。` : `已清空 ${member} 的群头衔。`;
+        return requested ? $t("group-title.text_7d9e11d9cf", { "member": member, "requested": requested }) : $t("group-title.text_238746aae7", { "member": member });
       }
-      case "protected": return changesOwnTitle ? "头衔包含屏蔽词，或该成员受群管保护。" : "该成员受群管保护。";
-      case "unavailable": return "当前无法设置群头衔，请核对群成员和群主权限。";
-      case "rejected": return "协议端拒绝设置群头衔。";
-      default: return "设置群头衔的结果未确认，请在群内核对。";
+      case "protected": return changesOwnTitle ? $t("group-title.text_56fed14298") : $t("group-title.text_f540fa427a");
+      case "unavailable": return $t("group-title.text_b3912f7c65");
+      case "rejected": return $t("group-title.text_9cf4485104");
+      default: return $t("group-title.text_95612fae08");
     }
   };
 }

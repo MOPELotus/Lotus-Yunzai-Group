@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { MessageNoticePart } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import type { PrivateNoticeOptions } from "./private-notice-config.ts";
@@ -45,16 +48,16 @@ export function createGroupRecallNotice(options: PrivateNoticeOptions): GroupRec
       const manager = positiveRecallId(operatorId) && operatorId !== userId ? operatorId : undefined;
       const summary: GroupRecallPart[] = [
         { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/100` },
-        `[通知(${botId}) - 群聊${manager === undefined ? "" : "管理"}撤回]\n`,
-        `撤回群名：${displayRequestField(groupName, 128) || "未知"}\n`,
-        `撤回群号：${groupId}\n`,
+        $t("group-recall-notice.text_80e54e7d6e", { "botId": botId, "value2": manager === undefined ? "" : $t("group-recall-notice.text_bb6d995724") }),
+        $t("group-recall-notice.text_1c463fcb34", { "value1": displayRequestField(groupName, 128) || $t("group-recall-notice.text_4d8c1c5b42") }),
+        $t("group-recall-notice.text_140d9d9ff5", { "groupId": groupId }),
       ];
       if (manager !== undefined) {
         const operator = displayRequestField(operatorName, 128);
-        summary.push(`撤回管理：${operator ? `${operator}(${manager})` : manager}\n`, `被撤回人：${author}\n`);
-      } else summary.push(`撤回人员：${author}\n`);
-      summary.push(`撤回时间：${when}`);
-      if (special === "[语音]" || special === "[视频]") summary.push(`\n特殊消息：${special}`);
+        summary.push($t("group-recall-notice.text_144785d8f1", { "value1": operator ? `${operator}(${manager})` : manager }), $t("group-recall-notice.text_8dcd88315a", { "author": author }));
+      } else summary.push($t("group-recall-notice.text_82a00d837b", { "author": author }));
+      summary.push($t("group-recall-notice.text_e61802dc6c", { "when": when }));
+      if (special === "[语音]" || special === "[视频]") summary.push($t("group-recall-notice.text_23cd2ec56d", { "special": special }));
       return { summary, ...content, ...(name && { nickname: name }) };
     },
   };

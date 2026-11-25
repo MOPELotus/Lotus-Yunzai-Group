@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { MessageNoticePart } from "./message-notice-content.ts";
 import type { PrivateNoticeOptions } from "./private-notice-config.ts";
 import { createRecallRetention, formatRecallBody, formatRecallTime, positiveRecallId, type RecallNoticeBodyPart } from "./recall-notice.ts";
@@ -30,10 +33,10 @@ export function createFriendRecallNotice(options: PrivateNoticeOptions): FriendR
       if (!content || await retention(botId, signal) === undefined || options.signal?.aborted || signal?.aborted) return;
       return [
         { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-        `[消息(${botId}) - 好友撤回消息]\n`,
-        `好友账号：${userId}\n`,
-        `撤回时间：${when}\n`,
-        "撤回消息：", ...(content.parts ?? [content.text]),
+        $t("friend-recall-notice.text_56e16f2899", { "botId": botId }),
+        $t("friend-recall-notice.text_36000fb53f", { "userId": userId }),
+        $t("friend-recall-notice.text_60d3b54396", { "when": when }),
+        $t("friend-recall-notice.text_f45b01a9e9"), ...(content.parts ?? [content.text]),
       ];
     },
   };

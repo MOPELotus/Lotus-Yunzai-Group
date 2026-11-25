@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
 export interface GroupOwnerBanNoticeInput {
@@ -22,10 +25,10 @@ function banDuration(seconds: number): string {
   const days = Math.floor(seconds / 86_400);
   const hours = Math.floor(seconds / 3_600) % 24;
   const minutes = Math.floor(seconds / 60) % 60;
-  const repeating = [[hours, "小时"], [minutes, "分"], [seconds % 60, "秒"]] as const;
+  const repeating = [[hours, $t("group-owner-ban-notice.text_3b6fefc50f")], [minutes, $t("group-owner-ban-notice.text_b6a993c256")], [seconds % 60, $t("group-owner-ban-notice.text_9dcdc2b289")]] as const;
   const clock = repeating.filter(([amount]) => amount > 0)
     .map(([amount, unit]) => String(amount).padStart(2, "0") + unit).join("");
-  return (days ? `${days}天` : "") + clock;
+  return (days ? $t("group-owner-ban-notice.text_63c4ff4f1e", { "days": days }) : "") + clock;
 }
 
 export function createGroupOwnerBanNotice(options: PrivateNoticeOptions): GroupOwnerBanNotice {
@@ -37,11 +40,11 @@ export function createGroupOwnerBanNotice(options: PrivateNoticeOptions): GroupO
 
     const image = { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/100` } as const;
     if (duration === 0) {
-      return [image, `[通知(${botId}) - 机器人被解除禁言]\n`, `处理人账号：${operatorId}\n`, `处理群号：${groupId}`];
+      return [image, $t("group-owner-ban-notice.text_646d81965a", { "botId": botId }), $t("group-owner-ban-notice.text_c10961f23a", { "operatorId": operatorId }), $t("group-owner-ban-notice.text_6d5dbc507f", { "groupId": groupId })];
     }
     return [
-      image, `[通知(${botId}) - 机器人被禁言]\n`, `禁言人账号：${operatorId}\n`, `禁言群号：${groupId}\n`,
-      `禁言时长：${banDuration(duration)}`,
+      image, $t("group-owner-ban-notice.text_3d4cf71236", { "botId": botId }), $t("group-owner-ban-notice.text_1ef04217ab", { "operatorId": operatorId }), $t("group-owner-ban-notice.text_fcc77b1c08", { "groupId": groupId }),
+      $t("group-owner-ban-notice.text_472dcb1058", { "value1": banDuration(duration) }),
     ];
   };
 }

@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createHash } from "node:crypto";
 import { constants, linkSync, renameSync } from "node:fs";
 import { mkdir, mkdtemp, open, realpath, rm } from "node:fs/promises";
@@ -37,9 +40,9 @@ const defaults: LikeSettings = {
   count: 10,
   recall: 0,
   closeTips: "",
-  successMsg: "给你点了 {{thumbUpNum}} 下赞。",
-  failsMsg: "点赞未成功，可能已达到平台次数上限或协议端暂不接受。",
-  noFriendMsg: "当前仅向好友点赞。",
+  successMsg: $t("like-settings.text_7798265450"),
+  failsMsg: $t("like-settings.text_4cd698e132"),
+  noFriendMsg: $t("like-settings.text_f00bd3786a"),
 };
 
 const defaultRoot = new URL("../../", import.meta.url);
@@ -60,22 +63,22 @@ function validate(key: string, value: unknown): string | number | boolean {
     case "cloneAllThumbUp":
     case "strangeThumbUp":
       if (typeof value === "boolean") return value;
-      throw new LikeSettingsError("invalid", `${key} 须为布尔值。`);
+      throw new LikeSettingsError("invalid", $t("like-settings.text_8bb8f6c961", { "key": key }));
     case "count":
       if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 10) return value;
-      throw new LikeSettingsError("invalid", "count 须为 1–10 的整数。");
+      throw new LikeSettingsError("invalid", $t("like-settings.text_92a602c784"));
     case "recall":
       if (recallSeconds(value)) return value;
-      throw new LikeSettingsError("invalid", "recall 须为 0–120 秒。");
+      throw new LikeSettingsError("invalid", $t("like-settings.text_95865e87ab"));
     case "closeTips":
     case "successMsg":
     case "failsMsg":
     case "noFriendMsg":
       if (value === false || value === "false") return false;
       if (typeof value === "string") return value;
-      throw new LikeSettingsError("invalid", `${key} 须为文本或 false。`);
+      throw new LikeSettingsError("invalid", $t("like-settings.text_b642af32ef", { "key": key }));
     default:
-      throw new LikeSettingsError("invalid", "包含未知的点赞配置字段。");
+      throw new LikeSettingsError("invalid", $t("like-settings.text_e9a05f9d3f"));
   }
 }
 
@@ -132,7 +135,7 @@ async function readSnapshot(path: string, required: boolean) {
 
   try {
     const stat = await handle.stat();
-    if (!stat.isFile()) throw new LikeSettingsError("invalid", "点赞配置须为普通文件。");
+    if (!stat.isFile()) throw new LikeSettingsError("invalid", $t("like-settings.text_3857a7f825"));
     const contents = await handle.readFile();
     return {
       text: contents.toString("utf8"),
@@ -146,17 +149,17 @@ async function readSnapshot(path: string, required: boolean) {
 
 function readDocument(text: string) {
   const document = parseDocument(text, { merge: true, strict: true, uniqueKeys: true });
-  if (document.errors.length) throw new LikeSettingsError("invalid", "点赞配置的 YAML 无效。");
+  if (document.errors.length) throw new LikeSettingsError("invalid", $t("like-settings.text_608bd2d8ce"));
 
   let values: unknown;
   try {
     values = document.toJS({ mapAsMap: true });
   } catch {
-    throw new LikeSettingsError("invalid", "点赞配置的 YAML 引用无效。");
+    throw new LikeSettingsError("invalid", $t("like-settings.text_64e2f6254a"));
   }
 
   if (values == null) return { document, values: new Map<unknown, unknown>() };
-  if (!(values instanceof Map)) throw new LikeSettingsError("invalid", "群功能配置须为映射。");
+  if (!(values instanceof Map)) throw new LikeSettingsError("invalid", $t("like-settings.text_e756444b59"));
   return { document, values: values as Map<unknown, unknown> };
 }
 
@@ -165,7 +168,7 @@ function unknownFields(values: Map<unknown, unknown>) {
 }
 
 function conflict() {
-  return new LikeSettingsError("conflict", "点赞配置已变更，请重新读取后保存。");
+  return new LikeSettingsError("conflict", $t("like-settings.text_db3c2c2835"));
 }
 
 function settingsRevision(primary: string, fallback?: string) {
@@ -203,15 +206,15 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
 }) {
   const prototype = typeof patch === "object" && patch !== null ? Object.getPrototypeOf(patch) : undefined;
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new LikeSettingsError("invalid", "点赞配置修改须为映射。");
+    throw new LikeSettingsError("invalid", $t("like-settings.text_c946b410e3"));
   }
   if (typeof options.revision !== "string" || !/^(missing|[a-f0-9]{64})$/u.test(options.revision)) {
-    throw new LikeSettingsError("invalid", "点赞配置版本无效，请重新读取。");
+    throw new LikeSettingsError("invalid", $t("like-settings.text_e18863ceab"));
   }
   const updates = Object.entries(patch as Record<string, unknown>).map(([key, value]) => [key, validate(key, value)] as const);
   const { file, required, legacy, fallback } = await configLocation(options);
   const authorize = () => {
-    if (options.canWrite && !options.canWrite()) throw new LikeSettingsError("conflict", "点赞配置写入权限已失效。");
+    if (options.canWrite && !options.canWrite()) throw new LikeSettingsError("conflict", $t("like-settings.text_c293acf76f"));
   };
   const operation = (pendingWrites.get(file) ?? Promise.resolve()).then(async () => {
     authorize();
@@ -236,7 +239,7 @@ export async function saveLikeSettings(patch: unknown, options: LikeSettingsLoca
     const settings = effectiveSettings(after, legacy, inherited);
     if (!isDeepStrictEqual(unknownFields(values), unknownFields(after)) ||
         !isDeepStrictEqual(settings, { ...before, ...Object.fromEntries(changes) })) {
-      throw new LikeSettingsError("invalid", "保存将改变其他 YAML 字段，请先检查配置中的引用。");
+      throw new LikeSettingsError("invalid", $t("like-settings.text_a4ae595d15"));
     }
 
     await mkdir(dirname(file), { recursive: true, mode: 0o700 });

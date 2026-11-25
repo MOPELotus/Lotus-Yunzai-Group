@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 export interface GroupAnnouncement {
   readonly id: string;
   readonly text: string;
@@ -42,13 +45,13 @@ export const isGroupAnnouncementDeleteCommand = (message: string) => deletePatte
 const maxEntries = 20;
 const summaryLength = 30;
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-const unavailable = "当前无法获取本群的 QQ 群公告，请在 QQ 中查看。";
+const unavailable = $t("group-announcements.text_fb7cf31f5f");
 const directionControls = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu;
 
 function summary(text: string): string {
   // Keep joiners used by emoji, while removing controls and directional formatting.
   const line = text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").replace(directionControls, "").trim();
-  if (!line) return "（无文字）";
+  if (!line) return $t("group-announcements.text_ed90d3f61e");
   const parts: string[] = [];
   for (const { segment } of graphemes.segment(line.toWellFormed())) {
     if (parts.length === summaryLength) return parts.slice(0, summaryLength - 3).join("") + "...";
@@ -60,7 +63,7 @@ function summary(text: string): string {
 function deletedText(text: string): string {
   const cleaned = text.replace(/\r\n?|[\u2028\u2029]/gu, "\n")
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, "").replace(directionControls, "").toWellFormed();
-  if (!cleaned.trim()) return "（无文字，可能仅含图片）";
+  if (!cleaned.trim()) return $t("group-announcements.text_06891158b3");
   const maxLength = 4096;
   if (cleaned.length <= maxLength) return cleaned;
   return cleaned.slice(0, maxLength - 1).replace(/[\ud800-\udbff]$/u, "") + "…";
@@ -72,7 +75,7 @@ export async function groupAnnouncementsCommand(message: string, context: GroupA
   try {
     const entries = await context.groupListAnnouncements();
     if (!entries || signal?.aborted) return unavailable;
-    if (!entries.length) return "本群暂无群公告。";
+    if (!entries.length) return $t("group-announcements.text_6628d29264");
     return entries.slice(0, maxEntries).map(({ text }, index) => `${index + 1}、${summary(text)}`).join("\n");
   } catch { return unavailable; }
 }
@@ -107,20 +110,20 @@ export function createGroupAnnouncementPublisher(signal?: AbortSignal) {
     if (!prefix || context.message_type !== "group") return;
     const { groupPublishAnnouncement } = context;
     const key = groupAnnouncementMessageKey(context, signal);
-    const unavailable = "当前无法发布 QQ 群公告，请核对群管理权限和网关连接。";
+    const unavailable = $t("group-announcements.text_34281e36c5");
     if (!key || !groupPublishAnnouncement) return unavailable;
     const content = message.slice(prefix.length).trim();
-    if (!content) return "❎ 公告不能为空";
+    if (!content) return $t("group-announcements.text_afe5787558");
     if (!claim(key)) return [];
 
     let result: GroupAnnouncementPublishResult;
     try { result = await groupPublishAnnouncement(content); } catch { result = "unknown"; }
     switch (result) {
       case "confirmed": return [];
-      case "rejected": return "❎ 发送失败，协议端拒绝发布群公告。";
-      case "unknown": return "群公告发布结果未确认，请先在 QQ 中核对。";
+      case "rejected": return $t("group-announcements.text_4fa8fa024e");
+      case "unknown": return $t("group-announcements.text_60fa51d23e");
       case "unavailable": return unavailable;
-      case "invalid-image": return "无法使用原消息的公告图片，请检查后重新发送。";
+      case "invalid-image": return $t("group-announcements.text_d577275507");
     }
   };
 }
@@ -132,19 +135,19 @@ export function createGroupAnnouncementDeletion(signal?: AbortSignal) {
     if (rawIndex === undefined || context.message_type !== "group") return;
     const { groupDeleteAnnouncement } = context;
     const key = groupAnnouncementMessageKey(context, signal);
-    const unavailable = "当前无法删除 QQ 群公告，请核对群管理权限和网关连接。";
+    const unavailable = $t("group-announcements.text_04b1bd9302");
     if (!key || !groupDeleteAnnouncement) return unavailable;
     const index = Number(rawIndex);
-    if (!positiveId(index)) return "❎ 公告序号须为正整数。";
+    if (!positiveId(index)) return $t("group-announcements.text_85c90ad4fb");
     if (!claim(key)) return [];
 
     let result: GroupAnnouncementDeleteResult;
     try { result = await groupDeleteAnnouncement(index); } catch { result = { status: "unknown" }; }
     switch (result.status) {
-      case "confirmed": return result.text === undefined ? `✅ 已删除第 ${index} 条群公告` : `✅ 已删除「${deletedText(result.text)}」`;
-      case "rejected": return "❎ 删除失败，协议端拒绝删除群公告。";
-      case "unknown": return "群公告删除结果未确认，请先在 QQ 中核对。";
-      case "not-found": return "找不到该序号的群公告，请先发送 #查群公告。";
+      case "confirmed": return result.text === undefined ? $t("group-announcements.text_61b18b70fa", { "index": index }) : $t("group-announcements.text_1a0fc31c3b", { "value1": deletedText(result.text) });
+      case "rejected": return $t("group-announcements.text_05f3714da2");
+      case "unknown": return $t("group-announcements.text_a23217666d");
+      case "not-found": return $t("group-announcements.text_cb8805ef97");
       case "unavailable": return unavailable;
     }
   };

@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { configuredPrivateNotice, createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 
@@ -26,9 +29,9 @@ function positiveId(value: number): boolean {
 
 function status(result: FriendRequestNoticeInput["autoResult"]): string | undefined {
   switch (result) {
-    case "confirmed": return "Tip：自动审批请求已获协议端确认。";
-    case "rejected": return "Tip：协议端未接受自动审批，请在 QQ 中处理。";
-    case "unknown": return "Tip：自动审批结果未确认，请先在 QQ 核对。";
+    case "confirmed": return $t("friend-request-notice.text_9df4a97a6b");
+    case "rejected": return $t("friend-request-notice.text_91b32d7e24");
+    case "unknown": return $t("friend-request-notice.text_373678a285");
   }
 }
 
@@ -42,13 +45,13 @@ export function createFriendRequestNotice(options: FriendRequestNoticeOptions): 
     const result = status(autoResult);
     return [
       { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-      `[通知(${botId}) - 添加好友申请]\n`,
-      `申请人账号：${userId}\n`,
-      `申请人昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
-      `申请来源：${displayRequestField(source, 256) || "未知"}\n`,
-      `附加信息：${displayRequestField(comment, 512) || "无附加信息"}\n`,
+      $t("friend-request-notice.text_8f3453d252", { "botId": botId }),
+      $t("friend-request-notice.text_ab396461c0", { "userId": userId }),
+      $t("friend-request-notice.text_7432151306", { "value1": displayRequestField(nickname, 128) || $t("friend-request-notice.text_4d8c1c5b42") }),
+      $t("friend-request-notice.text_eefb7113fb", { "value1": displayRequestField(source, 256) || $t("friend-request-notice.text_4d8c1c5b42") }),
+      $t("friend-request-notice.text_cd8c63c469", { "value1": displayRequestField(comment, 512) || $t("friend-request-notice.text_d67cd0210e") }),
       ...(result ? [`${result}\n`] : []),
-      "-------------\n可回复：#查看好友申请",
+      $t("friend-request-notice.text_9785ebc975"),
     ];
   };
 }

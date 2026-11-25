@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { GroupMuteContext } from "./group-mute.ts";
 
 export interface GroupQuotedReviewResult {
@@ -25,14 +28,14 @@ function decisionReply(result: GroupQuotedReviewResult, verb: string): string | 
     case "unrelated": return;
     case "confirmed": {
       const name = result.nickname?.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").trim().slice(0, 128).toWellFormed();
-      const applicant = identity(result.userId) ? (name ? `${name}(${result.userId})` : String(result.userId)) : "该用户";
-      return `已${verb}${applicant}的加群申请辣٩(๑^o^๑)۶`;
+      const applicant = identity(result.userId) ? (name ? `${name}(${result.userId})` : String(result.userId)) : $t("group-quoted-review.text_bcf5d24f94");
+      return $t("group-quoted-review.text_4836a9d66c", { "verb": verb, "applicant": applicant });
     }
-    case "rejected": return "呜呜呜，处理失败辣(இωஇ)";
-    case "expired": return `找不到原消息了，手动${verb}叭~`;
-    case "risk": return "该账号为风险账号请手动处理哦ಠ~ಠ";
-    case "unknown": return "加群申请处理结果未确认，请先在 QQ 核对。";
-    case "unavailable": return "当前无法核实并处理这条加群申请，请在 QQ 手动处理。";
+    case "rejected": return $t("group-quoted-review.text_51512e46aa");
+    case "expired": return $t("group-quoted-review.text_df0e30f728", { "verb": verb });
+    case "risk": return $t("group-quoted-review.text_f8693f4988");
+    case "unknown": return $t("group-quoted-review.text_f956eda5d4");
+    case "unavailable": return $t("group-quoted-review.text_569868d9f9");
   }
 }
 

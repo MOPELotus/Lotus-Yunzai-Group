@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { readFile } from "node:fs/promises";
 
 export type OwnGroupCardResult = "confirmed" | "unchanged" | "rejected" | "unknown";
@@ -49,12 +52,12 @@ const defaultRoot = new URL("../../", import.meta.url);
 const defaultCron = "0 0,30 * * * *";
 // MOPELotus example/自动群名片.js at 3969d13.
 const originalSuffixes = [
-  "本机器人拒绝服务酷狗！",
-  "米游社区寄生的酷狗能不能滚一边去！",
+  $t("auto-group-card.text_6031fceaed"),
+  $t("auto-group-card.text_37b47581f6"),
   "Hello，Kugou！",
-  "MC是Minecraft，别连简称也蹭！",
-  "在米游社区跳脸就接受后果！",
-  "推广米游不好玩呜哇好玩有素质没？",
+  $t("auto-group-card.text_44b021b500"),
+  $t("auto-group-card.text_e575b86262"),
+  $t("auto-group-card.text_9551591bac"),
 ] as const;
 
 function positiveId(value: unknown): value is number {
@@ -63,7 +66,7 @@ function positiveId(value: unknown): value is number {
 
 function groupId(value: unknown): number {
   const id = typeof value === "string" && /^[1-9]\d*$/u.test(value) ? Number(value) : value;
-  if (!positiveId(id)) throw new TypeError("notGroup 应包含有效群号。");
+  if (!positiveId(id)) throw new TypeError($t("auto-group-card.text_2ac43b3e10"));
   return id;
 }
 
@@ -87,23 +90,23 @@ async function readSettings(root: URL): Promise<Settings | undefined> {
 
 export function parseAutoGroupCardSettings(input: unknown): Settings {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new TypeError("自动群名片配置须为映射。");
+    throw new TypeError($t("auto-group-card.text_cb5eb80671"));
   }
   const { enable, cron, nickname, notGroup, suffixes } = input as Record<string, unknown>;
-  if (enable !== undefined && enable !== null && typeof enable !== "boolean") throw new TypeError("enable 应为布尔值。");
+  if (enable !== undefined && enable !== null && typeof enable !== "boolean") throw new TypeError($t("auto-group-card.text_b0f9d8a5ca"));
   const expression = cron ? (typeof cron === "string" ? cron.trim().replace(/\s+/gu, " ") : "") : defaultCron;
-  if (![5, 6].includes(expression.split(" ").length)) throw new TypeError("cron 应为五段或六段表达式。");
+  if (![5, 6].includes(expression.split(" ").length)) throw new TypeError($t("auto-group-card.text_809ea92463"));
   if (nickname !== undefined && nickname !== null && nickname !== "" && !cardPart(nickname)) {
-    throw new TypeError("nickname 应为单行文本。");
+    throw new TypeError($t("auto-group-card.text_7b24c209e2"));
   }
-  if (notGroup != null && !Array.isArray(notGroup)) throw new TypeError("notGroup 应为群号列表。");
-  if (suffixes != null && !Array.isArray(suffixes)) throw new TypeError("suffixes 应为文案列表。");
+  if (notGroup != null && !Array.isArray(notGroup)) throw new TypeError($t("auto-group-card.text_d78a288233"));
+  if (suffixes != null && !Array.isArray(suffixes)) throw new TypeError($t("auto-group-card.text_37bdf5f936"));
   return {
     enabled: enable === true, cron: expression, nickname: cardPart(nickname),
     notGroup: new Set((notGroup as unknown[] | undefined)?.map(groupId)),
     suffixes: suffixes === undefined ? originalSuffixes : (suffixes as unknown[] | null)?.map((value) => {
       const text = cardPart(value);
-      if (!text) throw new TypeError("suffixes 应包含非空的单行文本。");
+      if (!text) throw new TypeError($t("auto-group-card.text_1abc3171cd"));
       return text;
     }) ?? [],
   };
@@ -123,15 +126,15 @@ function describe(result: Run): string {
   switch (result.status) {
     case "complete": {
       const { updated, unchanged, failed, unknown, unavailableAccounts } = result.summary;
-      return `群名片更新完成：成功 ${updated} 个，未变 ${unchanged} 个，失败 ${failed} 个，未确认 ${unknown} 个` +
-        (unavailableAccounts ? `，无法读取 ${unavailableAccounts} 个账号的群名片目标。` : "。");
+      return $t("auto-group-card.text_fbd33cf343", { "updated": updated, "unchanged": unchanged, "failed": failed, "unknown": unknown }) +
+        (unavailableAccounts ? $t("auto-group-card.text_2152e8e729", { "unavailableAccounts": unavailableAccounts }) : "。");
     }
-    case "disabled": return "自动群名片功能未启用。";
-    case "missing-template": return "请先在 auto-group-card.yaml 配置群名片文案。";
-    case "invalid-config": return "自动群名片配置无法读取。";
-    case "no-accounts": return "没有可查询的在线机器人账号。";
-    case "busy": return "群名片正在更新，请稍后再试。";
-    case "stopped": return "群名片更新已停止。";
+    case "disabled": return $t("auto-group-card.text_d21763c792");
+    case "missing-template": return $t("auto-group-card.text_80d0539a8a");
+    case "invalid-config": return $t("auto-group-card.text_f5baa309c3");
+    case "no-accounts": return $t("auto-group-card.text_f240b8b322");
+    case "busy": return $t("auto-group-card.text_6ca25c7ddf");
+    case "stopped": return $t("auto-group-card.text_328c8c4b27");
   }
 }
 
@@ -193,11 +196,11 @@ export function createAutoGroupCard({ root = defaultRoot, signal, accounts, choo
       return settings?.enabled && settings.suffixes.length ? { cron: settings.cron } : undefined;
     },
     async command(argument: string, context: AutoGroupCardContext) {
-      if (context.isDelegated || (!context.isMaster && !context.ownGroupCardAccount)) return "❎ 该命令仅限主人可用";
-      if (argument) return "请直接发送 #更新群名片。";
+      if (context.isDelegated || (!context.isMaster && !context.ownGroupCardAccount)) return $t("auto-group-card.text_d46f6afc9a");
+      if (argument) return $t("auto-group-card.text_d04418da4d");
       const { ownGroupCardAccount } = context;
       if (context.message_type === "terminal" || !ownGroupCardAccount || ownGroupCardAccount.signal.aborted) {
-        return "当前会话不支持批量更新本机器人的群名片。";
+        return $t("auto-group-card.text_cadd3c025e");
       }
       return describe(await run(() => [ownGroupCardAccount]));
     },

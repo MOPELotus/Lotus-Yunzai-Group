@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { constants } from "node:fs";
 import { link, mkdir, mkdtemp, open, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -62,17 +65,17 @@ function decode(raw?: Buffer): State {
   const data: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   if (!record(data) || data.version !== 1 || !Array.isArray(data.tasks) || !data.tasks.every(task) ||
       !Array.isArray(data.retiredLegacy) || !data.retiredLegacy.every(mode) || new Set(data.tasks.map(key)).size !== data.tasks.length) {
-    throw new Error("定时群禁言记录无效。");
+    throw new Error($t("group-timed-mute.text_4a5d007679"));
   }
   return { version: 1, tasks: data.tasks, retiredLegacy: data.retiredLegacy };
 }
 
 function legacyRows(raw: string | null): readonly unknown[] {
   if (raw === null) return [];
-  if (raw.length > maxBytes) throw new Error("旧定时群禁言记录过大。");
+  if (raw.length > maxBytes) throw new Error($t("group-timed-mute.text_fe554a3c04"));
   const rows: unknown = JSON.parse(raw);
   if (rows == null) return [];
-  if (!Array.isArray(rows)) throw new Error("旧定时群禁言记录无效。");
+  if (!Array.isArray(rows)) throw new Error($t("group-timed-mute.text_e087ff62e6"));
   return rows;
 }
 
@@ -92,7 +95,7 @@ function legacyTasks(raw: string | null): readonly LegacyTask[] {
 }
 
 export function prepareLegacyMuteHandoff(state: Buffer, legacy: string | null): { value: string | null; removed: number } {
-  if (state.length > maxBytes) throw new Error("定时群禁言记录过大。");
+  if (state.length > maxBytes) throw new Error($t("group-timed-mute.text_df9eb58a06"));
   const { retiredLegacy } = decode(state);
   const retired = new Set(retiredLegacy.map(key));
   const rows = legacyRows(legacy);
@@ -126,7 +129,7 @@ async function snapshot(file: string): Promise<Buffer | undefined> {
   if (!handle) return;
   try {
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > maxBytes) throw new Error("定时群禁言文件无效。");
+    if (!stat.isFile() || stat.size > maxBytes) throw new Error($t("group-timed-mute.text_a5abcd968d"));
     const buffer = Buffer.alloc(stat.size + 1);
     let length = 0;
     while (length < buffer.length) {
@@ -134,7 +137,7 @@ async function snapshot(file: string): Promise<Buffer | undefined> {
       if (!bytesRead) break;
       length += bytesRead;
     }
-    if (length !== stat.size) throw new Error("定时群禁言文件已变更。");
+    if (length !== stat.size) throw new Error($t("group-timed-mute.text_cebc7c4d7f"));
     return buffer.subarray(0, length);
   } finally { await handle.close(); }
 }
@@ -174,7 +177,7 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
       const runSignal = AbortSignal.any([active, controller.signal]);
       let running = false;
       try {
-        const dispose = services.register(`${groupTimedMuteFeature} ${entry.groupId} ${entry.enabled ? "禁言" : "解禁"}`, entry.cron, async () => {
+        const dispose = services.register(`${groupTimedMuteFeature} ${entry.groupId} ${entry.enabled ? $t("group-timed-mute.text_f76935bcd9") : $t("group-timed-mute.text_75a8ec42b1")}`, entry.cron, async () => {
           if (runSignal.aborted || running) return;
           running = true;
           try {
@@ -190,11 +193,11 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
     }
   }
 
-  type Edit = { state?: State; retry?: State; reply: string };
-  async function update(authorize: () => Promise<boolean>, mutate: (state: State) => Promise<Edit>): Promise<string> {
+  type Edit = { state?: State; retry?: State; reply: string; saved?: true };
+  async function update(authorize: () => Promise<boolean>, mutate: (state: State) => Promise<Edit>): Promise<Edit> {
     active.throwIfAborted();
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    const lock = await lockFile(join(directory, ".lotus-mute-schedule.sqlite"), "定时群禁言");
+    const lock = await lockFile(join(directory, ".lotus-mute-schedule.sqlite"), $t("group-timed-mute.text_3fe7c13476"));
     let result: Edit;
     try {
       active.throwIfAborted();
@@ -202,15 +205,15 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
       result = await mutate(decode(before));
       if (result.state) {
         const bytes = Buffer.from(JSON.stringify(result.state, null, 2) + "\n");
-        if (bytes.length > maxBytes) throw new Error("定时群禁言记录过大。");
+        if (bytes.length > maxBytes) throw new Error($t("group-timed-mute.text_df9eb58a06"));
         const stage = await mkdtemp(join(directory, ".lotus-mute-schedule-"));
         try {
           const staged = join(stage, "tasks.json");
           const output = await open(staged, "wx", 0o600);
           try { await output.writeFile(bytes); await output.sync(); } finally { await output.close(); }
-          if (!await authorize()) return "当前会话没有管理定时群禁言的权限。";
+          if (!await authorize()) return { reply: $t("group-timed-mute.text_fac2bbd6ae") };
           const latest = await snapshot(file);
-          if (before ? !latest?.equals(before) : latest !== undefined) throw new Error("定时群禁言已被其他程序修改。");
+          if (before ? !latest?.equals(before) : latest !== undefined) throw new Error($t("group-timed-mute.text_7ba715c2d6"));
           active.throwIfAborted();
           if (before) await rename(staged, file);
           else await link(staged, file);
@@ -219,7 +222,7 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
     } finally { lock.close(); }
     if (result.state) await sync(result.state);
     if (result.retry && await authorize()) await sync(result.retry);
-    return result.reply;
+    return result;
   }
 
   const stop = () => stopPending ??= (async () => {
@@ -252,7 +255,7 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
     const authorize = async () => {
       try { return !active.aborted && await context.groupManageBlacklist?.() === true && !active.aborted; } catch { return false; }
     };
-    if (!await authorize()) return "当前会话没有管理定时群禁言的权限。";
+    if (!await authorize()) return $t("group-timed-mute.text_fac2bbd6ae");
     try {
       if (text === list) {
         const state = decode(await snapshot(file));
@@ -260,64 +263,64 @@ export async function createGroupTimedMute(root: URL, lockFile: LockFile, servic
         const lines: string[] = [];
         for (const enabled of [true, false]) {
           const id = key({ groupId, enabled });
-          const label = enabled ? "禁言时间" : "解禁时间";
+          const label = enabled ? $t("group-timed-mute.text_9031194f3f") : $t("group-timed-mute.text_97cc77d5de");
           const current = state.tasks.find((entry) => key(entry) === id);
           if (current) {
-            const health = !supported(current.cron) ? "当前调度器不支持" : !jobs.has(id) ? "已保存，未能注册" : "已注册";
-            lines.push(`${label}："${supported(current.cron) ? current.cron : "原表达式待核对"}"（${health}）`);
+            const health = !supported(current.cron) ? $t("group-timed-mute.text_da60564edf") : !jobs.has(id) ? $t("group-timed-mute.text_7d47239484") : $t("group-timed-mute.text_1f4273cab1");
+            lines.push(`${label}："${supported(current.cron) ? current.cron : $t("group-timed-mute.text_123c071f95")}"（${health}）`);
           } else if (!state.retiredLegacy.some((entry) => key(entry) === id)) {
             const candidates = old.filter((entry) => key(entry) === id);
             if (!candidates.length) continue;
             const legacy = candidates[0]!;
             const cron = legacy.cron?.trim().replace(/[ \t]+/gu, " ");
-            const health = candidates.length > 1 ? "多条旧记录待处理" : !supported(cron) ? "旧 cron 无法调度，可取消后重设"
-              : legacy.botId === botId ? "待绑定，使用 #绑定旧定时" + (enabled ? "禁言" : "解禁") : "旧机器人身份未匹配，可取消后重设";
-            lines.push(`${label}："${supported(cron) ? cron : "旧表达式待核对"}"（${health}）`);
+            const health = candidates.length > 1 ? $t("group-timed-mute.text_b13d304d1e") : !supported(cron) ? $t("group-timed-mute.text_b95a6ac1d9")
+              : legacy.botId === botId ? $t("group-timed-mute.text_0ab10656d1") + (enabled ? $t("group-timed-mute.text_f76935bcd9") : $t("group-timed-mute.text_75a8ec42b1")) : $t("group-timed-mute.text_1e8bdeb388");
+            lines.push(`${label}："${supported(cron) ? cron : $t("group-timed-mute.text_03703eb2b7")}"（${health}）`);
           }
         }
         return lines.length ? { type: "forward", nodes: [[{ type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/100` },
-          `\n群号：${groupId}\n${lines.join("\n")}`]] } : "目前本群还没有定时禁言任务。";
+          $t("group-timed-mute.text_2e6279961c", { "groupId": groupId, "value2": lines.join("\n") })]] } : $t("group-timed-mute.text_930a740b99");
       }
       const edit = change.exec(text), create = make.exec(text);
       const enabled = (edit?.[2] ?? create?.[1]) === "禁言";
       const target: Mode = { groupId, enabled };
       const id = key(target);
-      const label = enabled ? "禁言" : "解禁";
+      const label = enabled ? $t("group-timed-mute.text_f76935bcd9") : $t("group-timed-mute.text_75a8ec42b1");
       const cron = create ? normalizeCron(create[2]?.trim() ?? "") : undefined;
-      if (create && !supported(cron)) return `请输入有效的时间或调度器支持的六段 cron，例如 #定时${label}21:30。`;
+      if (create && !supported(cron)) return $t("group-timed-mute.text_9238a8eb17", { "label": label });
       if (!claim(context)) return [];
       return await serialize(async () => {
-        const reply = await update(authorize, async (state) => {
+        const result = await update(authorize, async (state) => {
           const current = state.tasks.find((entry) => key(entry) === id);
           const retired = state.retiredLegacy.some((entry) => key(entry) === id);
           const old = current || retired ? [] : legacyTasks(await services.readLegacy()).filter((entry) => key(entry) === id);
           if (edit?.[1] === "取消定时") {
-            if (!current && !old.length) return { reply: `本群没有定时${label}任务。` };
+            if (!current && !old.length) return { reply: $t("group-timed-mute.text_49b7d15137", { "label": label }) };
             return { state: { ...state, tasks: state.tasks.filter((entry) => key(entry) !== id),
-              retiredLegacy: retired ? state.retiredLegacy : [...state.retiredLegacy, target] }, reply: `已取消本群定时${label}。` };
+              retiredLegacy: retired ? state.retiredLegacy : [...state.retiredLegacy, target] }, reply: $t("group-timed-mute.text_dff5991fa1", { "label": label }) };
           }
           if (current) {
             if (create && !jobs.has(id) && current.cron === cron && current.adapter === adapter && current.botId === botId && current.issuerId === issuerId) {
-              return { retry: state, reply: `已保存本群定时${label}，可发送 #定时禁言任务 查看。` };
+              return { retry: state, saved: true, reply: $t("group-timed-mute.text_8cfb3a8420", { "label": label }) };
             }
-            return { reply: `本群已有定时${label}任务，请先取消；如果未能注册，原发令人可重新发送相同设置。` };
+            return { reply: $t("group-timed-mute.text_fb82cbcc8c", { "label": label }) };
           }
           let expression = cron;
           if (edit?.[1] === "绑定旧定时") {
             const legacy = old[0];
-            if (old.length !== 1 || legacy?.botId !== botId) return { reply: "没有可绑定到当前机器人的唯一旧任务。" };
+            if (old.length !== 1 || legacy?.botId !== botId) return { reply: $t("group-timed-mute.text_07de49ba6d") };
             expression = legacy.cron?.trim().replace(/[ \t]+/gu, " ");
-            if (!supported(expression)) return { reply: "旧任务 cron 无法调度，请取消后重新设置。" };
-          } else if (old.length) return { reply: `本群有待绑定的旧定时${label}，请先绑定或取消。` };
-          if (!expression) return { reply: "无法读取定时群禁言表达式。" };
+            if (!supported(expression)) return { reply: $t("group-timed-mute.text_ee92c4bab1") };
+          } else if (old.length) return { reply: $t("group-timed-mute.text_7f925f5062", { "label": label }) };
+          if (!expression) return { reply: $t("group-timed-mute.text_0a13d34e23") };
           const entry: Task = { ...target, cron: expression, adapter, botId, issuerId };
           return { state: { ...state, tasks: [...state.tasks, entry], retiredLegacy: retired ? state.retiredLegacy : [...state.retiredLegacy, target] },
-            reply: `已保存本群定时${label}，可发送 #定时禁言任务 查看。` };
+            saved: true, reply: $t("group-timed-mute.text_8cfb3a8420", { "label": label }) };
         });
-        if (reply.startsWith("已保存") && !jobs.has(id)) return `定时${label}已保存，但暂未注册。`;
-        return reply;
+        if (result.saved && !jobs.has(id)) return $t("group-timed-mute.text_2090c022ba", { "label": label });
+        return result.reply;
       });
-    } catch { return "定时群禁言配置暂不可用。"; }
+    } catch { return $t("group-timed-mute.text_74a526adf1"); }
   }
 
   return { command, stop };

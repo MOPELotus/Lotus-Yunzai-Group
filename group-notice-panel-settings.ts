@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createNoticeSettingsStore, NoticeSettingsConflictError, NoticeSettingsPermissionError, type NoticeSettingsField } from "./notice-settings-store.ts";
 import { recallRetentionSeconds } from "./recall-notice.ts";
 
@@ -26,15 +29,15 @@ export { NoticeSettingsPermissionError as GroupNoticePanelSettingsPermission };
 
 export class GroupNoticePanelSettingsConflict extends Error {
   readonly code = "GROUP_NOTICE_SETTINGS_CONFLICT";
-  constructor() { super("通知设置已变更，请重新读取后保存。"); }
+  constructor() { super($t("group-notice-panel-settings.text_8f1100d6ae")); }
 }
 export class GroupNoticePanelSettingsInputError extends Error {
   readonly code = "GROUP_NOTICE_SETTINGS_INPUT";
-  constructor() { super("请选择有效的通知开关、撤回缓存秒数及配置版本。"); }
+  constructor() { super($t("group-notice-panel-settings.text_3e65470095")); }
 }
 export class GroupNoticePanelSettingsUnavailable extends Error {
   readonly code = "GROUP_NOTICE_SETTINGS_UNAVAILABLE";
-  constructor() { super("暂无法安全保存通知设置。"); }
+  constructor() { super($t("group-notice-panel-settings.text_822efd7f2f")); }
 }
 
 function parsePatch(patch: unknown, scoped: boolean): (readonly [GroupNoticePanelField, boolean | number | undefined])[] {

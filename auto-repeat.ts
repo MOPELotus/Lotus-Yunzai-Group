@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createHash } from "node:crypto";
 
 type Text = { readonly type: "text"; readonly text: string };
@@ -170,9 +173,9 @@ export function createAutoRepeat({
       }
       if (active.aborted) return;
       try {
-        if (!await reply(result)) console.warn("[group] 自动复读发送失败。");
+        if (!await reply(result)) console.warn($t("auto-repeat.text_38641df4d7"));
       } catch {
-        console.warn("[group] 自动复读发送结果未确认。");
+        console.warn($t("auto-repeat.text_bfb21df83c"));
       }
     }
     if (observeAutoRepeat) await observeAutoRepeat(group, observe);

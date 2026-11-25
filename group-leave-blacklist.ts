@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 
@@ -51,7 +54,7 @@ export function matchesGroupLeaveBlacklistCommand(command: string): boolean {
 }
 
 export function groupLeaveBlacklistKey(groupId: number): string {
-  if (!positiveId(groupId)) throw new TypeError("无效群号。");
+  if (!positiveId(groupId)) throw new TypeError($t("group-leave-blacklist.text_28fe7dca18"));
   return `Yz:group-leave-blacklist:${groupId}`;
 }
 
@@ -67,13 +70,13 @@ async function readGroups(root: URL, configName: string): Promise<ReadonlySet<nu
     if (source === undefined) continue;
     const config: unknown = parse(source);
     if (config == null) return new Set();
-    if (typeof config !== "object" || Array.isArray(config)) throw new TypeError("退群黑名单配置须为映射。");
+    if (typeof config !== "object" || Array.isArray(config)) throw new TypeError($t("group-leave-blacklist.text_1e8838897b"));
     const { enable, groups } = config as Record<string, unknown>;
     if (enable !== true || groups == null) return new Set();
-    if (!Array.isArray(groups)) throw new TypeError("退群黑名单 groups 应为群号列表。");
+    if (!Array.isArray(groups)) throw new TypeError($t("group-leave-blacklist.text_30c75eecf0"));
     return new Set(groups.map((value: unknown) => {
       const id = typeof value === "string" && /^[1-9]\d*$/u.test(value) ? Number(value) : value;
-      if (!positiveId(id)) throw new TypeError("退群黑名单 groups 包含无效群号。");
+      if (!positiveId(id)) throw new TypeError($t("group-leave-blacklist.text_203351f84e"));
       return id;
     }));
   }
@@ -83,7 +86,7 @@ async function readGroups(root: URL, configName: string): Promise<ReadonlySet<nu
 export async function readGroupLeaveBlacklist(
   root: URL, io: GroupLeaveBlacklistIO, { configName = "group-leave-blacklist.yaml" }: { readonly configName?: string } = {},
 ): Promise<GroupLeaveBlacklist> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.ya?ml$/u.test(configName)) throw new TypeError("无效退群黑名单配置文件名。");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.ya?ml$/u.test(configName)) throw new TypeError($t("group-leave-blacklist.text_1f2b36c97a"));
   let groups: ReadonlySet<number> = new Set();
   let invalid = false;
   let reading: Promise<void> | undefined;
@@ -206,18 +209,18 @@ export async function readGroupLeaveBlacklist(
         if (signal.aborted) return;
         await refresh();
         if (signal.aborted || !isEnabled(scope.groupId)) return;
-        if (!positiveId(userId)) return "请输入有效 QQ 号。";
+        if (!positiveId(userId)) return $t("group-leave-blacklist.text_a950cc2204");
         try {
           if (match[1] === "解除") {
             const removed = await io.remove(scope.groupId, userId);
-            if (removed) return `已解除 ${userId} 在本群的退群黑名单。全局黑名单如有记录，仍需手动处理。`;
+            if (removed) return $t("group-leave-blacklist.text_f65bafe98b", { "userId": userId });
           } else if ((await io.get(scope.groupId, userId)) !== null) {
-            return `${userId} 在本群退群黑名单中。`;
+            return $t("group-leave-blacklist.text_a9a2de8cb1", { "userId": userId });
           }
-          return `${userId} 不在本群退群黑名单中。`;
+          return $t("group-leave-blacklist.text_b80aba8ad8", { "userId": userId });
         } catch {
           io.report?.("storage", "unknown");
-          return "退群黑名单暂不可用。";
+          return $t("group-leave-blacklist.text_a4fae92ec1");
         }
       });
     },

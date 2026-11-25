@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 export const groupNameFeature = "[group] 修改群名称";
 
 type GroupNameResult = "confirmed" | "rejected" | "unknown" | "unavailable";
@@ -20,18 +23,18 @@ export async function changeGroupName(command: string, context: GroupNameContext
   let groupId: number | undefined;
   if (context.message_type === "private") {
     const input = /^([1-9]\d*)(?:\s+([\s\S]*))?$/u.exec(name);
-    if (!input) return "请输入有效群号和群名称。";
+    if (!input) return $t("group-name.text_60a5e102d8");
     groupId = Number(input[1]);
-    if (!Number.isSafeInteger(groupId)) return "请输入有效群号和群名称。";
+    if (!Number.isSafeInteger(groupId)) return $t("group-name.text_60a5e102d8");
     name = input[2]?.trim() ?? "";
   }
-  if (!name) return "群名称不能为空。";
-  if (!context.setGroupName) return "当前会话无法修改群名称。";
+  if (!name) return $t("group-name.text_e26f7ceff2");
+  if (!context.setGroupName) return $t("group-name.text_4e2ac318eb");
   const result = await context.setGroupName(name, groupId);
   switch (result) {
-    case "confirmed": return "✅ 群昵称修改成功";
-    case "rejected": return "❎ 群昵称修改失败";
-    case "unavailable": return "当前账号或操作者没有修改该群名称的权限。";
-    case "unknown": return "群名称修改结果未确认，请先查看群信息。";
+    case "confirmed": return $t("group-name.text_b6e6e2ad8c");
+    case "rejected": return $t("group-name.text_9d0fb4eed4");
+    case "unavailable": return $t("group-name.text_92154e412a");
+    case "unknown": return $t("group-name.text_349b8a932e");
   }
 }

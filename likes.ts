@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { readLikeSettings, type LikeSettings } from "./like-settings.ts";
 
 export interface MentionLike {
@@ -43,7 +46,7 @@ function reply(template: string | false, context: LikeContext, style: string, co
   mention?: MentionLike, image?: ImagePart): Reply {
   if (!template) return [];
   const target = mention?.userId ?? context.user_id;
-  const userLabel = mention ? String(mention.userId) : "你";
+  const userLabel = mention ? String(mention.userId) : $t("likes.text_a0c7716669");
   const fragments: MessagePart[] = [];
   const expanded = template.replace(/\{\{\s*noFriend:([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\}/gu,
     (_whole, body: string) => friend === false ? body.replace(/\{\s*(doType|userId|thumbUpNum)\s*\}/gu,
@@ -72,7 +75,7 @@ function reply(template: string | false, context: LikeContext, style: string, co
 const aliases = ["赞我", "点赞", "资料卡点赞", "我要点赞", "给我点赞", "我要资料卡点赞", "给我资料卡点赞"];
 const colloquial = ["超", "操", "草", "抄", "吵", "炒"];
 const mentionPronouns = ["他", "她", "它", "TA", "ta", "Ta"];
-const mentionPrompt = "请在群聊中只 @ 一位其他群成员。";
+const mentionPrompt = $t("likes.text_dfab485394");
 
 function otherMention(context: LikeContext): MentionLike | undefined {
   const { message_type, isDelegated, mentionLike, user_id, self_id } = context;
@@ -106,13 +109,13 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
 
   function like(style: string, mode: "self" | "all" | "mention" = "self"): Handler {
     return async (argument, context) => {
-      if (argument) return mode === "mention" ? mentionPrompt : "请直接发送点赞指令。";
+      if (argument) return mode === "mention" ? mentionPrompt : $t("likes.text_ec4a104b5a");
       if (mode === "all" && context.message_type !== "group") return [];
       let current: LikeSettings;
       try {
         current = await config();
       } catch {
-        return "点赞配置无法读取，请联系管理员。";
+        return $t("likes.text_9b6fb6c426");
       }
       if (mode === "all" && current.cloneAllThumbUp) return [];
       const mention = mode === "mention" ? otherMention(context) : undefined;
@@ -120,11 +123,11 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
       if (mode === "mention" && !mention) return mentionPrompt;
       const { likeSelf, user_id } = context;
       const submit = mention ? (count: number) => mention.like(count) : likeSelf;
-      if (!submit || user_id === undefined || context.message_type === "terminal") return "当前协议端不支持资料卡点赞。";
+      if (!submit || user_id === undefined || context.message_type === "terminal") return $t("likes.text_bd80d5cbf9");
       const botId = context.self_id ?? "unknown";
       const requesterKey = `${botId}:${user_id}`;
       const targetKey = `${botId}:${mention?.userId ?? user_id}`;
-      if (inFlight.has(requesterKey) || inFlight.has(targetKey)) return mode === "all" ? [] : "正在处理你的点赞请求。";
+      if (inFlight.has(requesterKey) || inFlight.has(targetKey)) return mode === "all" ? [] : $t("likes.text_6751e96036");
       inFlight.add(requesterKey);
       inFlight.add(targetKey);
       try {
@@ -156,11 +159,11 @@ export function createGroupPlugin(config: () => Promise<LikeSettings> = async ()
     };
   }
 
-  const commands: Record<string, Handler> = { "#全部赞我": like("赞", "all") };
-  for (const name of aliases) commands[`#${name}`] = like("赞");
-  for (const verb of colloquial) commands[`#${verb}我`] = like("超");
+  const commands: Record<string, Handler> = { "#全部赞我": like($t("likes.text_9c0d90f768"), "all") };
+  for (const name of aliases) commands[`#${name}`] = like($t("likes.text_9c0d90f768"));
+  for (const verb of colloquial) commands[`#${verb}我`] = like($t("likes.text_c92686569d"));
   for (const verb of ["赞", ...colloquial]) {
-    for (const pronoun of mentionPronouns) commands[`#${verb}${pronoun}`] = like(verb === "赞" ? "赞" : "超", "mention");
+    for (const pronoun of mentionPronouns) commands[`#${verb}${pronoun}`] = like(verb === "赞" ? $t("likes.text_9c0d90f768") : $t("likes.text_c92686569d"), "mention");
   }
   const bareAliases = Object.fromEntries(Object.keys(commands).filter((name) => name !== "#全部赞我").map((name) => [name.slice(1), name]));
   return { commands, aliases: bareAliases };

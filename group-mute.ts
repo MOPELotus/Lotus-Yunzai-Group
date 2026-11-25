@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { ManagedBlacklistPermissionError, readManagedWhitelist, type ManagedBlacklistStore } from "./managed-blacklist.ts";
 
 export type GroupWholeMuteResult = "confirmed" | "rejected" | "unknown" | "unavailable";
@@ -118,7 +121,7 @@ export function parseGroupMuteDuration(value: string): number | undefined {
   const parts = amountPattern.exec(value);
   if (!parts?.[1]) return;
   const amount = parseGroupInteger(parts[1]);
-  const multiplier = groupTimeUnits.get((parts[2] ?? "秒").toUpperCase());
+  const multiplier = groupTimeUnits.get((parts[2] ?? $t("group-mute.text_9dcdc2b289")).toUpperCase());
   if (amount === undefined || multiplier === undefined) return;
   const seconds = amount * multiplier;
   if (Number.isSafeInteger(seconds) && seconds >= 0 && seconds <= maxGroupMuteSeconds) return seconds;
@@ -192,10 +195,10 @@ async function activeMuteRoster(load: NonNullable<GroupMuteContext["groupMuteRos
 function formatRoster(rows: readonly GroupMuteRosterEntry[]): GroupMuteReply {
   const now = Math.floor(Date.now() / 1000);
   const active = rows.filter((entry) => entry.until > now);
-  if (!active.length) return "本群没有被禁言的成员。";
+  if (!active.length) return $t("group-mute.text_a8ef62dfea");
   const nodes: RosterPart[][] = [];
   const perNode = Math.ceil(active.length / 100);
-  const roles = { member: "群员", admin: "群管理", owner: "群主" } as const;
+  const roles = { member: $t("group-mute.text_af43d2e34f"), admin: $t("group-mute.text_628153beb4"), owner: $t("group-mute.text_81d4acd17e") } as const;
   for (let start = 0; start < active.length; start += perNode) {
     const node: RosterPart[] = [];
     for (const { userId, name, role, until } of active.slice(start, start + perNode)) {
@@ -204,11 +207,11 @@ function formatRoster(rows: readonly GroupMuteRosterEntry[]): GroupMuteReply {
       const days = Math.floor(remaining / 86400);
       const hours = Math.floor(remaining / 3600) % 24;
       const minutes = Math.floor(remaining / 60) % 60;
-      const time = `${days ? `${days} 天 ` : ""}${hours ? `${hours} 小时 ` : ""}${minutes ? `${minutes} 分 ` : ""}${remaining % 60} 秒`;
+      const time = $t("group-mute.text_b9149928c9", { "value1": days ? $t("group-mute.text_12cebb1cf7", { "days": days }) : "", "value2": hours ? $t("group-mute.text_969e87756b", { "hours": hours }) : "", "value3": minutes ? $t("group-mute.text_b8a2da7e54", { "minutes": minutes }) : "", "value4": remaining % 60 });
       if (node.length) node.push("\n\n");
       node.push({ type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-        `\n昵称：${nickname || userId}\nQQ：${userId}\n群身份：${role && Object.hasOwn(roles, role) ? roles[role] : "未确认"}\n` +
-        `禁言剩余时间：${time}\n禁言到期时间：${new Date(until * 1000).toLocaleString("zh-CN")}`);
+        $t("group-mute.text_6e17514698", { "value1": nickname || userId, "userId": userId, "value3": role && Object.hasOwn(roles, role) ? roles[role] : $t("group-mute.text_c098e854e6") }) +
+        $t("group-mute.text_d5a096a521", { "time": time, "value2": new Date(until * 1000).toLocaleString("zh-CN") }));
     }
     nodes.push(node);
   }
@@ -246,53 +249,53 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     if (!whole && !roster && !kick && !admin && !essence && !selfMute && !editList && !toggle && !commandPattern.test(command) && !compactMuteUnit.test(command)) return;
     const { groupMute, groupMuteSelf, groupMuteRoster, groupWholeMute, groupKick, groupSetAdmin, groupSetQuotedEssence, user_id, self_id, group_id } = context;
     const issuer = positiveId(user_id), bot = positiveId(self_id);
-    const list = editList?.[2] === "白" || toggle ? "白名单" : "黑名单";
-    const listPermission = toggle ? "当前会话没有设置白名单自动解禁的权限。" : `当前会话没有编辑群管${list}的权限。`;
+    const list = editList?.[2] === "白" || toggle ? $t("group-mute.text_27e2d9e2d9") : $t("group-mute.text_174ec5a4ab");
+    const listPermission = toggle ? $t("group-mute.text_83a76cffba") : $t("group-mute.text_5f0d545088", { "list": list });
     if (context.isDelegated || moduleSignal?.aborted || issuer === undefined || bot === undefined || positiveId(group_id) === undefined) {
       if (editList || toggle) return listPermission;
-      if (admin) return "当前会话没有设置群管理员的权限。";
-      if (essence) return "当前会话没有设置群精华的权限。";
-      if (selfMute) return "当前会话无法使用自助禁言。";
-      return kick ? "当前会话没有移出群成员的权限。" : "当前会话没有群禁言权限。";
+      if (admin) return $t("group-mute.text_33e9d2a303");
+      if (essence) return $t("group-mute.text_74cd0a4734");
+      if (selfMute) return $t("group-mute.text_78a692e9df");
+      return kick ? $t("group-mute.text_3507d4ea03") : $t("group-mute.text_a6816ec207");
     }
     if (selfMute) {
-      if (issuer === bot || context.isBotMaster(issuer)) return { type: "quoted", message: "别自闭啦~~" };
+      if (issuer === bot || context.isBotMaster(issuer)) return { type: "quoted", message: $t("group-mute.text_5913483e8c") };
       const amount = selfMute[1] === undefined ? 5 : parseGroupInteger(selfMute[1]);
-      const multiplier = groupTimeUnits.get((selfMute[2] ?? "分").toUpperCase());
+      const multiplier = groupTimeUnits.get((selfMute[2] ?? $t("group-mute.text_b6a993c256")).toUpperCase());
       const seconds = amount !== undefined && multiplier !== undefined ? amount * multiplier : 0;
-      if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > maxGroupMuteSeconds) return "请输入有效的自助禁言时长（正整数秒）。";
-      if (!groupMuteSelf) return "当前会话无法使用自助禁言。";
+      if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > maxGroupMuteSeconds) return $t("group-mute.text_8b1440ae37");
+      if (!groupMuteSelf) return $t("group-mute.text_78a692e9df");
       if (!claim(context, bot, issuer, true)) return [];
       let result: GroupMuteResult;
       try { result = await groupMuteSelf(seconds); } catch { result = "unknown"; }
       switch (result) {
-        case "confirmed": return { type: "quoted", message: "那我就不手下留情了~" };
-        case "protected": return { type: "quoted", message: "别自闭啦~~" };
-        case "rejected": return "协议端拒绝自助禁言。";
-        case "unavailable": return "当前会话无法使用自助禁言。";
-        default: return "自助禁言结果未确认，请在群内核对。";
+        case "confirmed": return { type: "quoted", message: $t("group-mute.text_ee919b8c63") };
+        case "protected": return { type: "quoted", message: $t("group-mute.text_5913483e8c") };
+        case "rejected": return $t("group-mute.text_0ec4feb05f");
+        case "unavailable": return $t("group-mute.text_78a692e9df");
+        default: return $t("group-mute.text_7e6856229b");
       }
     }
     if (essence) {
       const enabled = essence[1] !== "移";
-      const operation = enabled ? "加精" : "移精";
-      const quoteRequired = `请引用本群要${operation}的消息。`;
+      const operation = enabled ? $t("group-mute.text_ac99962bb8") : $t("group-mute.text_6d15b2f370");
+      const quoteRequired = $t("group-mute.text_b57491f340", { "operation": operation });
       const quote = context.reply_id;
       if (!(typeof quote === "number" && Number.isSafeInteger(quote) && quote !== 0) && !(typeof quote === "string" && quote.trim())) return quoteRequired;
-      if (!groupSetQuotedEssence) return "当前会话无法执行群精华操作，请核对协议端支持和群管理权限。";
+      if (!groupSetQuotedEssence) return $t("group-mute.text_b0f39940d5");
       if (!claim(context, bot, issuer, true)) return [];
       let result: GroupEssenceResult;
       try { result = await groupSetQuotedEssence(enabled); } catch { result = "unknown"; }
       switch (result) {
-        case "confirmed": return `已${operation}。`;
-        case "rejected": return `协议端拒绝${operation}。`;
-        case "unavailable": return "当前会话无法执行群精华操作，请核对协议端支持和群管理权限。";
+        case "confirmed": return $t("group-mute.text_cb24c9668d", { "operation": operation });
+        case "rejected": return $t("group-mute.text_7c0ca23df6", { "operation": operation });
+        case "unavailable": return $t("group-mute.text_b0f39940d5");
         case "invalid-quote": return quoteRequired;
-        default: return `${operation}结果未确认，请在群内核对。`;
+        default: return $t("group-mute.text_d573799815", { "operation": operation });
       }
     }
     if (editList || toggle) {
-      if (!blacklist) return `群管${list}暂不可用。`;
+      if (!blacklist) return $t("group-mute.text_06d2ef3a2a", { "list": list });
       const authorize = async () => {
         try { return await (toggle ? context.groupManageWhitelistAutoUnmute?.() : context.groupManageBlacklist?.()) === true; }
         catch { return false; }
@@ -303,49 +306,49 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
         if (toggle) {
           const enabled = toggle[1] === "开启";
           const changed = await blacklist.setAutoUnmute(enabled, moduleSignal, authorize);
-          return changed ? `已${toggle[1]}白名单自动解禁。` : `白名单自动解禁已处于${toggle[1]}状态。`;
+          return changed ? $t("group-mute.text_56d590de58", { "value1": toggle[1] }) : $t("group-mute.text_6e97c77ee5", { "value1": toggle[1] });
         }
         const action = kickTargets(context, bot, editList?.[3], true);
-        if (!action || action.length !== 1) return "请 @ 一位群成员，或输入一个 QQ 号。";
+        if (!action || action.length !== 1) return $t("group-mute.text_888d5cee57");
         const target = action[0]!;
         const add = editList?.[1] === "加";
         const changed = await (list === "白名单" ? blacklist.updateWhitelist : blacklist.update)([target], add, moduleSignal, authorize);
-        if (add) return changed ? `已将 ${target} 加入群管${list}。` : `${target} 已在群管${list}中。`;
-        return changed ? `已从群管${list}移除 ${target}。` : `${target} 不在群管${list}中。`;
+        if (add) return changed ? $t("group-mute.text_1e83fa613f", { "target": target, "list": list }) : $t("group-mute.text_48e6f60f02", { "target": target, "list": list });
+        return changed ? $t("group-mute.text_2b5516117e", { "list": list, "target": target }) : $t("group-mute.text_8582eacd4c", { "target": target, "list": list });
       } catch (error) {
         if (error instanceof ManagedBlacklistPermissionError) return listPermission;
-        return toggle ? "白名单自动解禁设置保存失败。" : `群管${list}保存失败。`;
+        return toggle ? $t("group-mute.text_faa625ff69") : $t("group-mute.text_a1778b97a8", { "list": list });
       }
     }
     if (whole) {
-      if (!groupWholeMute) return "当前会话没有群禁言权限。";
+      if (!groupWholeMute) return $t("group-mute.text_a6816ec207");
       if (!claim(context, bot, issuer)) return [];
       const enabled = whole[1] === "禁言";
       let outcome: GroupWholeMuteResult;
       try { outcome = await groupWholeMute(enabled); }
       catch { outcome = "unknown"; }
       switch (outcome) {
-        case "confirmed": return `已${enabled ? "开启" : "关闭"}全体禁言。`;
-        case "rejected": return "协议端拒绝全体禁言操作。";
-        case "unavailable": return "无法设置全体禁言，请核对群管理权限。";
-        default: return "全体禁言操作结果未确认，请在群内核对。";
+        case "confirmed": return $t("group-mute.text_c70d091321", { "value1": enabled ? $t("group-mute.text_8da97ddda9") : $t("group-mute.text_3fd47edce4") });
+        case "rejected": return $t("group-mute.text_52e0df1a8b");
+        case "unavailable": return $t("group-mute.text_3ce1d4eb34");
+        default: return $t("group-mute.text_727523782c");
       }
     }
     if (roster) {
       const release = command === "#解除全部禁言";
       if (release) {
-        const denied = "当前会话没有解除群禁言的权限。";
+        const denied = $t("group-mute.text_81cc7b9456");
         if (!groupMute || !context.groupManageBlacklist) return denied;
         if (!claim(context, bot, issuer, true)) return [];
         try {
           if (!await context.groupManageBlacklist() || moduleSignal?.aborted) return denied;
         } catch { return denied; }
       }
-      if (!groupMuteRoster) return "当前协议端无法提供可靠的群禁言列表。";
+      if (!groupMuteRoster) return $t("group-mute.text_c751976359");
       const rows = await activeMuteRoster(groupMuteRoster);
-      if (!rows || moduleSignal?.aborted) return "当前协议端无法提供可靠的群禁言列表。";
+      if (!rows || moduleSignal?.aborted) return $t("group-mute.text_c751976359");
       if (!release) return formatRoster(rows);
-      if (!rows.length) return "本群没有被禁言的成员。";
+      if (!rows.length) return $t("group-mute.text_a8ef62dfea");
       const counts = { confirmed: 0, rejected: 0, unknown: 0, unavailable: 0, protected: 0, expired: 0 };
       for (const { userId, until } of rows) {
         if (moduleSignal?.aborted) break;
@@ -356,12 +359,12 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
       }
       const stopped = rows.length - Object.values(counts).reduce((total, count) => total + count, 0);
       return [
-        `已解除 ${counts.confirmed} 人的禁言。`,
-        counts.rejected && `${counts.rejected} 人的解禁被协议端拒绝。`,
-        counts.unknown && `${counts.unknown} 人的解禁结果未确认，请在群内核对。`,
-        counts.unavailable + counts.protected > 0 && `${counts.unavailable + counts.protected} 人未能解禁，请核对群管理权限。`,
-        counts.expired && `${counts.expired} 人的禁言已到期。`,
-        stopped > 0 && `${stopped} 人尚未处理。`,
+        $t("group-mute.text_f480ff4a82", { "confirmed": counts.confirmed }),
+        counts.rejected && $t("group-mute.text_3a5db13677", { "rejected": counts.rejected }),
+        counts.unknown && $t("group-mute.text_3b00179d07", { "unknown": counts.unknown }),
+        counts.unavailable + counts.protected > 0 && $t("group-mute.text_ebc7be6f78", { "value1": counts.unavailable + counts.protected }),
+        counts.expired && $t("group-mute.text_1a439dbea9", { "expired": counts.expired }),
+        stopped > 0 && $t("group-mute.text_472710936f", { "stopped": stopped }),
       ].filter(Boolean).join("\n");
     }
     const issuerMaster = context.isBotMaster(issuer);
@@ -371,38 +374,38 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     let checkWhitelist: boolean;
     const memberNames = new Map<number, string>();
     if (admin) {
-      if (!groupSetAdmin || !issuerMaster) return "当前会话没有设置群管理员的权限。";
+      if (!groupSetAdmin || !issuerMaster) return $t("group-mute.text_33e9d2a303");
       const numeric = admin[2];
       const selected = numeric && numeric.length < 5 ? undefined : kickTargets(context, bot, numeric);
-      if (!selected) return "请 @ 要操作的群成员，或输入一个有效 QQ 号。";
+      if (!selected) return $t("group-mute.text_96acfa5626");
       ids = selected;
       const enabled = admin[1] === "设置";
       perform = (id) => groupSetAdmin(id, enabled, (name) => memberNames.set(id, name));
-      operation = "设置为群管理员";
+      operation = $t("group-mute.text_5c048fbdc5");
       checkWhitelist = false;
     } else if (kick) {
-      if (!groupKick) return "当前会话没有移出群成员的权限。";
+      if (!groupKick) return $t("group-mute.text_3507d4ea03");
       const selected = kickTargets(context, bot, kick[2]);
-      if (!selected) return "请 @ 要移出的群成员，或直接在指令后填写一个 QQ 号。";
+      if (!selected) return $t("group-mute.text_01f98325ed");
       ids = selected;
       const block = kick[1] === "黑";
       perform = (id) => groupKick(id, block, (name) => memberNames.set(id, name));
-      operation = block ? "踢出群聊，协议端已确认踢黑请求" : "踢出群聊";
+      operation = block ? $t("group-mute.text_6cf9dc4e39") : $t("group-mute.text_d5586c8693");
       checkWhitelist = true;
     } else {
-      if (!groupMute) return "当前会话没有群禁言权限。";
+      if (!groupMute) return $t("group-mute.text_a6816ec207");
       const action = targets(command, context, bot);
-      if (!action) return "请 @ 群成员或输入 QQ 号，并填写有效的禁言时长（整数秒）。";
+      if (!action) return $t("group-mute.text_affa132f94");
       const { seconds } = action;
       ids = action.ids;
       perform = (id) => groupMute(id, seconds);
-      operation = seconds ? `禁言 ${seconds} 秒` : "解除禁言";
+      operation = seconds ? $t("group-mute.text_44cded3a5b", { "seconds": seconds }) : $t("group-mute.text_89972c2246");
       checkWhitelist = seconds > 0;
     }
     let whitelist: ReadonlySet<number> | undefined;
     if (checkWhitelist && !issuerMaster) {
       try { whitelist = await readManagedWhitelist(root); }
-      catch { return kick ? "群管保护配置暂不可用。" : "群禁言保护配置暂不可用。"; }
+      catch { return kick ? $t("group-mute.text_08020476bd") : $t("group-mute.text_8a07d88ccf"); }
     }
 
     if (!claim(context, bot, issuer, Boolean(kick || admin))) return [];
@@ -426,19 +429,19 @@ export function createGroupMute(root: URL = defaultRoot, blacklist?: ManagedBlac
     if (confirmed && kick?.[1] === "黑" && blacklist) {
       try {
         await blacklist.update(confirmed, true, moduleSignal);
-        persistence = `${confirmed.join("、")} 已列入跨群群管黑名单。`;
+        persistence = $t("group-mute.text_697ac6031e", { "value1": confirmed.join("、") });
       } catch {
-        persistence = `协议已确认踢黑，未能将 ${confirmed.join("、")} 保存到跨群群管黑名单。`;
+        persistence = $t("group-mute.text_12cc3d2f41", { "value1": confirmed.join("、") });
       }
     }
     const confirmedLabels = confirmed?.map(id => formatGroupModerationMember(id, memberNames.get(id))).join("、");
     return [
-      confirmedLabels && (admin?.[1] === "取消" ? `已取消 ${confirmedLabels} 的群管理员权限。` : `已将 ${confirmedLabels} ${operation}。`),
+      confirmedLabels && (admin?.[1] === "取消" ? $t("group-mute.text_54f688e5f5", { "confirmedLabels": confirmedLabels }) : $t("group-mute.text_fdec810aac", { "confirmedLabels": confirmedLabels, "operation": operation })),
       persistence,
-      rejected && `协议端拒绝操作 ${rejected.join("、")}。`,
-      unknown && `${unknown.join("、")} 的操作结果未确认，请在群内核对。`,
-      protectedIds && `${protectedIds.join("、")} ${kick || admin ? "受群管保护" : "受群禁言保护"}。`,
-      unavailable && `无法操作 ${unavailable.join("、")}，请核对群成员和管理权限。`,
+      rejected && $t("group-mute.text_b0d00fafb1", { "value1": rejected.join("、") }),
+      unknown && $t("group-mute.text_20d90defe2", { "value1": unknown.join("、") }),
+      protectedIds && `${protectedIds.join("、")} ${kick || admin ? $t("group-mute.text_22624520a4") : $t("group-mute.text_6e802272b0")}。`,
+      unavailable && $t("group-mute.text_d4a68336b5", { "value1": unavailable.join("、") }),
     ].filter(Boolean).join("\n");
   };
 }

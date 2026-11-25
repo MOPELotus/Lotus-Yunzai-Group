@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 type NoticePart = string | { readonly type: "image"; readonly file: string } | {
   readonly type: "at";
   readonly qq: number;
@@ -71,9 +74,9 @@ export async function welcomeMember(event: GroupMemberNotice, claim = claimWelco
     }
   }
   return sendWithAvatar(event, [
-    `🌸 欢迎来到${name ? `「${name}」` : "本群"}\n\n`,
+    $t("member-notices.text_8d7060efbf", { "value1": name ? `「${name}」` : $t("member-notices.text_0d5f4509dd") }),
     { type: "at", qq: event.user_id },
-    " 欢迎加入～\n先看看群公告，有问题随时交流。",
+    $t("member-notices.text_764ebaf67d"),
   ]);
 }
 
@@ -86,7 +89,7 @@ export async function announceDeparture(event: GroupMemberNotice): Promise<boole
   const kicked = operator && positiveId(operator)
     ? operator !== event.user_id : event.action_sub_type === "kick";
   const content = kicked
-    ? `📋 成员变动\n\n${who} 已被移出本群。`
-    : `🍃 成员离开\n\n${who} 已退出本群。\n有缘再见，祝一切顺利。`;
+    ? $t("member-notices.text_335e0da8fc", { "who": who })
+    : $t("member-notices.text_810bebfa4d", { "who": who });
   return sendWithAvatar(event, [content]);
 }

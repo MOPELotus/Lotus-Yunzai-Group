@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 type CardResult = "confirmed" | "rejected" | "unknown" | "missing-group" | "insufficient-role";
 
 export interface CardEvent {
@@ -11,11 +14,11 @@ export interface CardEvent {
 
 const command = "#改群名片";
 const resultMessages: Readonly<Record<CardResult, string>> = {
-  confirmed: "✅ 群名片修改成功",
-  rejected: "❎ 群名片修改失败",
-  unknown: "群名片修改结果未确认，请在群聊中核对。",
-  "missing-group": "❎ 群聊列表查无此群",
-  "insufficient-role": "❎ Bot权限不足，需要管理员权限",
+  confirmed: $t("group-card.text_8ec38fa9f5"),
+  rejected: $t("group-card.text_47682ae0cd"),
+  unknown: $t("group-card.text_82c5205230"),
+  "missing-group": $t("group-card.text_d76007fb01"),
+  "insufficient-role": $t("group-card.text_2b79b928ee"),
 };
 
 function qq(value: unknown): number | undefined {
@@ -24,9 +27,9 @@ function qq(value: unknown): number | undefined {
 }
 
 export async function changeGroupCard(event: CardEvent): Promise<string> {
-  if (!event.isMaster) return "❎ 该命令仅限主人可用";
+  if (!event.isMaster) return $t("group-card.text_d46f6afc9a");
   const { message_type: room, setGroupCard } = event;
-  if (room === "terminal" || !setGroupCard) return "当前会话不支持修改群名片。";
+  if (room === "terminal" || !setGroupCard) return $t("group-card.text_24090ffb17");
 
   const argument = event.msg.slice(command.length).trim();
   let card = argument;
@@ -36,17 +39,17 @@ export async function changeGroupCard(event: CardEvent): Promise<string> {
   if (room === "group") {
     for (const { qq: value } of mentions) {
       const target = qq(value);
-      if (!target) return "请只 @ 一位要修改群名片的成员。";
+      if (!target) return $t("group-card.text_4c568a4cdb");
       if (target === event.self_id) continue;
-      if (userId !== undefined && userId !== target) return "请只 @ 一位要修改群名片的成员。";
+      if (userId !== undefined && userId !== target) return $t("group-card.text_4c568a4cdb");
       userId = target;
     }
   } else {
-    if (mentions.length) return "私聊仅能修改机器人的群名片。";
-    if (!argument) return "❎ 群号不能为空";
+    if (mentions.length) return $t("group-card.text_0219f8cf2e");
+    if (!argument) return $t("group-card.text_05551f1fa4");
     const match = /^([1-9]\d*)(?:\s+([\s\S]*))?$/u.exec(argument);
     groupId = qq(match?.[1]);
-    if (!groupId) return "❎ 群号不合法";
+    if (!groupId) return $t("group-card.text_2fb35621ad");
     card = match?.[2] ?? "";
   }
 

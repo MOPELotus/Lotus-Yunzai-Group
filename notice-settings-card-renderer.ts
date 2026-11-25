@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { builtinResourceDirectory } from "../../lib/builtin-resources.ts";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -48,13 +51,13 @@ export function createAdminSettingsCardRenderer({ resourceDirectories = [], mode
     if (!directory || signal?.aborted) return;
     const { png, engine } = await renderNoticeSettingsCard(model, mode, label, { backgroundPath: join(directory, "admin/imgs/bg/default.jpg"), bodyFontPath: join(directory, "common/font/FZB.ttf"), titleFontPath: join(directory, "common/font/NZBZ.ttf") });
     if (signal?.aborted) return;
-    console.log(`[渲染] ${label.slice(1)} ${engine.renderer} ${engine.api} ${engine.device}`);
+    console.log($t("notice-settings-card-renderer.text_6923c796fb", { "value1": label.slice(1), "renderer": engine.renderer, "api": engine.api, "device": engine.device }));
     return png;
   };
 }
 
 export function renderNoticeSettingsCard(model: NoticeSettingsCardModel, mode: Mode = "gpu", label: Label = "#通知设置", assets: Pick<InfoCardOptions, "backgroundPath" | "bodyFontPath" | "titleFontPath"> = {}) {
-  return renderInfoCard({ title: label.slice(1), metadata: label === "#通知设置" ? "群管配置" : undefined, width: 800 }, ({ x, y, width, measure }) => {
+  return renderInfoCard({ title: label.slice(1), metadata: label === "#通知设置" ? $t("notice-settings-card-renderer.text_d36a6c476a") : undefined, width: 800 }, ({ x, y, width, measure }) => {
     const valueWidth = 170;
     const leftWidth = width - valueWidth - 54;
     const groups = model.groups.map(({ title, rows, override }) => {

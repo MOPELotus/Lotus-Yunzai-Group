@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { formatNoticeBodyText, readMessageNoticeParts, type MessageNoticePart, type ReadMessageNoticeParts } from "./message-notice-content.ts";
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
@@ -38,12 +41,12 @@ export function createGroupMessageNotice(options: PrivateNoticeOptions): GroupMe
 
     return [
       { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/100` },
-      `[消息(${botId}) - 群聊消息]\n`,
-      `来源群号：${groupId}\n`,
-      `来源群名：${groupName || "未知"}\n`,
-      `发送人账号：${userId}\n`,
-      `发送人昵称：${displayRequestField(nickname, 128) || "未知"}\n`,
-      "消息内容：",
+      $t("group-message-notice.text_9e90ae4f85", { "botId": botId }),
+      $t("group-message-notice.text_d8c98c9c97", { "groupId": groupId }),
+      $t("group-message-notice.text_57923cdce7", { "value1": groupName || $t("group-message-notice.text_4d8c1c5b42") }),
+      $t("group-message-notice.text_4f25f2b199", { "userId": userId }),
+      $t("group-message-notice.text_668b44003e", { "value1": displayRequestField(nickname, 128) || $t("group-message-notice.text_4d8c1c5b42") }),
+      $t("group-message-notice.text_34c8fc816b"),
       ...content,
     ];
   };

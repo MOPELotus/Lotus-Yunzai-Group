@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { GroupWholeMuteResult } from "./group-mute.ts";
 
 export interface GroupNotificationPart extends Readonly<Record<string, unknown>> {
@@ -70,11 +73,11 @@ export function createGroupNotification(signal?: AbortSignal) {
     const validId = typeof message_id === "number" ? Number.isSafeInteger(message_id) :
       typeof message_id === "string" && message_id.length > 0 && message_id.length <= 128;
     if (context.isDelegated || signal?.aborted || !groupNotifyAll || !validId ||
-        !positiveId(self_id) || !positiveId(user_id) || !positiveId(group_id)) return "当前会话无法发送群通知，请核对群管理权限和网关连接。";
+        !positiveId(self_id) || !positiveId(user_id) || !positiveId(group_id)) return $t("group-notify.text_e244bb1946");
     const source = typeof message === "string" ? [{ type: "text", text: message }] : message;
     const body = source && bodyParts(source, input, self_id);
-    if (!body) return "通知含有当前不支持发送的消息段，请调整后重试。";
-    if (!body.some((part) => part.type !== "text" || (typeof part.text === "string" && part.text.trim()))) return "❎ 通知不能为空";
+    if (!body) return $t("group-notify.text_c2d2d9fcf2");
+    if (!body.some((part) => part.type !== "text" || (typeof part.text === "string" && part.text.trim()))) return $t("group-notify.text_f117f952e3");
 
     const id = JSON.stringify([adapter ?? "onebot", self_id, group_id, user_id, String(message_id)]);
     if (seen.has(id)) return [];
@@ -87,9 +90,9 @@ export function createGroupNotification(signal?: AbortSignal) {
     try { status = await groupNotifyAll(body); } catch { status = "unknown"; }
     switch (status) {
       case "confirmed": return [];
-      case "rejected": return "协议端拒绝发送群通知。";
-      case "unavailable": return "当前会话无法发送群通知，请核对群管理权限和消息段是否受支持。";
-      case "unknown": return "群通知发送结果未确认，请在群内核对。";
+      case "rejected": return $t("group-notify.text_172ed45d15");
+      case "unavailable": return $t("group-notify.text_02cc282f88");
+      case "unknown": return $t("group-notify.text_7c38f9e547");
     }
   };
 }

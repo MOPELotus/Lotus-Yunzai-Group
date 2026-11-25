@@ -1,0 +1,1993 @@
+{
+  "language": "zh-CN",
+  "name": "简体中文",
+  "namespace": "group",
+  "description": "群管理",
+  "sections": {
+    "auto-group-card": {
+      "description": "群管理：群管理 · 图片卡片",
+      "source": "plugins/group/auto-group-card.ts"
+    },
+    "auto-repeat": {
+      "description": "群管理",
+      "source": "plugins/group/auto-repeat.ts"
+    },
+    "banned-words": {
+      "description": "群管理",
+      "source": "plugins/group/banned-words.ts"
+    },
+    "friend-message-notice": {
+      "description": "群管理：订阅与通知",
+      "source": "plugins/group/friend-message-notice.ts"
+    },
+    "friend-poke-notice": {
+      "description": "群管理：订阅与通知",
+      "source": "plugins/group/friend-poke-notice.ts"
+    },
+    "friend-recall-notice": {
+      "description": "群管理：订阅与通知",
+      "source": "plugins/group/friend-recall-notice.ts"
+    },
+    "friend-relationship-notice": {
+      "description": "群管理：订阅与通知",
+      "source": "plugins/group/friend-relationship-notice.ts"
+    },
+    "friend-request-list": {
+      "description": "群管理：请求",
+      "source": "plugins/group/friend-request-list.ts"
+    },
+    "friend-request-notice": {
+      "description": "群管理：请求 · 订阅与通知",
+      "source": "plugins/group/friend-request-notice.ts"
+    },
+    "friend-request-review": {
+      "description": "群管理：请求",
+      "source": "plugins/group/friend-request-review.ts"
+    },
+    "group-activity": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-activity.ts"
+    },
+    "group-add-notice": {
+      "description": "群管理：群管理 · 订阅与通知",
+      "source": "plugins/group/group-add-notice.ts"
+    },
+    "group-announcements": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-announcements.ts"
+    },
+    "group-card": {
+      "description": "群管理：群管理 · 图片卡片",
+      "source": "plugins/group/group-card.ts"
+    },
+    "group-invitation-list": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-invitation-list.ts"
+    },
+    "group-invitation-review": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-invitation-review.ts"
+    },
+    "group-leave-blacklist": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-leave-blacklist.ts"
+    },
+    "group-message-notice": {
+      "description": "群管理：群管理 · 订阅与通知",
+      "source": "plugins/group/group-message-notice.ts"
+    },
+    "group-mute": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-mute.ts"
+    },
+    "group-name": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-name.ts"
+    },
+    "group-notice-panel-settings": {
+      "description": "群管理：群管理 · 订阅与通知 · 面板 · 设置",
+      "source": "plugins/group/group-notice-panel-settings.ts"
+    },
+    "group-notify": {
+      "description": "群管理：群管理 · 通知",
+      "source": "plugins/group/group-notify.ts"
+    },
+    "group-owner-admin-notice": {
+      "description": "群管理：群管理 · 主人权限 · 订阅与通知",
+      "source": "plugins/group/group-owner-admin-notice.ts"
+    },
+    "group-owner-ban-notice": {
+      "description": "群管理：群管理 · 主人权限 · 订阅与通知",
+      "source": "plugins/group/group-owner-ban-notice.ts"
+    },
+    "group-owner-group-notice": {
+      "description": "群管理：群管理 · 主人权限 · 订阅与通知",
+      "source": "plugins/group/group-owner-group-notice.ts"
+    },
+    "group-owner-invitation-notice": {
+      "description": "群管理：群管理 · 主人权限 · 订阅与通知",
+      "source": "plugins/group/group-owner-invitation-notice.ts"
+    },
+    "group-owner-join-request-notice": {
+      "description": "群管理：群管理 · 主人权限 · 请求 · 订阅与通知",
+      "source": "plugins/group/group-owner-join-request-notice.ts"
+    },
+    "group-owner-member-notice": {
+      "description": "群管理：群管理 · 主人权限 · 订阅与通知",
+      "source": "plugins/group/group-owner-member-notice.ts"
+    },
+    "group-pending-join": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-pending-join.ts"
+    },
+    "group-quoted-review": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-quoted-review.ts"
+    },
+    "group-recall-notice": {
+      "description": "群管理：群管理 · 订阅与通知",
+      "source": "plugins/group/group-recall-notice.ts"
+    },
+    "group-timed-mute": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-timed-mute.ts"
+    },
+    "group-title": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-title.ts"
+    },
+    "group-verification": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-verification.ts"
+    },
+    "group-vote": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/group-vote.ts"
+    },
+    "index": {
+      "description": "群管理",
+      "source": "plugins/group/index.ts"
+    },
+    "like-settings": {
+      "description": "群管理：设置",
+      "source": "plugins/group/like-settings.ts"
+    },
+    "likes": {
+      "description": "群管理",
+      "source": "plugins/group/likes.ts"
+    },
+    "managed-blacklist": {
+      "description": "群管理：进程托管",
+      "source": "plugins/group/managed-blacklist.ts"
+    },
+    "member-notices": {
+      "description": "群管理",
+      "source": "plugins/group/member-notices.ts"
+    },
+    "notice-settings": {
+      "description": "群管理：订阅与通知 · 设置",
+      "source": "plugins/group/notice-settings.ts"
+    },
+    "notice-settings-card-model": {
+      "description": "群管理：订阅与通知 · 设置 · 图片卡片",
+      "source": "plugins/group/notice-settings-card-model.ts"
+    },
+    "notice-settings-card-renderer": {
+      "description": "群管理：订阅与通知 · 设置 · 图片卡片",
+      "source": "plugins/group/notice-settings-card-renderer.ts"
+    },
+    "notice-settings-store": {
+      "description": "群管理：订阅与通知 · 设置",
+      "source": "plugins/group/notice-settings-store.ts"
+    },
+    "owner-friend-reply": {
+      "description": "群管理：主人权限",
+      "source": "plugins/group/owner-friend-reply.ts"
+    },
+    "owner-request-batch": {
+      "description": "群管理：主人权限 · 请求",
+      "source": "plugins/group/owner-request-batch.ts"
+    },
+    "private-group-mute": {
+      "description": "群管理：群管理",
+      "source": "plugins/group/private-group-mute.ts"
+    },
+    "repeat": {
+      "description": "群管理",
+      "source": "plugins/group/repeat.ts"
+    },
+    "request-overview": {
+      "description": "群管理：请求",
+      "source": "plugins/group/request-overview.ts"
+    },
+    "request-review": {
+      "description": "群管理：请求",
+      "source": "plugins/group/request-review.ts"
+    },
+    "runtime-events": {
+      "description": "群管理：运行环境",
+      "source": "plugins/group/runtime-events.ts"
+    },
+    "screened-words": {
+      "description": "群管理",
+      "source": "plugins/group/screened-words.ts"
+    },
+    "temporary-message-notice": {
+      "description": "群管理：订阅与通知",
+      "source": "plugins/group/temporary-message-notice.ts"
+    }
+  },
+  "messages": {
+    "auto-group-card.text_1abc3171cd": "suffixes 应包含非空的单行文本。",
+    "auto-group-card.text_2152e8e729": "，无法读取 {unavailableAccounts} 个账号的群名片目标。",
+    "auto-group-card.text_2ac43b3e10": "notGroup 应包含有效群号。",
+    "auto-group-card.text_328c8c4b27": "群名片更新已停止。",
+    "auto-group-card.text_37b47581f6": "米游社区寄生的酷狗能不能滚一边去！",
+    "auto-group-card.text_37bdf5f936": "suffixes 应为文案列表。",
+    "auto-group-card.text_44b021b500": "MC是Minecraft，别连简称也蹭！",
+    "auto-group-card.text_6031fceaed": "本机器人拒绝服务酷狗！",
+    "auto-group-card.text_6ca25c7ddf": "群名片正在更新，请稍后再试。",
+    "auto-group-card.text_7b24c209e2": "nickname 应为单行文本。",
+    "auto-group-card.text_809ea92463": "cron 应为五段或六段表达式。",
+    "auto-group-card.text_80d0539a8a": "请先在 auto-group-card.yaml 配置群名片文案。",
+    "auto-group-card.text_9551591bac": "推广米游不好玩呜哇好玩有素质没？",
+    "auto-group-card.text_b0f9d8a5ca": "enable 应为布尔值。",
+    "auto-group-card.text_cadd3c025e": "当前会话不支持批量更新本机器人的群名片。",
+    "auto-group-card.text_cb5eb80671": "自动群名片配置须为映射。",
+    "auto-group-card.text_d04418da4d": "请直接发送 #更新群名片。",
+    "auto-group-card.text_d21763c792": "自动群名片功能未启用。",
+    "auto-group-card.text_d46f6afc9a": "❎ 该命令仅限主人可用",
+    "auto-group-card.text_d78a288233": "notGroup 应为群号列表。",
+    "auto-group-card.text_e575b86262": "在米游社区跳脸就接受后果！",
+    "auto-group-card.text_f240b8b322": "没有可查询的在线机器人账号。",
+    "auto-group-card.text_f5baa309c3": "自动群名片配置无法读取。",
+    "auto-group-card.text_fbd33cf343": "群名片更新完成：成功 {updated} 个，未变 {unchanged} 个，失败 {failed} 个，未确认 {unknown} 个",
+    "auto-repeat.text_38641df4d7": "[group] 自动复读发送失败。",
+    "auto-repeat.text_bfb21df83c": "[group] 自动复读发送结果未确认。",
+    "banned-words.text_079f417d9c": "违禁词配置格式无效。",
+    "banned-words.text_18b28c4b48": "违禁词文件无效。",
+    "banned-words.text_1be34f23d0": "违禁词文件正由其他程序修改。",
+    "banned-words.text_222c77c1a1": "群违禁词",
+    "banned-words.text_223f06e91e": "图片违禁词仅支持精确匹配。",
+    "banned-words.text_235532a9c1": "精确",
+    "banned-words.text_259220ce1a": "\n处理方式：{value1}",
+    "banned-words.text_271af2a977": "\n匹配模式：{value1}",
+    "banned-words.text_2f0d4e72d8": "正则表达式无效。",
+    "banned-words.text_36bab7a3de": "模糊",
+    "banned-words.text_3b470aa585": "踢",
+    "banned-words.text_3ffe6d0671": "违禁词文件超出上限。",
+    "banned-words.text_44d0e7b5ba": "已删除违禁词。",
+    "banned-words.text_45436534d8": "旧规则待核对",
+    "banned-words.text_4d8c1c5b42": "未知",
+    "banned-words.text_4fd516dd76": "这条违禁词已存在。",
+    "banned-words.text_515903994e": "屏蔽词：",
+    "banned-words.text_6734533fef": "例如：#新增模糊撤违禁词 内容；#新增正则2禁违禁词 /^示例$/i\n",
+    "banned-words.text_70bd71aa4e": "已添加违禁词。\n",
+    "banned-words.text_71c8715d42": "本群违禁词已达上限。",
+    "banned-words.text_75b304aa94": "正则",
+    "banned-words.text_876a2f05fc": "无法读取原消息的违禁词图片。",
+    "banned-words.text_907a17c4be": "禁撤",
+    "banned-words.text_93df2f0113": "违禁词帮助\n新增：#新增违禁词 内容（默认精确匹配、禁言）\n",
+    "banned-words.text_9c2db968fe": "新增、查看或删除精确图片规则时，可在命令后附一张原图。\n",
+    "banned-words.text_9e0ee023b2": "禁",
+    "banned-words.text_a1fe3c669f": "这条违禁词不存在。",
+    "banned-words.text_a206a3de0b": "设置禁言秒数：#设置违禁词禁言时间300",
+    "banned-words.text_a71f445d35": "[图片]",
+    "banned-words.text_a77abe6f71": "当前会话没有编辑违禁词的权限。",
+    "banned-words.text_aac341b388": "请输入有效的禁言秒数。",
+    "banned-words.text_ab5be2dc91": "踢黑",
+    "banned-words.text_ab9cfc0c94": "查看：#查看违禁词 内容；#违禁词列表；#违禁词列表原始\n删除：#删除违禁词 内容\n",
+    "banned-words.text_b8e928759e": "撤",
+    "banned-words.text_d5928ee880": "违禁词配置正由其他程序修改。",
+    "banned-words.text_d6fe6c12b1": "支持精确、模糊、正则1（表达式）、正则2（/表达式/标志），以及踢、禁、撤、踢撤、禁撤、踢黑。\n",
+    "banned-words.text_db77d61415": "\n添加人：{value1}",
+    "banned-words.text_dcf607b3ef": "违禁词配置暂不可用。",
+    "banned-words.text_e011d75927": "请填写有效的违禁词。",
+    "banned-words.text_e476b9f54c": "本群违禁词禁言时间已设置为 {seconds} 秒。",
+    "banned-words.text_eecfc48be1": "群号无效。",
+    "banned-words.text_f0b232b249": "踢撤",
+    "banned-words.text_f31340cb38": "\n添加时间：{value1}",
+    "banned-words.text_fff11ce9d2": "没有违禁词。",
+    "friend-message-notice.text_34c8fc816b": "消息内容：",
+    "friend-message-notice.text_36000fb53f": "好友账号：{userId}\n",
+    "friend-message-notice.text_4d8c1c5b42": "未知",
+    "friend-message-notice.text_75c5a94f41": "[消息({botId}) - 好友消息]\n",
+    "friend-message-notice.text_7b0771ce1d": "好友昵称：{value1}\n",
+    "friend-message-notice.text_842e677d46": "引用该消息：回复 <内容>\n",
+    "friend-message-notice.text_8a28439754": "\n-------------\n{quoteHint}可发送：回复 {userId} <内容>",
+    "friend-poke-notice.text_16c1b7c5c9": "[消息({botId}) - 戳一戳]\n",
+    "friend-poke-notice.text_c6ce36333c": "来源账号：{userId}",
+    "friend-recall-notice.text_36000fb53f": "好友账号：{userId}\n",
+    "friend-recall-notice.text_56e16f2899": "[消息({botId}) - 好友撤回消息]\n",
+    "friend-recall-notice.text_60d3b54396": "撤回时间：{when}\n",
+    "friend-recall-notice.text_f45b01a9e9": "撤回消息：",
+    "friend-relationship-notice.text_0d2eb9c771": "[通知({botId}) - {value2}]\n",
+    "friend-relationship-notice.text_1a8679d6bb": "好友昵称：{value1}",
+    "friend-relationship-notice.text_36000fb53f": "好友账号：{userId}\n",
+    "friend-relationship-notice.text_3a4e7852ea": "新增好友",
+    "friend-relationship-notice.text_4d8c1c5b42": "未知",
+    "friend-relationship-notice.text_f845e0cdfa": "好友减少",
+    "friend-request-list.text_06fe686be4": "\n申请人QQ：{userId}\n申请人昵称：{value2}",
+    "friend-request-list.text_261d1eb9bd": "现有未处理的好友申请如下，共 {length} 条",
+    "friend-request-list.text_263504d056": "本次查询范围内未发现待处理的好友申请，未能核验完整列表，请在 QQ 中查看。",
+    "friend-request-list.text_3bdc06c4ce": "本次查到 {length} 条待处理好友申请，未能核验完整列表",
+    "friend-request-list.text_3c475b75db": "{value1}（北京时间）",
+    "friend-request-list.text_44d7227b76": "\n申请来源：{value1}\n申请时间：{value2}",
+    "friend-request-list.text_4d8c1c5b42": "未知",
+    "friend-request-list.text_8259da8992": "\n仅展示前 {length} 条，请在 QQ 中查看其余申请。",
+    "friend-request-list.text_8b328b830a": "\n附加信息：{value1}",
+    "friend-request-list.text_a97550976a": "暂无好友申请(。-ω-)zzz",
+    "friend-request-list.text_ca241ed68e": "当前无法核验该机器人的好友申请，请在 QQ 中查看。",
+    "friend-request-list.text_d67cd0210e": "无附加信息",
+    "friend-request-list.text_e9141ace8b": "\n普通申请",
+    "friend-request-list.text_f2ef22d907": "请由当前机器人的主人私聊查看好友申请。",
+    "friend-request-list.text_fabdfd3ca1": "\n风险申请，请在 QQ 中查看。",
+    "friend-request-notice.text_373678a285": "Tip：自动审批结果未确认，请先在 QQ 核对。",
+    "friend-request-notice.text_4d8c1c5b42": "未知",
+    "friend-request-notice.text_7432151306": "申请人昵称：{value1}\n",
+    "friend-request-notice.text_8f3453d252": "[通知({botId}) - 添加好友申请]\n",
+    "friend-request-notice.text_91b32d7e24": "Tip：协议端未接受自动审批，请在 QQ 中处理。",
+    "friend-request-notice.text_9785ebc975": "-------------\n可回复：#查看好友申请",
+    "friend-request-notice.text_9df4a97a6b": "Tip：自动审批请求已获协议端确认。",
+    "friend-request-notice.text_ab396461c0": "申请人账号：{userId}\n",
+    "friend-request-notice.text_cd8c63c469": "附加信息：{value1}\n",
+    "friend-request-notice.text_d67cd0210e": "无附加信息",
+    "friend-request-notice.text_eefb7113fb": "申请来源：{value1}\n",
+    "friend-request-review.text_136de7a8c4": "拒绝",
+    "friend-request-review.text_32e3cb3096": "本次查询范围内未找到这个人的待处理好友申请，请在 QQ 中查看。",
+    "friend-request-review.text_33079e0a3b": "该账号为风险账号请在 QQ 中手动处理。",
+    "friend-request-review.text_46b6463018": "当前无法按 QQ 核实并处理这条好友申请，请在 QQ 中处理。",
+    "friend-request-review.text_74d9ad48d6": "好友申请",
+    "friend-request-review.text_905819e2e3": "同意",
+    "friend-request-review.text_9130311e8b": "✅ 已{verb} {applicant} 的好友申请",
+    "friend-request-review.text_a5a7d5bd90": "❎ 协议端拒绝了这次好友申请审核。",
+    "friend-request-review.text_b8b406d9cf": "请由当前机器人的主人私聊处理好友申请。",
+    "friend-request-review.text_d7c9ed2121": "请填写有效的申请人 QQ 号。",
+    "friend-request-review.text_f19a731cd0": "好友申请处理结果未确认，请先在 QQ 中核对。",
+    "friend-request-review.text_f502a4c980": "协议端已受理{verb} {applicant} 的好友申请，请在 QQ 中核对处理结果。",
+    "friend-request-review.text_f641747f89": "这个 QQ 有多条待处理的好友申请，请在 QQ 中处理。",
+    "group-activity.text_0c88f66347": "本群暂无{label}没发言的成员。",
+    "group-activity.text_195d0c23ba": "不活跃排行榜top1 - top{length}",
+    "group-activity.text_3106a179e3": "以下成员受保护",
+    "group-activity.text_39c93849a3": "以下成员已不符合首次确认条件，已跳过",
+    "group-activity.text_3ac49b343f": "第{value1}名：\n",
+    "group-activity.text_432210226a": "当前会话没有获取群活跃名单的权限。",
+    "group-activity.text_45778d51bc": "本次共需清理 {size} 人。请在 120 秒内发送「#确认清理」开始清理，或发送「#取消清理」。",
+    "group-activity.text_461a50b127": "当前为第 {page} 页，共 {pages} 页，本页共 {length} 人，总共 {value4} 人。",
+    "group-activity.text_4995b77877": "本群暂无符合清理条件的{label}没发言成员。",
+    "group-activity.text_4f2209b12b": "群管白名单暂不可用。",
+    "group-activity.text_54c9a615a8": "请输入有效的未发言时长。",
+    "group-activity.text_584770450a": "本群暂无符合清理条件的从未发言成员。",
+    "group-activity.text_6437e93806": "清理结果未确认，请在群内核对",
+    "group-activity.text_6f047dd795": "确认范围为全部预览页。",
+    "group-activity.text_7450cc5b16": "未记录",
+    "group-activity.text_7dab13a1c4": "以下成员未能清理，请核对权限和成员活动数据",
+    "group-activity.text_7f9002261f": "最近的{length}条入群记录",
+    "group-activity.text_8c42f26d5d": "没有第 {page} 页。本群共 {pages} 页。",
+    "group-activity.text_946b6fe8dd": "请输入有效的成员数量。",
+    "group-activity.text_97a7a7cd47": "本群暂无从未发言的成员。",
+    "group-activity.text_98437fb742": "以下为{label}没发言的人\n",
+    "group-activity.text_98d70da306": "进群时间：{value1}",
+    "group-activity.text_9c24bfc568": "\n可用「{next}」翻页。",
+    "group-activity.text_9d921ef563": "当前无法读取完整的群成员发言数据，请核对当前群会话和协议端支持。",
+    "group-activity.text_a0e16a077a": "正在核对本群成员，请稍候。",
+    "group-activity.text_bab538b87f": "请输入有效页码。",
+    "group-activity.text_c6b25cf6eb": "本群已有清理正在执行，请等待结果。",
+    "group-activity.text_c6cb9397aa": "以下为进群后从未发言过的人\n",
+    "group-activity.text_d0abdaf029": "以下为每次清理的结果",
+    "group-activity.text_d51fdbeb98": "已取消清理。",
+    "group-activity.text_da6f627ab3": "入群时间：{value1}\n",
+    "group-activity.text_dd5f4239c3": "成功清理如下人员",
+    "group-activity.text_e5ffa04ac7": "协议端拒绝清理",
+    "group-activity.text_e8ca51f84e": "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。",
+    "group-activity.text_f2cdfe21b1": "最后发言时间：{value1}",
+    "group-activity.text_fae6a701c4": "当前会话没有清理群成员的权限。",
+    "group-activity.text_fdfcb48138": "\nQQ：{userId}\n昵称：{value2}\n",
+    "group-add-notice.text_0658d83969": "QQ号：{user}\n",
+    "group-add-notice.text_0b33340dde": "当前会话没有设置加群申请通知的权限。",
+    "group-add-notice.text_0cc82e2893": "暂无法保存加群申请通知配置。",
+    "group-add-notice.text_0fc03b6a51": "昵称：{value1}\n",
+    "group-add-notice.text_3e42af8964": "✅ 已{value1}「{group}」的加群申请通知",
+    "group-add-notice.text_4034f92bbe": "❎ 本群暂未开启加群申请通知",
+    "group-add-notice.text_4d8c1c5b42": "未知",
+    "group-add-notice.text_a077741442": "{value1}邀请人：{inviter_id}",
+    "group-add-notice.text_d183ccfbbd": "❎ 本群加群申请通知已处于开启状态",
+    "group-announcements.text_04b1bd9302": "当前无法删除 QQ 群公告，请核对群管理权限和网关连接。",
+    "group-announcements.text_05f3714da2": "❎ 删除失败，协议端拒绝删除群公告。",
+    "group-announcements.text_06891158b3": "（无文字，可能仅含图片）",
+    "group-announcements.text_1a0fc31c3b": "✅ 已删除「{value1}」",
+    "group-announcements.text_34281e36c5": "当前无法发布 QQ 群公告，请核对群管理权限和网关连接。",
+    "group-announcements.text_4fa8fa024e": "❎ 发送失败，协议端拒绝发布群公告。",
+    "group-announcements.text_60fa51d23e": "群公告发布结果未确认，请先在 QQ 中核对。",
+    "group-announcements.text_61b18b70fa": "✅ 已删除第 {index} 条群公告",
+    "group-announcements.text_6628d29264": "本群暂无群公告。",
+    "group-announcements.text_85c90ad4fb": "❎ 公告序号须为正整数。",
+    "group-announcements.text_a23217666d": "群公告删除结果未确认，请先在 QQ 中核对。",
+    "group-announcements.text_afe5787558": "❎ 公告不能为空",
+    "group-announcements.text_cb8805ef97": "找不到该序号的群公告，请先发送 #查群公告。",
+    "group-announcements.text_d577275507": "无法使用原消息的公告图片，请检查后重新发送。",
+    "group-announcements.text_ed90d3f61e": "（无文字）",
+    "group-announcements.text_fb7cf31f5f": "当前无法获取本群的 QQ 群公告，请在 QQ 中查看。",
+    "group-card.text_0219f8cf2e": "私聊仅能修改机器人的群名片。",
+    "group-card.text_05551f1fa4": "❎ 群号不能为空",
+    "group-card.text_24090ffb17": "当前会话不支持修改群名片。",
+    "group-card.text_2b79b928ee": "❎ Bot权限不足，需要管理员权限",
+    "group-card.text_2fb35621ad": "❎ 群号不合法",
+    "group-card.text_47682ae0cd": "❎ 群名片修改失败",
+    "group-card.text_4c568a4cdb": "请只 @ 一位要修改群名片的成员。",
+    "group-card.text_82c5205230": "群名片修改结果未确认，请在群聊中核对。",
+    "group-card.text_8ec38fa9f5": "✅ 群名片修改成功",
+    "group-card.text_d46f6afc9a": "❎ 该命令仅限主人可用",
+    "group-card.text_d76007fb01": "❎ 群聊列表查无此群",
+    "group-invitation-list.text_16f81de849": "暂无群邀请哦(。-ω-)zzz",
+    "group-invitation-list.text_272f803dcf": "当前无法核验该机器人的群邀请，请在 QQ 中查看。",
+    "group-invitation-list.text_2d8fb3546f": "现有未处理的群邀请如下，共 {length} 条",
+    "group-invitation-list.text_4d8c1c5b42": "未知",
+    "group-invitation-list.text_588fd16580": "\n仅展示前 {length} 条，请在 QQ 中查看其余邀请。",
+    "group-invitation-list.text_628153beb4": "群管理",
+    "group-invitation-list.text_81d4acd17e": "群主",
+    "group-invitation-list.text_897485828f": "\n邀请群号：{groupId}\n邀请群名：{value2}",
+    "group-invitation-list.text_90e5195857": "请由当前机器人的主人私聊查看群邀请。",
+    "group-invitation-list.text_93940e80e1": "本次查询范围内未发现待处理的群邀请，未能核验完整列表，请在 QQ 中查看。",
+    "group-invitation-list.text_af43d2e34f": "群员",
+    "group-invitation-list.text_bd8cf904d3": "\n邀请人身份：{value1}",
+    "group-invitation-list.text_d22910bde9": "本次查到 {length} 条待处理群邀请，未能核验完整列表",
+    "group-invitation-list.text_fe45271e58": "\n邀请人QQ：{inviterId}\n邀请人昵称：{value2}",
+    "group-invitation-review.text_136de7a8c4": "拒绝",
+    "group-invitation-review.text_22dd4ecc3b": "这个群有多条待处理的邀请，请在 QQ 中处理。",
+    "group-invitation-review.text_33eb74d355": "❎ 协议端拒绝了这次群邀请审核。",
+    "group-invitation-review.text_49e6850c67": "这条群邀请",
+    "group-invitation-review.text_5719bde29d": "当前无法按群号核实并处理这条群邀请，请在 QQ 中处理。",
+    "group-invitation-review.text_68e69b986a": "当前无法核实并处理原群邀请，请在 QQ 中处理。",
+    "group-invitation-review.text_763e26c60d": "群邀请处理结果未确认，请先在 QQ 中核对。",
+    "group-invitation-review.text_8589b7b0c6": "原群邀请通知已过期或已处理，请在 QQ 中核对。",
+    "group-invitation-review.text_905819e2e3": "同意",
+    "group-invitation-review.text_9c48f6c70c": "请填写有效的群号。",
+    "group-invitation-review.text_9db598325f": "✅ 已{verb}{value2}",
+    "group-invitation-review.text_ad1f34e8f4": "群 {groupId} 的邀请",
+    "group-invitation-review.text_ad3e7e8fd5": "群邀请",
+    "group-invitation-review.text_bf5a701669": "本次查询范围内未找到这个群的待处理邀请，请在 QQ 中查看。",
+    "group-invitation-review.text_d0d3b81db8": "请由当前机器人的主人私聊处理群邀请。",
+    "group-leave-blacklist.text_1e8838897b": "退群黑名单配置须为映射。",
+    "group-leave-blacklist.text_1f2b36c97a": "无效退群黑名单配置文件名。",
+    "group-leave-blacklist.text_203351f84e": "退群黑名单 groups 包含无效群号。",
+    "group-leave-blacklist.text_28fe7dca18": "无效群号。",
+    "group-leave-blacklist.text_30c75eecf0": "退群黑名单 groups 应为群号列表。",
+    "group-leave-blacklist.text_a4fae92ec1": "退群黑名单暂不可用。",
+    "group-leave-blacklist.text_a950cc2204": "请输入有效 QQ 号。",
+    "group-leave-blacklist.text_a9a2de8cb1": "{userId} 在本群退群黑名单中。",
+    "group-leave-blacklist.text_b80aba8ad8": "{userId} 不在本群退群黑名单中。",
+    "group-leave-blacklist.text_f65bafe98b": "已解除 {userId} 在本群的退群黑名单。全局黑名单如有记录，仍需手动处理。",
+    "group-message-notice.text_34c8fc816b": "消息内容：",
+    "group-message-notice.text_4d8c1c5b42": "未知",
+    "group-message-notice.text_4f25f2b199": "发送人账号：{userId}\n",
+    "group-message-notice.text_57923cdce7": "来源群名：{value1}\n",
+    "group-message-notice.text_668b44003e": "发送人昵称：{value1}\n",
+    "group-message-notice.text_9e90ae4f85": "[消息({botId}) - 群聊消息]\n",
+    "group-message-notice.text_d8c98c9c97": "来源群号：{groupId}\n",
+    "group-mute.text_01f98325ed": "请 @ 要移出的群成员，或直接在指令后填写一个 QQ 号。",
+    "group-mute.text_06d2ef3a2a": "群管{list}暂不可用。",
+    "group-mute.text_08020476bd": "群管保护配置暂不可用。",
+    "group-mute.text_0ec4feb05f": "协议端拒绝自助禁言。",
+    "group-mute.text_12cc3d2f41": "协议已确认踢黑，未能将 {value1} 保存到跨群群管黑名单。",
+    "group-mute.text_12cebb1cf7": "{days} 天 ",
+    "group-mute.text_174ec5a4ab": "黑名单",
+    "group-mute.text_1a439dbea9": "{expired} 人的禁言已到期。",
+    "group-mute.text_1e83fa613f": "已将 {target} 加入群管{list}。",
+    "group-mute.text_20d90defe2": "{value1} 的操作结果未确认，请在群内核对。",
+    "group-mute.text_22624520a4": "受群管保护",
+    "group-mute.text_27e2d9e2d9": "白名单",
+    "group-mute.text_2b5516117e": "已从群管{list}移除 {target}。",
+    "group-mute.text_33e9d2a303": "当前会话没有设置群管理员的权限。",
+    "group-mute.text_3507d4ea03": "当前会话没有移出群成员的权限。",
+    "group-mute.text_3a5db13677": "{rejected} 人的解禁被协议端拒绝。",
+    "group-mute.text_3b00179d07": "{unknown} 人的解禁结果未确认，请在群内核对。",
+    "group-mute.text_3ce1d4eb34": "无法设置全体禁言，请核对群管理权限。",
+    "group-mute.text_3fd47edce4": "关闭",
+    "group-mute.text_44cded3a5b": "禁言 {seconds} 秒",
+    "group-mute.text_472710936f": "{stopped} 人尚未处理。",
+    "group-mute.text_48e6f60f02": "{target} 已在群管{list}中。",
+    "group-mute.text_52e0df1a8b": "协议端拒绝全体禁言操作。",
+    "group-mute.text_54f688e5f5": "已取消 {confirmedLabels} 的群管理员权限。",
+    "group-mute.text_56d590de58": "已{value1}白名单自动解禁。",
+    "group-mute.text_5913483e8c": "别自闭啦~~",
+    "group-mute.text_5c048fbdc5": "设置为群管理员",
+    "group-mute.text_5f0d545088": "当前会话没有编辑群管{list}的权限。",
+    "group-mute.text_628153beb4": "群管理",
+    "group-mute.text_697ac6031e": "{value1} 已列入跨群群管黑名单。",
+    "group-mute.text_6cf9dc4e39": "踢出群聊，协议端已确认踢黑请求",
+    "group-mute.text_6d15b2f370": "移精",
+    "group-mute.text_6e17514698": "\n昵称：{value1}\nQQ：{userId}\n群身份：{value3}\n",
+    "group-mute.text_6e802272b0": "受群禁言保护",
+    "group-mute.text_6e97c77ee5": "白名单自动解禁已处于{value1}状态。",
+    "group-mute.text_727523782c": "全体禁言操作结果未确认，请在群内核对。",
+    "group-mute.text_74cd0a4734": "当前会话没有设置群精华的权限。",
+    "group-mute.text_78a692e9df": "当前会话无法使用自助禁言。",
+    "group-mute.text_7c0ca23df6": "协议端拒绝{operation}。",
+    "group-mute.text_7e6856229b": "自助禁言结果未确认，请在群内核对。",
+    "group-mute.text_81cc7b9456": "当前会话没有解除群禁言的权限。",
+    "group-mute.text_81d4acd17e": "群主",
+    "group-mute.text_83a76cffba": "当前会话没有设置白名单自动解禁的权限。",
+    "group-mute.text_8582eacd4c": "{target} 不在群管{list}中。",
+    "group-mute.text_888d5cee57": "请 @ 一位群成员，或输入一个 QQ 号。",
+    "group-mute.text_89972c2246": "解除禁言",
+    "group-mute.text_8a07d88ccf": "群禁言保护配置暂不可用。",
+    "group-mute.text_8b1440ae37": "请输入有效的自助禁言时长（正整数秒）。",
+    "group-mute.text_8da97ddda9": "开启",
+    "group-mute.text_969e87756b": "{hours} 小时 ",
+    "group-mute.text_96acfa5626": "请 @ 要操作的群成员，或输入一个有效 QQ 号。",
+    "group-mute.text_9dcdc2b289": "秒",
+    "group-mute.text_a1778b97a8": "群管{list}保存失败。",
+    "group-mute.text_a6816ec207": "当前会话没有群禁言权限。",
+    "group-mute.text_a8ef62dfea": "本群没有被禁言的成员。",
+    "group-mute.text_ac99962bb8": "加精",
+    "group-mute.text_af43d2e34f": "群员",
+    "group-mute.text_affa132f94": "请 @ 群成员或输入 QQ 号，并填写有效的禁言时长（整数秒）。",
+    "group-mute.text_b0d00fafb1": "协议端拒绝操作 {value1}。",
+    "group-mute.text_b0f39940d5": "当前会话无法执行群精华操作，请核对协议端支持和群管理权限。",
+    "group-mute.text_b57491f340": "请引用本群要{operation}的消息。",
+    "group-mute.text_b6a993c256": "分",
+    "group-mute.text_b8a2da7e54": "{minutes} 分 ",
+    "group-mute.text_b9149928c9": "{value1}{value2}{value3}{value4} 秒",
+    "group-mute.text_c098e854e6": "未确认",
+    "group-mute.text_c70d091321": "已{value1}全体禁言。",
+    "group-mute.text_c751976359": "当前协议端无法提供可靠的群禁言列表。",
+    "group-mute.text_cb24c9668d": "已{operation}。",
+    "group-mute.text_d4a68336b5": "无法操作 {value1}，请核对群成员和管理权限。",
+    "group-mute.text_d5586c8693": "踢出群聊",
+    "group-mute.text_d573799815": "{operation}结果未确认，请在群内核对。",
+    "group-mute.text_d5a096a521": "禁言剩余时间：{time}\n禁言到期时间：{value2}",
+    "group-mute.text_ebc7be6f78": "{value1} 人未能解禁，请核对群管理权限。",
+    "group-mute.text_ee919b8c63": "那我就不手下留情了~",
+    "group-mute.text_f480ff4a82": "已解除 {confirmed} 人的禁言。",
+    "group-mute.text_faa625ff69": "白名单自动解禁设置保存失败。",
+    "group-mute.text_fdec810aac": "已将 {confirmedLabels} {operation}。",
+    "group-name.text_349b8a932e": "群名称修改结果未确认，请先查看群信息。",
+    "group-name.text_4e2ac318eb": "当前会话无法修改群名称。",
+    "group-name.text_60a5e102d8": "请输入有效群号和群名称。",
+    "group-name.text_92154e412a": "当前账号或操作者没有修改该群名称的权限。",
+    "group-name.text_9d0fb4eed4": "❎ 群昵称修改失败",
+    "group-name.text_b6e6e2ad8c": "✅ 群昵称修改成功",
+    "group-name.text_e26f7ceff2": "群名称不能为空。",
+    "group-notice-panel-settings.text_3e65470095": "请选择有效的通知开关、撤回缓存秒数及配置版本。",
+    "group-notice-panel-settings.text_822efd7f2f": "暂无法安全保存通知设置。",
+    "group-notice-panel-settings.text_8f1100d6ae": "通知设置已变更，请重新读取后保存。",
+    "group-notify.text_02cc282f88": "当前会话无法发送群通知，请核对群管理权限和消息段是否受支持。",
+    "group-notify.text_172ed45d15": "协议端拒绝发送群通知。",
+    "group-notify.text_7c38f9e547": "群通知发送结果未确认，请在群内核对。",
+    "group-notify.text_c2d2d9fcf2": "通知含有当前不支持发送的消息段，请调整后重试。",
+    "group-notify.text_e244bb1946": "当前会话无法发送群通知，请核对群管理权限和网关连接。",
+    "group-notify.text_f117f952e3": "❎ 通知不能为空",
+    "group-owner-admin-notice.text_2209785716": "被操作群号：{groupId}",
+    "group-owner-admin-notice.text_450bbee8b8": "[通知({botId}) - {title}]\n",
+    "group-owner-admin-notice.text_5f5f570d88": "新增群管理员",
+    "group-owner-admin-notice.text_633104b616": "取消群管理员",
+    "group-owner-admin-notice.text_659b0e8718": "被操作账号：{userId}\n",
+    "group-owner-admin-notice.text_75ceaf6b5c": "机器人被设置管理",
+    "group-owner-admin-notice.text_b057c168a9": "机器人被取消管理",
+    "group-owner-ban-notice.text_1ef04217ab": "禁言人账号：{operatorId}\n",
+    "group-owner-ban-notice.text_3b6fefc50f": "小时",
+    "group-owner-ban-notice.text_3d4cf71236": "[通知({botId}) - 机器人被禁言]\n",
+    "group-owner-ban-notice.text_472dcb1058": "禁言时长：{value1}",
+    "group-owner-ban-notice.text_63c4ff4f1e": "{days}天",
+    "group-owner-ban-notice.text_646d81965a": "[通知({botId}) - 机器人被解除禁言]\n",
+    "group-owner-ban-notice.text_6d5dbc507f": "处理群号：{groupId}",
+    "group-owner-ban-notice.text_9dcdc2b289": "秒",
+    "group-owner-ban-notice.text_b6a993c256": "分",
+    "group-owner-ban-notice.text_c10961f23a": "处理人账号：{operatorId}\n",
+    "group-owner-ban-notice.text_fcc77b1c08": "禁言群号：{groupId}\n",
+    "group-owner-group-notice.text_0845c2a43b": "操作人：{operatorId}",
+    "group-owner-group-notice.text_1b6b59544b": "群名称暂不可用",
+    "group-owner-group-notice.text_5bfa724a8c": "群聊：{value1}",
+    "group-owner-group-notice.text_64bbec1614": "群号：{groupId}",
+    "group-owner-group-notice.text_6b788db055": "⚪ 机器人退出群聊",
+    "group-owner-group-notice.text_887474db24": "🔴 群聊已解散",
+    "group-owner-group-notice.text_bb45c39ec7": "🔴 机器人被移出",
+    "group-owner-group-notice.text_bfc7ca3615": "时间：{value1}",
+    "group-owner-group-notice.text_cc3929ad37": "⚪ 机器人已离开群聊",
+    "group-owner-group-notice.text_e0048482bb": "机器人：{botId}",
+    "group-owner-group-notice.text_fe68ee6c6e": "🟢 机器人加入群聊",
+    "group-owner-invitation-notice.text_05a49ee594": "[通知({botId}) - 邀请机器人进群]\n",
+    "group-owner-invitation-notice.text_4d8c1c5b42": "未知",
+    "group-owner-invitation-notice.text_91857d9964": "邀请人群身份：未知\n",
+    "group-owner-invitation-notice.text_b031c1acd4": "目标群名：{value1}\n",
+    "group-owner-invitation-notice.text_b70105504b": "目标群号：{groupId}\n",
+    "group-owner-invitation-notice.text_ea5aeefbc6": "邀请人昵称：{value1}\n",
+    "group-owner-invitation-notice.text_faa7cd8023": "邀请人账号：{userId}\n",
+    "group-owner-join-request-notice.text_4d8c1c5b42": "未知",
+    "group-owner-join-request-notice.text_57f576fae6": "账号：{userId}\n",
+    "group-owner-join-request-notice.text_5d779b4638": "\n附言：{value1}",
+    "group-owner-join-request-notice.text_7c16f27f89": "昵称：{value1}",
+    "group-owner-join-request-notice.text_89d5765416": "[通知({botId}) - 加群申请]\n",
+    "group-owner-join-request-notice.text_94afa695be": "群号：{groupId}\n",
+    "group-owner-join-request-notice.text_d67cd0210e": "无附加信息",
+    "group-owner-join-request-notice.text_fd113754ab": "群名：{value1}\n",
+    "group-owner-member-notice.text_1b6b59544b": "群名称暂不可用",
+    "group-owner-member-notice.text_3832f15144": "名片：{displayCard}",
+    "group-owner-member-notice.text_5bfa724a8c": "群聊：{value1}",
+    "group-owner-member-notice.text_64bbec1614": "群号：{groupId}",
+    "group-owner-member-notice.text_770ec6e737": "邀请人：{inviterId}",
+    "group-owner-member-notice.text_78369cbbac": "⚪ 成员离开",
+    "group-owner-member-notice.text_9051fddcc2": "🟢 新成员加入",
+    "group-owner-member-notice.text_9676b62fed": "方式：申请通过",
+    "group-owner-member-notice.text_a2fef33cce": "方式：邀请入群",
+    "group-owner-member-notice.text_bfc7ca3615": "时间：{value1}",
+    "group-owner-member-notice.text_df572f6429": "成员：{value1}",
+    "group-owner-member-notice.text_e0048482bb": "机器人：{botId}",
+    "group-pending-join.text_136de7a8c4": "拒绝",
+    "group-pending-join.text_14903b8370": "呜呜呜，没找到这个淫的加群申请(つд⊂)",
+    "group-pending-join.text_226af6cc05": "本次查到 {length} 条待处理加群申请，未能核验完整列表",
+    "group-pending-join.text_28384d7afd": "失败",
+    "group-pending-join.text_2c8239c6ae": "呜呜呜，处理失败辣(இωஇ)，协议端拒绝了这次审核。",
+    "group-pending-join.text_405fdfb59a": "本次查询范围内未发现待处理的加群申请，未能核验完整列表，请在 QQ 中查看。",
+    "group-pending-join.text_4a76ccc820": "已{verb}{value2}的加群申请辣٩(๑^o^๑)۶",
+    "group-pending-join.text_4d8c1c5b42": "未知",
+    "group-pending-join.text_593c328a9d": "另有 {value1} 条，详见 QQ。",
+    "group-pending-join.text_597ee8e766": "已{verb}",
+    "group-pending-join.text_5d3ec98b49": "这个 QQ 有多条待处理的加群申请，请引用相应的原加群通知或在 QQ 中处理。",
+    "group-pending-join.text_7f37189c6c": "暂无加群申请(。-ω-)zzz",
+    "group-pending-join.text_8259da8992": "\n仅展示前 {length} 条，请在 QQ 中查看其余申请。",
+    "group-pending-join.text_83fbf42f9e": "未处理",
+    "group-pending-join.text_87fa90add5": "当前无法核验本群的完整待审列表，不能批量审核。请引用原加群通知或在 QQ 中处理。",
+    "group-pending-join.text_8a28483bab": "这条加群申请已过期或已处理，请在 QQ 中核对。",
+    "group-pending-join.text_8b328b830a": "\n附加信息：{value1}",
+    "group-pending-join.text_905819e2e3": "同意",
+    "group-pending-join.text_9391be06da": "{id}（已过期或已处理）",
+    "group-pending-join.text_af75e78cac": "风险",
+    "group-pending-join.text_b405cff8d7": "当前无法按 QQ 核实并审核这条加群申请，请引用原加群通知或在 QQ 中处理。",
+    "group-pending-join.text_bd409adca9": "本次共核对 {length} 条加群申请",
+    "group-pending-join.text_ce7c0f9436": "\nQQ：{userId}\n昵称：{value2}",
+    "group-pending-join.text_d67cd0210e": "无附加信息",
+    "group-pending-join.text_d7c9ed2121": "请填写有效的申请人 QQ 号。",
+    "group-pending-join.text_dad8fb9cfc": "\n风险申请，请在 QQ 中处理。",
+    "group-pending-join.text_e9339d3412": "{label}名单\n{value2}",
+    "group-pending-join.text_effe03effd": "现有未处理的加群申请如下，共 {length} 条",
+    "group-pending-join.text_f8693f4988": "该账号为风险账号请手动处理哦ಠ~ಠ",
+    "group-pending-join.text_f8a770e14e": "{label}：{length} 条",
+    "group-pending-join.text_f956eda5d4": "加群申请处理结果未确认，请先在 QQ 核对。",
+    "group-pending-join.text_fb7e71452c": "结果未知",
+    "group-pending-join.text_fd8660b736": "当前无法核验本群的加群申请，请在 QQ 中查看。",
+    "group-quoted-review.text_4836a9d66c": "已{verb}{applicant}的加群申请辣٩(๑^o^๑)۶",
+    "group-quoted-review.text_51512e46aa": "呜呜呜，处理失败辣(இωஇ)",
+    "group-quoted-review.text_569868d9f9": "当前无法核实并处理这条加群申请，请在 QQ 手动处理。",
+    "group-quoted-review.text_bcf5d24f94": "该用户",
+    "group-quoted-review.text_df0e30f728": "找不到原消息了，手动{verb}叭~",
+    "group-quoted-review.text_f8693f4988": "该账号为风险账号请手动处理哦ಠ~ಠ",
+    "group-quoted-review.text_f956eda5d4": "加群申请处理结果未确认，请先在 QQ 核对。",
+    "group-recall-notice.text_140d9d9ff5": "撤回群号：{groupId}\n",
+    "group-recall-notice.text_144785d8f1": "撤回管理：{value1}\n",
+    "group-recall-notice.text_1c463fcb34": "撤回群名：{value1}\n",
+    "group-recall-notice.text_23cd2ec56d": "\n特殊消息：{special}",
+    "group-recall-notice.text_4d8c1c5b42": "未知",
+    "group-recall-notice.text_80e54e7d6e": "[通知({botId}) - 群聊{value2}撤回]\n",
+    "group-recall-notice.text_82a00d837b": "撤回人员：{author}\n",
+    "group-recall-notice.text_8dcd88315a": "被撤回人：{author}\n",
+    "group-recall-notice.text_bb6d995724": "管理",
+    "group-recall-notice.text_e61802dc6c": "撤回时间：{when}",
+    "group-timed-mute.text_03703eb2b7": "旧表达式待核对",
+    "group-timed-mute.text_07de49ba6d": "没有可绑定到当前机器人的唯一旧任务。",
+    "group-timed-mute.text_0a13d34e23": "无法读取定时群禁言表达式。",
+    "group-timed-mute.text_0ab10656d1": "待绑定，使用 #绑定旧定时",
+    "group-timed-mute.text_123c071f95": "原表达式待核对",
+    "group-timed-mute.text_1e8bdeb388": "旧机器人身份未匹配，可取消后重设",
+    "group-timed-mute.text_1f4273cab1": "已注册",
+    "group-timed-mute.text_2090c022ba": "定时{label}已保存，但暂未注册。",
+    "group-timed-mute.text_2e6279961c": "\n群号：{groupId}\n{value2}",
+    "group-timed-mute.text_3fe7c13476": "定时群禁言",
+    "group-timed-mute.text_49b7d15137": "本群没有定时{label}任务。",
+    "group-timed-mute.text_4a5d007679": "定时群禁言记录无效。",
+    "group-timed-mute.text_74a526adf1": "定时群禁言配置暂不可用。",
+    "group-timed-mute.text_75a8ec42b1": "解禁",
+    "group-timed-mute.text_7ba715c2d6": "定时群禁言已被其他程序修改。",
+    "group-timed-mute.text_7d47239484": "已保存，未能注册",
+    "group-timed-mute.text_7f925f5062": "本群有待绑定的旧定时{label}，请先绑定或取消。",
+    "group-timed-mute.text_8cfb3a8420": "已保存本群定时{label}，可发送 #定时禁言任务 查看。",
+    "group-timed-mute.text_9031194f3f": "禁言时间",
+    "group-timed-mute.text_9238a8eb17": "请输入有效的时间或调度器支持的六段 cron，例如 #定时{label}21:30。",
+    "group-timed-mute.text_930a740b99": "目前本群还没有定时禁言任务。",
+    "group-timed-mute.text_97cc77d5de": "解禁时间",
+    "group-timed-mute.text_a5abcd968d": "定时群禁言文件无效。",
+    "group-timed-mute.text_b13d304d1e": "多条旧记录待处理",
+    "group-timed-mute.text_b95a6ac1d9": "旧 cron 无法调度，可取消后重设",
+    "group-timed-mute.text_cebc7c4d7f": "定时群禁言文件已变更。",
+    "group-timed-mute.text_da60564edf": "当前调度器不支持",
+    "group-timed-mute.text_df9eb58a06": "定时群禁言记录过大。",
+    "group-timed-mute.text_dff5991fa1": "已取消本群定时{label}。",
+    "group-timed-mute.text_e087ff62e6": "旧定时群禁言记录无效。",
+    "group-timed-mute.text_ee92c4bab1": "旧任务 cron 无法调度，请取消后重新设置。",
+    "group-timed-mute.text_f76935bcd9": "禁言",
+    "group-timed-mute.text_fac2bbd6ae": "当前会话没有管理定时群禁言的权限。",
+    "group-timed-mute.text_fb82cbcc8c": "本群已有定时{label}任务，请先取消；如果未能注册，原发令人可重新发送相同设置。",
+    "group-timed-mute.text_fe554a3c04": "旧定时群禁言记录过大。",
+    "group-title.text_1dc0552f31": "头衔屏蔽词配置暂不可用。",
+    "group-title.text_235532a9c1": "精确",
+    "group-title.text_238746aae7": "已清空 {member} 的群头衔。",
+    "group-title.text_2cf05441ba": "当前会话没有设置该群头衔的权限。",
+    "group-title.text_36bab7a3de": "模糊",
+    "group-title.text_484d556139": "无",
+    "group-title.text_546058c94e": "当前会话没有编辑头衔屏蔽词的权限。",
+    "group-title.text_555b7d4434": "以下词已存在：{value1}",
+    "group-title.text_56fed14298": "头衔包含屏蔽词，或该成员受群管保护。",
+    "group-title.text_72aae60c79": "请填写有效的头衔屏蔽词，多个词用逗号分隔。",
+    "group-title.text_74554e8fb2": "成功删除：{value1}",
+    "group-title.text_7d9e11d9cf": "已将 {member} 的头衔设置为「{requested}」。",
+    "group-title.text_8efeafc478": "头衔屏蔽词匹配模式无效。",
+    "group-title.text_939d5d690a": "请填写要设置的头衔。",
+    "group-title.text_95612fae08": "设置群头衔的结果未确认，请在群内核对。",
+    "group-title.text_961b67d3da": "请输入有效的群头衔。",
+    "group-title.text_9cf4485104": "协议端拒绝设置群头衔。",
+    "group-title.text_a824fcae29": "本群头衔屏蔽词已达上限。",
+    "group-title.text_b3912f7c65": "当前无法设置群头衔，请核对群成员和群主权限。",
+    "group-title.text_c4656f6d72": "现有的头衔屏蔽词如下：{value1}",
+    "group-title.text_cc6f47db46": "成功添加：{value1}",
+    "group-title.text_cd1111c85e": "请 @ 一位要修改头衔的群成员。",
+    "group-title.text_d92312ffc0": "已将你的头衔更换为「{requested}」。",
+    "group-title.text_de30dcf804": "已清空你的群头衔。",
+    "group-title.text_e002ad88e0": "头衔包含屏蔽词。",
+    "group-title.text_eea3407ed7": "已修改匹配模式为{value1}匹配。",
+    "group-title.text_f540fa427a": "该成员受群管保护。",
+    "group-title.text_fc4cce2240": "头衔屏蔽词数据无效。",
+    "group-title.text_fe8f13b0c6": "以下词未在屏蔽词中：{value1}",
+    "group-verification.text_04f071ff72": "批量验证结束，已确认向 {sent} 人发送题目，跳过或未确认 {value2} 人。",
+    "group-verification.text_105f55aa14": "验证失败",
+    "group-verification.text_127d0eacd6": "「{userId}」主动退群，验证流程结束",
+    "group-verification.text_1c0934668c": "✅ 已将验证超时时间设置为{seconds}秒",
+    "group-verification.text_20517ddc60": "仅当前机器人主人可以设置入群验证模式和时限。",
+    "group-verification.text_2df1e7f3a3": "验证通知未获确认，未启动计时。",
+    "group-verification.text_3387b4c8d3": "✅ 已切换验证模式为{mode}验证",
+    "group-verification.text_33e836986e": "❎ 请输入正确的 QQ 号或艾特一位群成员",
+    "group-verification.text_36288ef37d": "无法确认目标群成员或验证权限。",
+    "group-verification.text_4107228f80": "\n{reason}，已移出群聊，请重新申请。",
+    "group-verification.text_4119067e43": "{reply}\n建议至少一分钟（60秒）",
+    "group-verification.text_5c7ea2c2b9": "暂无法保存入群验证配置。",
+    "group-verification.text_63ca8c6eab": "验证超时时间已是{seconds}秒。",
+    "group-verification.text_81d923cd3c": "❎ 该命令对机器人主人无效",
+    "group-verification.text_847c1ab4bc": "❎ 目标群成员处于验证状态",
+    "group-verification.text_8ea5c6551d": "本群已有批量验证正在进行。",
+    "group-verification.text_99467feff8": "当前群未开启验证哦~",
+    "group-verification.text_9b57faebdb": "❎ 本群验证已处于开启状态",
+    "group-verification.text_a1a906e9eb": "❎ 本群暂未开启验证",
+    "group-verification.text_a355ca5356": "❎ 该命令对群主或管理员无效",
+    "group-verification.text_a438e77214": "验证超时",
+    "group-verification.text_abebe24d28": "✅ 本群暂无从未发言的人",
+    "group-verification.text_b371f710cd": "\n验证仅剩最后一分钟\n请发送「{expression}」的运算结果\n否则将会被移出群聊",
+    "group-verification.text_bef545b91f": "✅ 已{value1}本群验证",
+    "group-verification.text_c1c102ec4b": "❎ 目标群成员当前无需验证",
+    "group-verification.text_ce393b5736": "请填写有效的正整数验证秒数。",
+    "group-verification.text_d1a181432c": "\n{reason}，未能移出该成员。",
+    "group-verification.text_e287fbee75": "批量验证已停止，已确认向 {sent} 人发送题目。",
+    "group-verification.text_e7428cef88": "当前会话没有管理入群验证的权限。",
+    "group-verification.text_e8ca51f84e": "当前无法读取完整的群成员发言数据，请核对群管理权限和协议端支持。",
+    "group-verification.text_f5860f6479": "\n{reason}，移出结果未确认，请在 QQ 核对。",
+    "group-verification.text_f6198138e2": "\n❎ 验证失败\n你还有「{remaining}」次机会\n请发送「{expression}」的运算结果",
+    "group-verification.text_fb16ef8ee0": " 欢迎！\n请在「{time}」秒内发送\n「{expression}」的运算结果\n否则将会被移出群聊",
+    "group-verification.text_fb6e77bc5e": "当前待验证成员过多，请稍后再试。",
+    "group-vote.text_055c598567": "投票已结束，当前配置不允许管理员一票决定。",
+    "group-vote.text_09625cec9f": "群投票暂不可用。",
+    "group-vote.text_112697e730": "❎ 已有相同投票，请勿重复发起",
+    "group-vote.text_14d3bb0705": "❎ 请艾特或输入一位被投票人的 QQ",
+    "group-vote.text_17013daf99": " 的{value1}投票仅剩一分钟\n{value2}\n{value3}\n发起人 {issuer}",
+    "group-vote.text_171a798bfa": "❎ 权限不足，该命令对群主无效",
+    "group-vote.text_18c155b040": "赞成票未达到 {minNum} 票或未超过反对票，投票失败。",
+    "group-vote.text_26d8b8eb01": "✅ 已{value1}投票{value2}功能",
+    "group-vote.text_2d5a6f5390": "\n管理员拥有一票决定权",
+    "group-vote.text_32e7c7dffc": "❎ 该命令对主人或机器人无效",
+    "group-vote.text_3a40ae615f": "赞成票需超过反对票且至少 {minNum} 票",
+    "group-vote.text_3ffd79f6b2": "支持票数：{yes}\n反对票数：{no}",
+    "group-vote.text_439a8df5aa": "请输入有效的投票设置正整数。",
+    "group-vote.text_5056520007": "({user})\n{value2}\n超时时间 {outTime} 秒\n",
+    "group-vote.text_512ad5fa01": "当前会话无法确认本群投票权限。",
+    "group-vote.text_51a4f02eda": "❎ 该命令对管理员无效或机器人权限不足",
+    "group-vote.text_51d017efdc": "支持请发送 #支持投票{target}，反对请发送 #反对投票{value2}",
+    "group-vote.text_5a799d94fd": "当前活跃投票过多，请稍后再发起。",
+    "group-vote.text_5aa496f083": "投票已取消，当前配置不允许这项操作。",
+    "group-vote.text_60999611c6": "({target})的{value2}投票已发起\n发起人 ",
+    "group-vote.text_63bca11588": "投票通知未获确认，未启动计票。",
+    "group-vote.text_69d9bf48b3": "投票通过后将移出群聊\n",
+    "group-vote.text_6a87c96de2": "投票取消，管理员介入。",
+    "group-vote.text_749cb8aee9": "❎ 当前{value1}已经是{next}了",
+    "group-vote.text_752d574779": "踢出",
+    "group-vote.text_78e143627f": "协议端拒绝{value1}目标。",
+    "group-vote.text_7bff31095b": "踢人",
+    "group-vote.text_7d571592ba": "已{value1}目标 {target}。",
+    "group-vote.text_8373262f61": "群投票配置已是该设置。",
+    "group-vote.text_850233f5ba": "当前会话没有设置群投票的权限。",
+    "group-vote.text_885b329f02": "❎ 未找到对应投票",
+    "group-vote.text_8a68d0c6ad": "投票成功，当前票数\n支持：{yes} 反对：{no}",
+    "group-vote.text_b3757a54ea": "可设置超时时间（秒）、最低票数及禁言时间（秒），例如 #投票设置禁言时间8600。",
+    "group-vote.text_b68fa22994": "当前会话无法执行投票结果。",
+    "group-vote.text_ba6d66092c": "禁言时间 {BanTime} 秒\n",
+    "group-vote.text_bdf8068cda": "投票结束，投票结果：\n{value1}\n",
+    "group-vote.text_c7fe838c46": "❎ 该命令对机器人无效",
+    "group-vote.text_d54c6721a5": "✅ 已把{value1}设置成{next}了",
+    "group-vote.text_d5bb8fdec8": "投票结束，管理员介入。",
+    "group-vote.text_d91eaddd9c": "❎ 您不能对自己进行投票",
+    "group-vote.text_ddca42f1a9": "群投票参与人数已达上限。",
+    "group-vote.text_e0950272ac": "#启用投票禁言 / #禁用投票禁言\n#启用投票踢人 / #禁用投票踢人\n",
+    "group-vote.text_e5fe024945": "操作结果未确认，请先在 QQ 核对。",
+    "group-vote.text_e6a8acd2a9": "❎ 你已参与过投票，请勿重复参与",
+    "group-vote.text_ea554ce990": "目标受到保护，无法执行。",
+    "group-vote.text_ef700df3e9": "❎ 该功能已被禁用，请发送 #启用投票{value1} 来启用该功能。",
+    "group-vote.text_f76935bcd9": "禁言",
+    "group-vote.text_fdbd691c31": "❎ 投票{value1}功能已处于{value2}状态",
+    "group-vote.text_ffdf791c8e": "❎ 未找到正在计票的投票",
+    "index.text_4e1860cad1": "[group] 自动群名片配置无效，未启动定时更新。",
+    "index.text_db35009f5d": "当前协议端不支持主动发送好友申请。",
+    "like-settings.text_3857a7f825": "点赞配置须为普通文件。",
+    "like-settings.text_4cd698e132": "点赞未成功，可能已达到平台次数上限或协议端暂不接受。",
+    "like-settings.text_608bd2d8ce": "点赞配置的 YAML 无效。",
+    "like-settings.text_64e2f6254a": "点赞配置的 YAML 引用无效。",
+    "like-settings.text_7798265450": "给你点了 {{thumbUpNum}} 下赞。",
+    "like-settings.text_8bb8f6c961": "{key} 须为布尔值。",
+    "like-settings.text_92a602c784": "count 须为 1–10 的整数。",
+    "like-settings.text_95865e87ab": "recall 须为 0–120 秒。",
+    "like-settings.text_a4ae595d15": "保存将改变其他 YAML 字段，请先检查配置中的引用。",
+    "like-settings.text_b642af32ef": "{key} 须为文本或 false。",
+    "like-settings.text_c293acf76f": "点赞配置写入权限已失效。",
+    "like-settings.text_c946b410e3": "点赞配置修改须为映射。",
+    "like-settings.text_db3c2c2835": "点赞配置已变更，请重新读取后保存。",
+    "like-settings.text_e18863ceab": "点赞配置版本无效，请重新读取。",
+    "like-settings.text_e756444b59": "群功能配置须为映射。",
+    "like-settings.text_e9a05f9d3f": "包含未知的点赞配置字段。",
+    "like-settings.text_f00bd3786a": "当前仅向好友点赞。",
+    "likes.text_6751e96036": "正在处理你的点赞请求。",
+    "likes.text_9b6fb6c426": "点赞配置无法读取，请联系管理员。",
+    "likes.text_9c0d90f768": "赞",
+    "likes.text_a0c7716669": "你",
+    "likes.text_bd80d5cbf9": "当前协议端不支持资料卡点赞。",
+    "likes.text_c92686569d": "超",
+    "likes.text_dfab485394": "请在群聊中只 @ 一位其他群成员。",
+    "likes.text_ec4a104b5a": "请直接发送点赞指令。",
+    "managed-blacklist.text_019ec861ae": "入群验证成功消息无效。",
+    "managed-blacklist.text_1014170db4": "群投票 {field} 配置无效。",
+    "managed-blacklist.text_28347b513c": "{key} 须为映射。",
+    "managed-blacklist.text_2c6226549d": "入群验证模式无效。",
+    "managed-blacklist.text_2f5b4c164c": "群管名单包含无效 QQ 号。",
+    "managed-blacklist.text_349a434b43": "群管名单配置须为映射。",
+    "managed-blacklist.text_358b92f4b8": "群管名单配置已变更，请重试。",
+    "managed-blacklist.text_6a0329f3dc": "noBan 须为布尔值。",
+    "managed-blacklist.text_6d60b91058": "✅ 验证成功，欢迎入群",
+    "managed-blacklist.text_7d19566e54": "无法安全定位 {field} 的 YAML 源码范围。",
+    "managed-blacklist.text_7f6d605eae": "有一个加群通知，管理员快去看看吧~",
+    "managed-blacklist.text_86a479b541": "加群通知文案无效。",
+    "managed-blacklist.text_8a4766fad5": "群管名单配置正由其他程序修改。",
+    "managed-blacklist.text_904778f769": "{field} 须为 QQ 号列表。",
+    "managed-blacklist.text_9f7805a87f": "群管名单",
+    "managed-blacklist.text_aa82a8ac77": "保存将改变其他 YAML 字段，请检查配置引用。",
+    "managed-blacklist.text_b2ed6da695": "入群验证超时时间无效。",
+    "managed-blacklist.text_bfdcad1d78": "groupAddNotice.msg 无效。",
+    "managed-blacklist.text_c340a9586a": "入群验证时间或运算范围无效。",
+    "managed-blacklist.text_d22036798f": "群管名单配置文件无效。",
+    "managed-blacklist.text_f4267c8c8c": "群管名单 YAML 无效。",
+    "managed-blacklist.text_f4881fc2e9": "入群验证需要两个不同的可用整数。",
+    "managed-blacklist.text_fa7db96f41": "群管名单超过文件大小上限。",
+    "member-notices.text_0d5f4509dd": "本群",
+    "member-notices.text_335e0da8fc": "📋 成员变动\n\n{who} 已被移出本群。",
+    "member-notices.text_764ebaf67d": " 欢迎加入～\n先看看群公告，有问题随时交流。",
+    "member-notices.text_810bebfa4d": "🍃 成员离开\n\n{who} 已退出本群。\n有缘再见，祝一切顺利。",
+    "member-notices.text_8d7060efbf": "🌸 欢迎来到{value1}\n\n",
+    "notice-settings-card-model.text_0515a3fbfc": "全部主人",
+    "notice-settings-card-model.text_0d3b7c33ec": "群临时消息",
+    "notice-settings-card-model.text_0e0138610a": "Bot被禁言",
+    "notice-settings-card-model.text_103aee1983": "#通知设置删除缓存时间 + 时间(秒)",
+    "notice-settings-card-model.text_12accaff01": "好友撤回",
+    "notice-settings-card-model.text_17a8c31791": "群管理变动",
+    "notice-settings-card-model.text_19e250f99e": "向主人通知群成员的增减",
+    "notice-settings-card-model.text_2230f0c4ce": "转发已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4",
+    "notice-settings-card-model.text_2a70cd3b6b": "开启通知全部主人，关闭只通知配置中的首位主人",
+    "notice-settings-card-model.text_2c1bdb2ae6": "无效",
+    "notice-settings-card-model.text_2f971f0a42": "删除缓存时间",
+    "notice-settings-card-model.text_32e1d0b4cd": "好友和群撤回消息的缓存保留时间",
+    "notice-settings-card-model.text_39611933bd": "消息相关",
+    "notice-settings-card-model.text_39e190a823": "转发文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4",
+    "notice-settings-card-model.text_50da84eb96": "通知主人有新的好友申请",
+    "notice-settings-card-model.text_50fe8a519c": "全部主人（默认）",
+    "notice-settings-card-model.text_59201b4531": "好友列表变动",
+    "notice-settings-card-model.text_5b7b0b6660": "已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4",
+    "notice-settings-card-model.text_5fa03850e5": "首位主人",
+    "notice-settings-card-model.text_607c6db0f1": "群撤回",
+    "notice-settings-card-model.text_622b117f29": "{seconds} 秒",
+    "notice-settings-card-model.text_6744b4c6a9": "已关闭",
+    "notice-settings-card-model.text_68ea5dd4d7": "系统设置",
+    "notice-settings-card-model.text_74d9ad48d6": "好友申请",
+    "notice-settings-card-model.text_79b8844595": "群聊邀请",
+    "notice-settings-card-model.text_7b00210c8e": "群:{groupId} 单独配置",
+    "notice-settings-card-model.text_84b70f61fe": "目前支持 NapCat 好友新增",
+    "notice-settings-card-model.text_87cc45deac": "机器人进退群、被移出及群解散",
+    "notice-settings-card-model.text_8a4ef3e48e": "已开启",
+    "notice-settings-card-model.text_9488665fb4": "其他通知",
+    "notice-settings-card-model.text_9944b52ac0": "申请通知",
+    "notice-settings-card-model.text_9a82c8965f": "群消息",
+    "notice-settings-card-model.text_9db9d0d6ea": "群成员变动",
+    "notice-settings-card-model.text_ad3e7e8fd5": "群邀请",
+    "notice-settings-card-model.text_b26f5571c3": "Bot:{botId} 单独配置",
+    "notice-settings-card-model.text_b5cf3ca16f": "列表变动",
+    "notice-settings-card-model.text_b836608abe": "通知收件人",
+    "notice-settings-card-model.text_bb69cc6e13": "#通知设置{command} + 开启/关闭",
+    "notice-settings-card-model.text_be4344dee7": "#通知设置全部通知 + 开启/关闭",
+    "notice-settings-card-model.text_c36946d1cf": "图文表情可混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4",
+    "notice-settings-card-model.text_c3afaed55e": "群聊列表变动",
+    "notice-settings-card-model.text_ca167017c5": "通知全部主人",
+    "notice-settings-card-model.text_d1fdf073e6": "Bot:{botId} & 群:{groupId} 单独配置",
+    "notice-settings-card-model.text_deaef003cb": "在原编号通知内展示申请详情",
+    "notice-settings-card-model.text_e4a8f9e3f9": "加群申请",
+    "notice-settings-card-model.text_f76935bcd9": "禁言",
+    "notice-settings-card-model.text_fc0b8c0305": "好友消息",
+    "notice-settings-card-renderer.text_6923c796fb": "[渲染] {value1} {renderer} {api} {device}",
+    "notice-settings-card-renderer.text_d36a6c476a": "群管配置",
+    "notice-settings-store.text_247ca01ae2": "通知设置",
+    "notice-settings-store.text_5202f84bbd": "无法安全定位通知设置的 YAML 字段。",
+    "notice-settings.text_02ca33c606": "（支持已核验的文本、图片和表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）",
+    "notice-settings.text_0763d1024c": "（支持文本、表情和已核验原图混排，原音限已核验的独立 QQ SILK，视频限已核验的独立 MP4）",
+    "notice-settings.text_1124352949": "当前会话没有修改此通知设置的权限。",
+    "notice-settings.text_1b210521ba": "暂无法保存通知设置，配置未被本次操作覆盖。",
+    "notice-settings.text_1f4181ac81": "❎ 删除缓存时间仅支持默认设置。",
+    "notice-settings.text_214adbb965": "删除缓存时间：{value1}",
+    "notice-settings.text_2160a6c80b": "（已核验的文本、图片、表情和戳一戳，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）",
+    "notice-settings.text_270443ff14": "❎ 请使用开启、关闭或取消。",
+    "notice-settings.text_2c1bdb2ae6": "无效",
+    "notice-settings.text_33dae7bf2e": "\n当前无法读取通知设置。",
+    "notice-settings.text_350b867641": "所有主人",
+    "notice-settings.text_3fd47edce4": "关闭",
+    "notice-settings.text_5aa2915072": "全部通知：当前机器人的{recipients}{value2}",
+    "notice-settings.text_5fa03850e5": "首位主人",
+    "notice-settings.text_622b117f29": "{seconds} 秒",
+    "notice-settings.text_664916a999": "❎ 该设置项不支持此作用域。",
+    "notice-settings.text_733aba6db6": "✅ 已{value1}全部 {length} 项默认事件通知。",
+    "notice-settings.text_7a4a4cc85a": "（机器人进退群、被移出及群解散）",
+    "notice-settings.text_8da97ddda9": "开启",
+    "notice-settings.text_96ac77392f": "❎ 请填写有效的正整数秒数。",
+    "notice-settings.text_99f8ca068b": "（当前支持文本、图片、表情，语音原音限已核验的 QQ SILK，视频限已核验的独立 MP4）",
+    "notice-settings.text_9b65a28f35": "当前无法读取通知设置。",
+    "notice-settings.text_a43589c104": "通知设置无变化。",
+    "notice-settings.text_a8ab9d7a94": "（主人编号通知详情）",
+    "notice-settings.text_a95adab598": "（当前仅 NapCat 新增）",
+    "notice-settings.text_ccb91ce53d": "（未设置）",
+    "notice-settings.text_cf311caa29": "（仅机器人本人）",
+    "notice-settings.text_d283e288c6": "✅ 已保存通知设置。",
+    "notice-settings.text_edd04bcc54": "【通知设置】",
+    "owner-friend-reply.text_03f47776b4": "❎ 回复含有不支持的消息段，整条消息未发送。",
+    "owner-friend-reply.text_06abb72781": "❎ 好友列表查无此人",
+    "owner-friend-reply.text_3996f93313": "原好友消息通知已过期，请改用「回复 QQ号 <内容>」直接发送。",
+    "owner-friend-reply.text_4d86673643": "请由当前机器人的主人私聊回复好友。",
+    "owner-friend-reply.text_5cbccccf01": "✅ 已把消息发给它了哦~",
+    "owner-friend-reply.text_6231b5c85f": "❎ QQ号不正确，人家做不到的啦>_<~",
+    "owner-friend-reply.text_7d2a387083": "❎ 消息不能为空",
+    "owner-friend-reply.text_810b427d47": "好友消息发送结果未确认，请先在 QQ 中核对。",
+    "owner-friend-reply.text_861263afb4": "❎ 无法核验原消息中的图片或 QQ 表情，整条消息未发送。",
+    "owner-friend-reply.text_da7b4b19e5": "❎ 协议端拒绝发送这条好友消息。",
+    "owner-friend-reply.text_ebc4be67aa": "❎ 不能给当前机器人自己发送好友消息。",
+    "owner-friend-reply.text_ff5c335a07": "当前无法通过这条私聊发送好友消息，请在 QQ 中发送。",
+    "owner-request-batch.text_18cf61afbd": "已离开待审列表",
+    "owner-request-batch.text_28384d7afd": "失败",
+    "owner-request-batch.text_597ee8e766": "已{verb}",
+    "owner-request-batch.text_5a5ce4e708": "本次查询范围内未发现待处理的{kind}，请在 QQ 中查看完整列表。",
+    "owner-request-batch.text_7d7c402c04": "多条待审，请手动处理",
+    "owner-request-batch.text_83fbf42f9e": "未处理",
+    "owner-request-batch.text_af75e78cac": "风险",
+    "owner-request-batch.text_b0be616a4b": "已受理，待核对",
+    "owner-request-batch.text_b39b248297": "{kind}批量审核结果未确认，请先在 QQ 中核对。",
+    "owner-request-batch.text_bf241ef309": "当前无法核验可批量审核的{kind}，请在 QQ 中处理。",
+    "owner-request-batch.text_e36a329356": "本次共核对 {length} 条{kind}。审核仅覆盖本次可核验的范围，完整列表请在 QQ 中查看。",
+    "owner-request-batch.text_e9339d3412": "{label}名单\n{value2}",
+    "owner-request-batch.text_f8a770e14e": "{label}：{length} 条",
+    "owner-request-batch.text_fb7e71452c": "结果未知",
+    "private-group-mute.text_054404a3c8": "当前私聊会话没有群禁言权限。",
+    "private-group-mute.text_060d121dff": "群 {groupId}",
+    "private-group-mute.text_1221f79fd5": "解除全体禁言",
+    "private-group-mute.text_22624520a4": "受群管保护",
+    "private-group-mute.text_30381f77e8": "群 {groupId} 的{action}结果未确认，请核对当前禁言状态。",
+    "private-group-mute.text_4229d2fb99": "请填写有效的群号和 QQ 号。",
+    "private-group-mute.text_48f797024f": "协议端拒绝了群 {groupId} 的{action}操作。",
+    "private-group-mute.text_54f265889a": "无法对群 {groupId} 的 {target} 执行{action}，请核对成员身份与权限。",
+    "private-group-mute.text_5c7217592e": "{scope} 的{action}结果未确认，请核对当前{state}。",
+    "private-group-mute.text_691d8a1458": "请填写有效的群号、QQ 号和禁言时长。",
+    "private-group-mute.text_6e802272b0": "受群禁言保护",
+    "private-group-mute.text_7119778e87": "✅ 已将「{identity}」踢出群聊（群 {groupId}）",
+    "private-group-mute.text_7481c6123b": "协议端拒绝了群 {groupId} 对 {target} 的{action}。",
+    "private-group-mute.text_75a8ec42b1": "解禁",
+    "private-group-mute.text_7dc7680369": "禁言状态",
+    "private-group-mute.text_818db34ec9": "✅ 已将群 {groupId} 的「{identity}」禁言 {seconds} 秒",
+    "private-group-mute.text_8f381d9aa5": "群 {groupId} 对 {target}",
+    "private-group-mute.text_92a98d5729": "开启全体禁言",
+    "private-group-mute.text_9c48f6c70c": "请填写有效的群号。",
+    "private-group-mute.text_a97279717e": "当前私聊会话没有移出群成员的权限。",
+    "private-group-mute.text_ab4ac54c96": "无法对群 {groupId} 执行{action}，请核对群管理权限。",
+    "private-group-mute.text_b15986e965": "✅ 已将群 {groupId} 的「{identity}」解除禁言",
+    "private-group-mute.text_b19d453c21": "群 {groupId} 的 {target} 受群禁言保护。",
+    "private-group-mute.text_b5203e02df": "群 {groupId} 的 {target} 受群管保护。",
+    "private-group-mute.text_b858d99bee": "群 {groupId} 的 {target} {value3}。",
+    "private-group-mute.text_d5586c8693": "踢出群聊",
+    "private-group-mute.text_e2b54849e1": "✅ 已将群「{value1}」{action}",
+    "private-group-mute.text_ee2d379872": "群成员状态",
+    "private-group-mute.text_f76935bcd9": "禁言",
+    "repeat.text_71bc7a4052": "无法建立复读会话。",
+    "repeat.text_a15949957b": "请发送要复读的内容",
+    "repeat.text_d3bc98297a": "操作超时已取消",
+    "request-overview.text_12e6915279": "本次查到 {count} 条，未能核验完整列表",
+    "request-overview.text_3206286770": "{label}：未核实",
+    "request-overview.text_739389c5f9": "本次查询范围内未发现，未能核验完整列表",
+    "request-overview.text_74d9ad48d6": "好友申请",
+    "request-overview.text_92559c8f27": "{count} 条",
+    "request-overview.text_9716c7867a": "当前群申请",
+    "request-overview.text_ad3e7e8fd5": "群邀请",
+    "request-overview.text_e2f62b93d2": "仅当前机器人的主人可查看请求总览。",
+    "request-overview.text_e670a464b8": "\n可使用 {detail} 查看详情",
+    "request-overview.text_e6a10aacbc": "以下为暂未处理的请求",
+    "request-overview.text_f27c7bf063": "单向好友：未核实",
+    "request-review.text_0a2a5c33dd": "申请人",
+    "request-review.text_0bc07b8c10": "协议端没有接受这次操作，群请求仍待审核。",
+    "request-review.text_0d41259f66": "【待审核群请求】\n{value1}\n{actions}",
+    "request-review.text_2a08d3e7f5": "#同意入群 {id}\n#拒绝入群 {value2} [原因]",
+    "request-review.text_4bd09e36eb": "\n也可引用此通知回复「同意」或「拒绝」。",
+    "request-review.text_6cf1c3cd12": "群请求处理结果未确认。请先在 QQ 核对，再决定是否重试。",
+    "request-review.text_6d066daa0e": "邀请机器人加入群聊",
+    "request-review.text_7635bf24a4": "用法：#拒绝入群 <编号> [原因]",
+    "request-review.text_7bd74daa9a": "已同意群请求。",
+    "request-review.text_83ab0a608a": " · 邀请者 {inviter}",
+    "request-review.text_90acc5dee7": "已拒绝群请求。",
+    "request-review.text_90b918255e": "\n附言：{comment}",
+    "request-review.text_95d3c03027": "当前协议端不支持审核群请求。",
+    "request-review.text_a358632b8f": "用法：#同意入群 <编号>",
+    "request-review.text_a8292dcedc": "邀请者",
+    "request-review.text_afb4585d55": "{id} · {kind} · 群 {groupId} · {user} {applicant}",
+    "request-review.text_bd86fc28b4": "未找到当前机器人的待审核群请求。",
+    "request-review.text_cb3a88ff02": "当前没有待审核的群请求。",
+    "request-review.text_de89a5b7d9": "这个群请求正在处理。",
+    "request-review.text_e07bb7e32e": "请由当前机器人的主人私聊处理群请求。",
+    "request-review.text_ecac8180a9": "待审核群请求共有 {pages} 页。",
+    "request-review.text_efccdc5fef": "【待审核群请求】第 {page}/{pages} 页",
+    "request-review.text_f2dd0eab36": "用法：#入群申请 [页码]",
+    "request-review.text_fb68301598": "成员申请入群",
+    "request-review.text_ff7233a90a": "发送 #同意入群 <编号> 或 #拒绝入群 <编号> [原因]。",
+    "runtime-events.text_25cbae3da6": "欢迎新人",
+    "runtime-events.text_51a7f50614": "主动复读",
+    "runtime-events.text_671aa5876a": "群请求审核",
+    "runtime-events.text_a35768178c": "自动复读",
+    "runtime-events.text_c5c7885a8e": "退群通知",
+    "screened-words.text_0006d696d8": "新增",
+    "screened-words.text_0d5f4509dd": "本群",
+    "screened-words.text_1749100be5": "屏蔽词设置无效。",
+    "screened-words.text_1e7d9ca6fb": "屏蔽词监听当前关闭。",
+    "screened-words.text_2d99b9fb8b": "屏蔽词设置",
+    "screened-words.text_2f9daa8289": "删除",
+    "screened-words.text_31a42c858f": "{name}剩余 {value2} 个词未展示。",
+    "screened-words.text_3a119426b3": "屏蔽词配置正由其他程序修改。",
+    "screened-words.text_4116ed642c": "检测到违规词汇，已经制裁",
+    "screened-words.text_4a9ca6c825": "{value1}{label}屏蔽词：【{value3}】",
+    "screened-words.text_4be010acd4": "仅当前机器人的主人可以设置屏蔽词监听。",
+    "screened-words.text_4cc64fe6cd": "{label}屏蔽词已达上限。",
+    "screened-words.text_50a5557370": "{name}屏蔽词如下，共 {length} 个",
+    "screened-words.text_63d6b47116": "全局",
+    "screened-words.text_8cb590ad26": "屏蔽词词表",
+    "screened-words.text_8fcbb01165": "当前会话没有编辑{label}屏蔽词的权限。",
+    "screened-words.text_9f9e5df6cb": "已经被屏蔽",
+    "screened-words.text_a285325003": "屏蔽词配置格式无效。",
+    "screened-words.text_a2fa46e176": "请填写有效屏蔽词，多个词用逗号分隔。",
+    "screened-words.text_a8de643af4": "屏蔽词配置暂不可用。",
+    "screened-words.text_a9f749a829": "屏蔽词文件超出上限。",
+    "screened-words.text_acb3606148": "已{value1}屏蔽词监听。",
+    "screened-words.text_b8259a1c65": "词语【{value1}】{value2}",
+    "screened-words.text_ba018f9fc0": "屏蔽词数量超出上限。",
+    "screened-words.text_c07e5f7456": "屏蔽词词表无效。",
+    "screened-words.text_d7abc6cbd0": "尚未被屏蔽",
+    "screened-words.text_e3e505f1d9": "屏蔽词监听已处于{value1}状态。",
+    "temporary-message-notice.text_0c4d421224": "未核实（协议报告 {reportedGroupId}）",
+    "temporary-message-notice.text_0d8ac3f352": "[消息({botId}) - 群临时消息]\n",
+    "temporary-message-notice.text_34c8fc816b": "消息内容：",
+    "temporary-message-notice.text_433b841fe3": "未核实",
+    "temporary-message-notice.text_4f25f2b199": "发送人账号：{userId}\n",
+    "temporary-message-notice.text_eaae0032b0": "来源群号：{source}\n"
+  },
+  "parameters": {
+    "auto-group-card.text_fbd33cf343": {
+      "updated": "updated",
+      "unchanged": "unchanged",
+      "failed": "failed",
+      "unknown": "unknown"
+    },
+    "auto-group-card.text_2152e8e729": {
+      "unavailableAccounts": "unavailableAccounts"
+    },
+    "banned-words.text_271af2a977": {
+      "value1": "ruleModes[matchType(entry) - 1] ?? \"旧规则待核对\""
+    },
+    "banned-words.text_259220ce1a": {
+      "value1": "penaltyNames[Number(info.penaltyType) - 1] ?? \"旧规则待核对\""
+    },
+    "banned-words.text_db77d61415": {
+      "value1": "positive(info.addedBy) || typeof info.addedBy === \"string\" && /^\\d{1,16}$/u.test(info.addedBy) ? info.addedBy : \"未知\""
+    },
+    "banned-words.text_f31340cb38": {
+      "value1": "typeof info.date === \"string\" ? info.date.slice(0, 48).replace(/[\\p{Cc}\\p{Cf}]/gu, \"\") : \"未知\""
+    },
+    "banned-words.text_e476b9f54c": {
+      "seconds": "seconds"
+    },
+    "friend-message-notice.text_75c5a94f41": {
+      "botId": "botId"
+    },
+    "friend-message-notice.text_36000fb53f": {
+      "userId": "userId"
+    },
+    "friend-message-notice.text_7b0771ce1d": {
+      "value1": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "friend-message-notice.text_8a28439754": {
+      "quoteHint": "quoteHint",
+      "userId": "userId"
+    },
+    "friend-poke-notice.text_16c1b7c5c9": {
+      "botId": "botId"
+    },
+    "friend-poke-notice.text_c6ce36333c": {
+      "userId": "userId"
+    },
+    "friend-recall-notice.text_56e16f2899": {
+      "botId": "botId"
+    },
+    "friend-recall-notice.text_36000fb53f": {
+      "userId": "userId"
+    },
+    "friend-recall-notice.text_60d3b54396": {
+      "when": "when"
+    },
+    "friend-relationship-notice.text_0d2eb9c771": {
+      "botId": "botId",
+      "value2": "titles[kind]"
+    },
+    "friend-relationship-notice.text_36000fb53f": {
+      "userId": "userId"
+    },
+    "friend-relationship-notice.text_1a8679d6bb": {
+      "value1": "name || \"未知\""
+    },
+    "friend-request-list.text_3c475b75db": {
+      "value1": "shanghaiTime.format(seconds * 1000)"
+    },
+    "friend-request-list.text_261d1eb9bd": {
+      "length": "entries.length"
+    },
+    "friend-request-list.text_3bdc06c4ce": {
+      "length": "entries.length"
+    },
+    "friend-request-list.text_8259da8992": {
+      "length": "shown.length"
+    },
+    "friend-request-list.text_06fe686be4": {
+      "userId": "userId",
+      "value2": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "friend-request-list.text_44d7227b76": {
+      "value1": "displayRequestField(source, 256) || \"未知\"",
+      "value2": "requestTime(time)"
+    },
+    "friend-request-list.text_8b328b830a": {
+      "value1": "displayRequestField(comment, 512) || \"无附加信息\""
+    },
+    "friend-request-notice.text_8f3453d252": {
+      "botId": "botId"
+    },
+    "friend-request-notice.text_ab396461c0": {
+      "userId": "userId"
+    },
+    "friend-request-notice.text_7432151306": {
+      "value1": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "friend-request-notice.text_eefb7113fb": {
+      "value1": "displayRequestField(source, 256) || \"未知\""
+    },
+    "friend-request-notice.text_cd8c63c469": {
+      "value1": "displayRequestField(comment, 512) || \"无附加信息\""
+    },
+    "friend-request-review.text_9130311e8b": {
+      "verb": "verb",
+      "applicant": "applicant"
+    },
+    "friend-request-review.text_f502a4c980": {
+      "verb": "verb",
+      "applicant": "applicant"
+    },
+    "group-activity.text_fdfcb48138": {
+      "userId": "userId",
+      "value2": "nickname || userId"
+    },
+    "group-activity.text_7f9002261f": {
+      "length": "sorted.length"
+    },
+    "group-activity.text_195d0c23ba": {
+      "length": "sorted.length"
+    },
+    "group-activity.text_3ac49b343f": {
+      "value1": "start + index + 1"
+    },
+    "group-activity.text_da6f627ab3": {
+      "value1": "formattedDate(entry.joinTime)"
+    },
+    "group-activity.text_f2cdfe21b1": {
+      "value1": "entry.lastSentTime ? formattedDate(entry.lastSentTime) : \"未记录\""
+    },
+    "group-activity.text_0c88f66347": {
+      "label": "window.label"
+    },
+    "group-activity.text_8c42f26d5d": {
+      "page": "page",
+      "pages": "pages"
+    },
+    "group-activity.text_98437fb742": {
+      "label": "window.label"
+    },
+    "group-activity.text_461a50b127": {
+      "page": "page",
+      "pages": "pages",
+      "length": "shown.length",
+      "value4": "members.length"
+    },
+    "group-activity.text_9c24bfc568": {
+      "next": "next"
+    },
+    "group-activity.text_98d70da306": {
+      "value1": "formattedDate(entry.joinTime)"
+    },
+    "group-activity.text_4995b77877": {
+      "label": "window.label"
+    },
+    "group-activity.text_45778d51bc": {
+      "size": "selected.size"
+    },
+    "group-add-notice.text_0658d83969": {
+      "user": "user"
+    },
+    "group-add-notice.text_0fc03b6a51": {
+      "value1": "line(event.nickname) || \"未知\""
+    },
+    "group-add-notice.text_a077741442": {
+      "value1": "comment ? \"\\n\" : \"\"",
+      "inviter_id": "event.inviter_id"
+    },
+    "group-add-notice.text_3e42af8964": {
+      "value1": "match[1]",
+      "group": "group"
+    },
+    "group-announcements.text_61b18b70fa": {
+      "index": "index"
+    },
+    "group-announcements.text_1a0fc31c3b": {
+      "value1": "deletedText(result.text)"
+    },
+    "group-invitation-list.text_2d8fb3546f": {
+      "length": "entries.length"
+    },
+    "group-invitation-list.text_d22910bde9": {
+      "length": "entries.length"
+    },
+    "group-invitation-list.text_588fd16580": {
+      "length": "shown.length"
+    },
+    "group-invitation-list.text_897485828f": {
+      "groupId": "groupId",
+      "value2": "displayRequestField(groupName, 128) || \"未知\""
+    },
+    "group-invitation-list.text_fe45271e58": {
+      "inviterId": "inviterId",
+      "value2": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "group-invitation-list.text_bd8cf904d3": {
+      "value1": "roleNames[role]"
+    },
+    "group-invitation-review.text_ad1f34e8f4": {
+      "groupId": "groupId"
+    },
+    "group-invitation-review.text_9db598325f": {
+      "verb": "verb",
+      "value2": "positiveId(groupId) ? `群 ${groupId} 的邀请` : \"这条群邀请\""
+    },
+    "group-leave-blacklist.text_f65bafe98b": {
+      "userId": "userId"
+    },
+    "group-leave-blacklist.text_a9a2de8cb1": {
+      "userId": "userId"
+    },
+    "group-leave-blacklist.text_b80aba8ad8": {
+      "userId": "userId"
+    },
+    "group-message-notice.text_9e90ae4f85": {
+      "botId": "botId"
+    },
+    "group-message-notice.text_d8c98c9c97": {
+      "groupId": "groupId"
+    },
+    "group-message-notice.text_57923cdce7": {
+      "value1": "groupName || \"未知\""
+    },
+    "group-message-notice.text_4f25f2b199": {
+      "userId": "userId"
+    },
+    "group-message-notice.text_668b44003e": {
+      "value1": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "group-mute.text_12cebb1cf7": {
+      "days": "days"
+    },
+    "group-mute.text_969e87756b": {
+      "hours": "hours"
+    },
+    "group-mute.text_b8a2da7e54": {
+      "minutes": "minutes"
+    },
+    "group-mute.text_b9149928c9": {
+      "value1": "days ? `${days} 天 ` : \"\"",
+      "value2": "hours ? `${hours} 小时 ` : \"\"",
+      "value3": "minutes ? `${minutes} 分 ` : \"\"",
+      "value4": "remaining % 60"
+    },
+    "group-mute.text_6e17514698": {
+      "value1": "nickname || userId",
+      "userId": "userId",
+      "value3": "role && Object.hasOwn(roles, role) ? roles[role] : \"未确认\""
+    },
+    "group-mute.text_d5a096a521": {
+      "time": "time",
+      "value2": "new Date(until * 1000).toLocaleString(\"zh-CN\")"
+    },
+    "group-mute.text_5f0d545088": {
+      "list": "list"
+    },
+    "group-mute.text_b57491f340": {
+      "operation": "operation"
+    },
+    "group-mute.text_cb24c9668d": {
+      "operation": "operation"
+    },
+    "group-mute.text_7c0ca23df6": {
+      "operation": "operation"
+    },
+    "group-mute.text_d573799815": {
+      "operation": "operation"
+    },
+    "group-mute.text_06d2ef3a2a": {
+      "list": "list"
+    },
+    "group-mute.text_56d590de58": {
+      "value1": "toggle[1]"
+    },
+    "group-mute.text_6e97c77ee5": {
+      "value1": "toggle[1]"
+    },
+    "group-mute.text_1e83fa613f": {
+      "target": "target",
+      "list": "list"
+    },
+    "group-mute.text_48e6f60f02": {
+      "target": "target",
+      "list": "list"
+    },
+    "group-mute.text_2b5516117e": {
+      "list": "list",
+      "target": "target"
+    },
+    "group-mute.text_8582eacd4c": {
+      "target": "target",
+      "list": "list"
+    },
+    "group-mute.text_a1778b97a8": {
+      "list": "list"
+    },
+    "group-mute.text_c70d091321": {
+      "value1": "enabled ? \"开启\" : \"关闭\""
+    },
+    "group-mute.text_f480ff4a82": {
+      "confirmed": "counts.confirmed"
+    },
+    "group-mute.text_3a5db13677": {
+      "rejected": "counts.rejected"
+    },
+    "group-mute.text_3b00179d07": {
+      "unknown": "counts.unknown"
+    },
+    "group-mute.text_ebc7be6f78": {
+      "value1": "counts.unavailable + counts.protected"
+    },
+    "group-mute.text_1a439dbea9": {
+      "expired": "counts.expired"
+    },
+    "group-mute.text_472710936f": {
+      "stopped": "stopped"
+    },
+    "group-mute.text_44cded3a5b": {
+      "seconds": "seconds"
+    },
+    "group-mute.text_697ac6031e": {
+      "value1": "confirmed.join(\"、\")"
+    },
+    "group-mute.text_12cc3d2f41": {
+      "value1": "confirmed.join(\"、\")"
+    },
+    "group-mute.text_54f688e5f5": {
+      "confirmedLabels": "confirmedLabels"
+    },
+    "group-mute.text_fdec810aac": {
+      "confirmedLabels": "confirmedLabels",
+      "operation": "operation"
+    },
+    "group-mute.text_b0d00fafb1": {
+      "value1": "rejected.join(\"、\")"
+    },
+    "group-mute.text_20d90defe2": {
+      "value1": "unknown.join(\"、\")"
+    },
+    "group-mute.text_d4a68336b5": {
+      "value1": "unavailable.join(\"、\")"
+    },
+    "group-owner-admin-notice.text_450bbee8b8": {
+      "botId": "botId",
+      "title": "title"
+    },
+    "group-owner-admin-notice.text_659b0e8718": {
+      "userId": "userId"
+    },
+    "group-owner-admin-notice.text_2209785716": {
+      "groupId": "groupId"
+    },
+    "group-owner-ban-notice.text_63c4ff4f1e": {
+      "days": "days"
+    },
+    "group-owner-ban-notice.text_646d81965a": {
+      "botId": "botId"
+    },
+    "group-owner-ban-notice.text_c10961f23a": {
+      "operatorId": "operatorId"
+    },
+    "group-owner-ban-notice.text_6d5dbc507f": {
+      "groupId": "groupId"
+    },
+    "group-owner-ban-notice.text_3d4cf71236": {
+      "botId": "botId"
+    },
+    "group-owner-ban-notice.text_1ef04217ab": {
+      "operatorId": "operatorId"
+    },
+    "group-owner-ban-notice.text_fcc77b1c08": {
+      "groupId": "groupId"
+    },
+    "group-owner-ban-notice.text_472dcb1058": {
+      "value1": "banDuration(duration)"
+    },
+    "group-owner-group-notice.text_5bfa724a8c": {
+      "value1": "name || \"群名称暂不可用\""
+    },
+    "group-owner-group-notice.text_64bbec1614": {
+      "groupId": "groupId"
+    },
+    "group-owner-group-notice.text_0845c2a43b": {
+      "operatorId": "operatorId"
+    },
+    "group-owner-group-notice.text_bfc7ca3615": {
+      "value1": "formatGroupNoticeTime(time * 1_000)"
+    },
+    "group-owner-group-notice.text_e0048482bb": {
+      "botId": "botId"
+    },
+    "group-owner-invitation-notice.text_05a49ee594": {
+      "botId": "botId"
+    },
+    "group-owner-invitation-notice.text_b70105504b": {
+      "groupId": "groupId"
+    },
+    "group-owner-invitation-notice.text_b031c1acd4": {
+      "value1": "displayRequestField(groupName, 128) || \"未知\""
+    },
+    "group-owner-invitation-notice.text_faa7cd8023": {
+      "userId": "userId"
+    },
+    "group-owner-invitation-notice.text_ea5aeefbc6": {
+      "value1": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "group-owner-join-request-notice.text_89d5765416": {
+      "botId": "botId"
+    },
+    "group-owner-join-request-notice.text_94afa695be": {
+      "groupId": "groupId"
+    },
+    "group-owner-join-request-notice.text_fd113754ab": {
+      "value1": "displayRequestField(groupName, 128) || \"未知\""
+    },
+    "group-owner-join-request-notice.text_57f576fae6": {
+      "userId": "userId"
+    },
+    "group-owner-join-request-notice.text_7c16f27f89": {
+      "value1": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "group-owner-join-request-notice.text_5d779b4638": {
+      "value1": "displayRequestField(comment, 512) || \"无附加信息\""
+    },
+    "group-owner-member-notice.text_5bfa724a8c": {
+      "value1": "displayRequestField(groupName ?? details?.groupName, 128) || \"群名称暂不可用\""
+    },
+    "group-owner-member-notice.text_64bbec1614": {
+      "groupId": "groupId"
+    },
+    "group-owner-member-notice.text_df572f6429": {
+      "value1": "name ? `${name}（${userId}）` : userId"
+    },
+    "group-owner-member-notice.text_3832f15144": {
+      "displayCard": "displayCard"
+    },
+    "group-owner-member-notice.text_770ec6e737": {
+      "inviterId": "inviterId"
+    },
+    "group-owner-member-notice.text_bfc7ca3615": {
+      "value1": "formatGroupNoticeTime(timestamp)"
+    },
+    "group-owner-member-notice.text_e0048482bb": {
+      "botId": "botId"
+    },
+    "group-pending-join.text_effe03effd": {
+      "length": "entries.length"
+    },
+    "group-pending-join.text_226af6cc05": {
+      "length": "entries.length"
+    },
+    "group-pending-join.text_8259da8992": {
+      "length": "shown.length"
+    },
+    "group-pending-join.text_ce7c0f9436": {
+      "userId": "userId",
+      "value2": "displayRequestField(nickname, 128) || \"未知\""
+    },
+    "group-pending-join.text_8b328b830a": {
+      "value1": "displayRequestField(comment, 512) || \"无附加信息\""
+    },
+    "group-pending-join.text_4a76ccc820": {
+      "verb": "verb",
+      "value2": "name ? `${name}(${applicant})` : applicant"
+    },
+    "group-pending-join.text_597ee8e766": {
+      "verb": "verb"
+    },
+    "group-pending-join.text_9391be06da": {
+      "id": "id"
+    },
+    "group-pending-join.text_bd409adca9": {
+      "length": "result.entries.length"
+    },
+    "group-pending-join.text_f8a770e14e": {
+      "label": "label",
+      "length": "items.length"
+    },
+    "group-pending-join.text_593c328a9d": {
+      "value1": "items.length - shown.length"
+    },
+    "group-pending-join.text_e9339d3412": {
+      "label": "label",
+      "value2": "shown.join(\"\\n\")"
+    },
+    "group-quoted-review.text_4836a9d66c": {
+      "verb": "verb",
+      "applicant": "applicant"
+    },
+    "group-quoted-review.text_df0e30f728": {
+      "verb": "verb"
+    },
+    "group-recall-notice.text_80e54e7d6e": {
+      "botId": "botId",
+      "value2": "manager === undefined ? \"\" : \"管理\""
+    },
+    "group-recall-notice.text_1c463fcb34": {
+      "value1": "displayRequestField(groupName, 128) || \"未知\""
+    },
+    "group-recall-notice.text_140d9d9ff5": {
+      "groupId": "groupId"
+    },
+    "group-recall-notice.text_144785d8f1": {
+      "value1": "operator ? `${operator}(${manager})` : manager"
+    },
+    "group-recall-notice.text_8dcd88315a": {
+      "author": "author"
+    },
+    "group-recall-notice.text_82a00d837b": {
+      "author": "author"
+    },
+    "group-recall-notice.text_e61802dc6c": {
+      "when": "when"
+    },
+    "group-recall-notice.text_23cd2ec56d": {
+      "special": "special"
+    },
+    "group-timed-mute.text_2e6279961c": {
+      "groupId": "groupId",
+      "value2": "lines.join(\"\\n\")"
+    },
+    "group-timed-mute.text_9238a8eb17": {
+      "label": "label"
+    },
+    "group-timed-mute.text_49b7d15137": {
+      "label": "label"
+    },
+    "group-timed-mute.text_dff5991fa1": {
+      "label": "label"
+    },
+    "group-timed-mute.text_8cfb3a8420": {
+      "label": "label"
+    },
+    "group-timed-mute.text_fb82cbcc8c": {
+      "label": "label"
+    },
+    "group-timed-mute.text_7f925f5062": {
+      "label": "label"
+    },
+    "group-timed-mute.text_2090c022ba": {
+      "label": "label"
+    },
+    "group-title.text_c4656f6d72": {
+      "value1": "words.length ? `\\n${words.join(\"\\n\")}` : \"无\""
+    },
+    "group-title.text_eea3407ed7": {
+      "value1": "substring ? \"模糊\" : \"精确\""
+    },
+    "group-title.text_cc6f47db46": {
+      "value1": "absent.join(\"、\")"
+    },
+    "group-title.text_555b7d4434": {
+      "value1": "existing.join(\"、\")"
+    },
+    "group-title.text_74554e8fb2": {
+      "value1": "existing.join(\"、\")"
+    },
+    "group-title.text_fe8f13b0c6": {
+      "value1": "absent.join(\"、\")"
+    },
+    "group-title.text_d92312ffc0": {
+      "requested": "requested"
+    },
+    "group-title.text_7d9e11d9cf": {
+      "member": "member",
+      "requested": "requested"
+    },
+    "group-title.text_238746aae7": {
+      "member": "member"
+    },
+    "group-verification.text_4107228f80": {
+      "reason": "reason"
+    },
+    "group-verification.text_f5860f6479": {
+      "reason": "reason"
+    },
+    "group-verification.text_d1a181432c": {
+      "reason": "reason"
+    },
+    "group-verification.text_fb16ef8ee0": {
+      "time": "config.time",
+      "expression": "expression"
+    },
+    "group-verification.text_b371f710cd": {
+      "expression": "expression"
+    },
+    "group-verification.text_127d0eacd6": {
+      "userId": "event.userId"
+    },
+    "group-verification.text_f6198138e2": {
+      "remaining": "challenge.remaining",
+      "expression": "challenge.expression"
+    },
+    "group-verification.text_e287fbee75": {
+      "sent": "sent"
+    },
+    "group-verification.text_04f071ff72": {
+      "sent": "sent",
+      "value2": "candidates.length - sent"
+    },
+    "group-verification.text_3387b4c8d3": {
+      "mode": "mode"
+    },
+    "group-verification.text_1c0934668c": {
+      "seconds": "seconds"
+    },
+    "group-verification.text_63ca8c6eab": {
+      "seconds": "seconds"
+    },
+    "group-verification.text_4119067e43": {
+      "reply": "reply"
+    },
+    "group-verification.text_bef545b91f": {
+      "value1": "toggle[1]"
+    },
+    "group-vote.text_51d017efdc": {
+      "target": "target",
+      "value2": "target"
+    },
+    "group-vote.text_3ffd79f6b2": {
+      "yes": "poll.yes",
+      "no": "poll.no"
+    },
+    "group-vote.text_bdf8068cda": {
+      "value1": "count(poll)"
+    },
+    "group-vote.text_18c155b040": {
+      "minNum": "poll.settings.minNum"
+    },
+    "group-vote.text_7d571592ba": {
+      "value1": "label(poll.action)",
+      "target": "poll.target"
+    },
+    "group-vote.text_78e143627f": {
+      "value1": "label(poll.action)"
+    },
+    "group-vote.text_17013daf99": {
+      "value1": "label(poll.action)",
+      "value2": "count(poll)",
+      "value3": "voteInstructions(poll.target)",
+      "issuer": "poll.issuer"
+    },
+    "group-vote.text_60999611c6": {
+      "target": "target",
+      "value2": "label(action)"
+    },
+    "group-vote.text_5056520007": {
+      "user": "user",
+      "value2": "voteInstructions(target)",
+      "outTime": "settings.outTime"
+    },
+    "group-vote.text_ba6d66092c": {
+      "BanTime": "settings.BanTime"
+    },
+    "group-vote.text_3a40ae615f": {
+      "minNum": "settings.minNum"
+    },
+    "group-vote.text_fdbd691c31": {
+      "value1": "toggle[2]",
+      "value2": "toggle[1]"
+    },
+    "group-vote.text_749cb8aee9": {
+      "value1": "setting?.[1]",
+      "next": "next"
+    },
+    "group-vote.text_26d8b8eb01": {
+      "value1": "toggle[1]",
+      "value2": "toggle[2]"
+    },
+    "group-vote.text_d54c6721a5": {
+      "value1": "setting?.[1]",
+      "next": "next"
+    },
+    "group-vote.text_ef700df3e9": {
+      "value1": "action === \"mute\" ? \"禁言\" : \"踢人\""
+    },
+    "group-vote.text_8a68d0c6ad": {
+      "yes": "existing.yes",
+      "no": "existing.no"
+    },
+    "like-settings.text_8bb8f6c961": {
+      "key": "key"
+    },
+    "like-settings.text_b642af32ef": {
+      "key": "key"
+    },
+    "managed-blacklist.text_1014170db4": {
+      "field": "field"
+    },
+    "managed-blacklist.text_28347b513c": {
+      "key": "key"
+    },
+    "managed-blacklist.text_904778f769": {
+      "field": "field"
+    },
+    "managed-blacklist.text_7d19566e54": {
+      "field": "field"
+    },
+    "member-notices.text_8d7060efbf": {
+      "value1": "name ? `「${name}」` : \"本群\""
+    },
+    "member-notices.text_335e0da8fc": {
+      "who": "who"
+    },
+    "member-notices.text_810bebfa4d": {
+      "who": "who"
+    },
+    "notice-settings-card-model.text_622b117f29": {
+      "seconds": "seconds"
+    },
+    "notice-settings-card-model.text_bb69cc6e13": {
+      "command": "command"
+    },
+    "notice-settings-card-model.text_b26f5571c3": {
+      "botId": "botId"
+    },
+    "notice-settings-card-model.text_7b00210c8e": {
+      "groupId": "groupId"
+    },
+    "notice-settings-card-model.text_d1fdf073e6": {
+      "botId": "botId",
+      "groupId": "groupId"
+    },
+    "notice-settings-card-renderer.text_6923c796fb": {
+      "value1": "label.slice(1)",
+      "renderer": "engine.renderer",
+      "api": "engine.api",
+      "device": "engine.device"
+    },
+    "notice-settings.text_5aa2915072": {
+      "recipients": "recipients",
+      "value2": "all === undefined ? \"（未设置）\" : \"\""
+    },
+    "notice-settings.text_622b117f29": {
+      "seconds": "seconds"
+    },
+    "notice-settings.text_214adbb965": {
+      "value1": "seconds === undefined ? \"无效\" : `${seconds} 秒`"
+    },
+    "notice-settings.text_733aba6db6": {
+      "value1": "batch[1]",
+      "length": "eventFields.length"
+    },
+    "owner-request-batch.text_bf241ef309": {
+      "kind": "kind"
+    },
+    "owner-request-batch.text_5a5ce4e708": {
+      "kind": "kind"
+    },
+    "owner-request-batch.text_b39b248297": {
+      "kind": "kind"
+    },
+    "owner-request-batch.text_597ee8e766": {
+      "verb": "verb"
+    },
+    "owner-request-batch.text_e36a329356": {
+      "length": "result.entries.length",
+      "kind": "kind"
+    },
+    "owner-request-batch.text_f8a770e14e": {
+      "label": "label",
+      "length": "ids.length"
+    },
+    "owner-request-batch.text_e9339d3412": {
+      "label": "label",
+      "value2": "ids.map((id, index) => `${index + 1}、${id}`).join(\"\\n\")"
+    },
+    "private-group-mute.text_b5203e02df": {
+      "groupId": "groupId",
+      "target": "target"
+    },
+    "private-group-mute.text_b19d453c21": {
+      "groupId": "groupId",
+      "target": "target"
+    },
+    "private-group-mute.text_e2b54849e1": {
+      "value1": "name && name !== String(groupId) ? `${name}(${groupId})` : groupId",
+      "action": "action"
+    },
+    "private-group-mute.text_48f797024f": {
+      "groupId": "groupId",
+      "action": "action"
+    },
+    "private-group-mute.text_ab4ac54c96": {
+      "groupId": "groupId",
+      "action": "action"
+    },
+    "private-group-mute.text_30381f77e8": {
+      "groupId": "groupId",
+      "action": "action"
+    },
+    "private-group-mute.text_7119778e87": {
+      "identity": "identity",
+      "groupId": "groupId"
+    },
+    "private-group-mute.text_b15986e965": {
+      "groupId": "groupId",
+      "identity": "identity"
+    },
+    "private-group-mute.text_818db34ec9": {
+      "groupId": "groupId",
+      "identity": "identity",
+      "seconds": "seconds"
+    },
+    "private-group-mute.text_7481c6123b": {
+      "groupId": "groupId",
+      "target": "target",
+      "action": "action"
+    },
+    "private-group-mute.text_b858d99bee": {
+      "groupId": "groupId",
+      "target": "target",
+      "value3": "kick ? \"受群管保护\" : \"受群禁言保护\""
+    },
+    "private-group-mute.text_54f265889a": {
+      "groupId": "groupId",
+      "target": "target",
+      "action": "action"
+    },
+    "private-group-mute.text_060d121dff": {
+      "groupId": "groupId"
+    },
+    "private-group-mute.text_8f381d9aa5": {
+      "groupId": "groupId",
+      "target": "target"
+    },
+    "private-group-mute.text_5c7217592e": {
+      "scope": "scope",
+      "action": "action",
+      "state": "state"
+    },
+    "request-overview.text_92559c8f27": {
+      "count": "count"
+    },
+    "request-overview.text_12e6915279": {
+      "count": "count"
+    },
+    "request-overview.text_e670a464b8": {
+      "detail": "detail"
+    },
+    "request-overview.text_3206286770": {
+      "label": "label"
+    },
+    "request-review.text_afb4585d55": {
+      "id": "id",
+      "kind": "kind",
+      "groupId": "request.groupId",
+      "user": "user",
+      "applicant": "request.applicant"
+    },
+    "request-review.text_83ab0a608a": {
+      "inviter": "request.inviter"
+    },
+    "request-review.text_90b918255e": {
+      "comment": "request.comment"
+    },
+    "request-review.text_2a08d3e7f5": {
+      "id": "id",
+      "value2": "id"
+    },
+    "request-review.text_0d41259f66": {
+      "value1": "describe(id, request)",
+      "actions": "actions"
+    },
+    "request-review.text_ecac8180a9": {
+      "pages": "pages"
+    },
+    "request-review.text_efccdc5fef": {
+      "page": "page",
+      "pages": "pages"
+    },
+    "screened-words.text_50a5557370": {
+      "name": "name",
+      "length": "words.length"
+    },
+    "screened-words.text_31a42c858f": {
+      "name": "name",
+      "value2": "words.length - shown.length"
+    },
+    "screened-words.text_e3e505f1d9": {
+      "value1": "toggle[1]"
+    },
+    "screened-words.text_acb3606148": {
+      "value1": "toggle[1]"
+    },
+    "screened-words.text_8fcbb01165": {
+      "label": "label"
+    },
+    "screened-words.text_4cc64fe6cd": {
+      "label": "label"
+    },
+    "screened-words.text_4a9ca6c825": {
+      "value1": "removal ? \"删除\" : \"新增\"",
+      "label": "label",
+      "value3": "changed.join(\"】【\")"
+    },
+    "screened-words.text_b8259a1c65": {
+      "value1": "unchanged.join(\"】【\")",
+      "value2": "removal ? \"尚未被屏蔽\" : \"已经被屏蔽\""
+    },
+    "temporary-message-notice.text_0c4d421224": {
+      "reportedGroupId": "reportedGroupId"
+    },
+    "temporary-message-notice.text_0d8ac3f352": {
+      "botId": "botId"
+    },
+    "temporary-message-notice.text_eaae0032b0": {
+      "source": "source"
+    },
+    "temporary-message-notice.text_4f25f2b199": {
+      "userId": "userId"
+    }
+  }
+}

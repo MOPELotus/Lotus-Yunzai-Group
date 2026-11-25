@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { displayRequestField } from "./group-pending-join.ts";
 
 export interface PendingGroupInvitation {
@@ -28,8 +31,8 @@ type Reply = string | { readonly type: "forward"; readonly nodes: readonly (read
 export const groupInvitationListFeature = "[group] 群邀请列表";
 const lookup = /^#?查看(?:全部)?群邀请$/u;
 const maxShown = 50;
-const unavailable = "当前无法核验该机器人的群邀请，请在 QQ 中查看。";
-const roleNames = { member: "群员", admin: "群管理", owner: "群主" } as const;
+const unavailable = $t("group-invitation-list.text_272f803dcf");
+const roleNames = { member: $t("group-invitation-list.text_af43d2e34f"), admin: $t("group-invitation-list.text_628153beb4"), owner: $t("group-invitation-list.text_81d4acd17e") } as const;
 
 export function isGroupInvitationListCommand(command: string): boolean {
   return lookup.test(command);
@@ -42,7 +45,7 @@ function positiveId(value: number | undefined): value is number {
 export async function groupInvitationListCommand(command: string, context: GroupInvitationListContext, signal?: AbortSignal): Promise<Reply | undefined> {
   if (context.message_type !== "private" || context.isDelegated || signal?.aborted || !isGroupInvitationListCommand(command)) return;
   const { self_id, user_id, isBotMaster, listPendingGroupInvitations } = context;
-  if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) return "请由当前机器人的主人私聊查看群邀请。";
+  if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) return $t("group-invitation-list.text_90e5195857");
   if (!listPendingGroupInvitations) return unavailable;
 
   try {
@@ -54,20 +57,20 @@ export async function groupInvitationListCommand(command: string, context: Group
     const { complete } = result;
     const entries: readonly PendingGroupInvitation[] = result.entries;
     if (!entries.length) {
-      return complete ? "暂无群邀请哦(。-ω-)zzz" : "本次查询范围内未发现待处理的群邀请，未能核验完整列表，请在 QQ 中查看。";
+      return complete ? $t("group-invitation-list.text_16f81de849") : $t("group-invitation-list.text_93940e80e1");
     }
     const shown = entries.slice(0, maxShown);
-    const heading = complete ? `现有未处理的群邀请如下，共 ${entries.length} 条` :
-      `本次查到 ${entries.length} 条待处理群邀请，未能核验完整列表`;
+    const heading = complete ? $t("group-invitation-list.text_2d8fb3546f", { "length": entries.length }) :
+      $t("group-invitation-list.text_d22910bde9", { "length": entries.length });
     const summary = [
       heading,
-      ...(shown.length < entries.length ? [`\n仅展示前 ${shown.length} 条，请在 QQ 中查看其余邀请。`] : []),
+      ...(shown.length < entries.length ? [$t("group-invitation-list.text_588fd16580", { "length": shown.length })] : []),
     ];
     const nodes = shown.map(({ groupId, groupName, inviterId, nickname, role }): Part[] => [
       { type: "image", file: `https://p.qlogo.cn/gh/${groupId}/${groupId}/100` },
-      `\n邀请群号：${groupId}\n邀请群名：${displayRequestField(groupName, 128) || "未知"}` +
-      `\n邀请人QQ：${inviterId}\n邀请人昵称：${displayRequestField(nickname, 128) || "未知"}` +
-      (role && Object.hasOwn(roleNames, role) ? `\n邀请人身份：${roleNames[role]}` : ""),
+      $t("group-invitation-list.text_897485828f", { "groupId": groupId, "value2": displayRequestField(groupName, 128) || $t("group-invitation-list.text_4d8c1c5b42") }) +
+      $t("group-invitation-list.text_fe45271e58", { "inviterId": inviterId, "value2": displayRequestField(nickname, 128) || $t("group-invitation-list.text_4d8c1c5b42") }) +
+      (role && Object.hasOwn(roleNames, role) ? $t("group-invitation-list.text_bd8cf904d3", { "value1": roleNames[role] }) : ""),
     ]);
     return { type: "forward", nodes: [summary, ...nodes] };
   } catch {

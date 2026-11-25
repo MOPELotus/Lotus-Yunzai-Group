@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createAutoRepeat, type AutoRepeatEvent, type AutoRepeatOptions } from "./auto-repeat.ts";
 import { changeGroupCard, type CardEvent } from "./group-card.ts";
 import { announceDeparture, welcomeMember, type GroupMemberNotice } from "./member-notices.ts";
@@ -10,19 +13,19 @@ export function groupRuntimeEvents({ sessionSignal, ...options }: AutoRepeatOpti
   const observeRepeat = createAutoRepeat(options);
   return [
     {
-      name: "主动复读", event: "message", priority: 5000, continue: continueRepeat,
+      name: $t("runtime-events.text_51a7f50614"), event: "message", priority: 5000, continue: continueRepeat,
       rule: { pattern: /^#复读$/u, permission: "master", run: startRepeat },
     },
     {
-      name: "欢迎新人", event: "notice.group.increase", priority: 5000,
+      name: $t("runtime-events.text_25cbae3da6"), event: "notice.group.increase", priority: 5000,
       async observe(event: GroupMemberNotice) { await welcomeMember(event); },
     },
     {
-      name: "退群通知", event: "notice.group.decrease", priority: 5000,
+      name: $t("runtime-events.text_c5c7885a8e"), event: "notice.group.decrease", priority: 5000,
       async observe(event: GroupMemberNotice) { await announceDeparture(event); },
     },
     {
-      name: "群请求审核", event: "request.group", priority: 5000,
+      name: $t("runtime-events.text_671aa5876a"), event: "request.group", priority: 5000,
       async observe(event: GroupRequestEvent & { deferManualReview?: (review: () => Promise<void>) => void }) {
         const receive = () => groupRequestReview.receive(event);
         if (event.deferManualReview) event.deferManualReview(receive);
@@ -37,7 +40,7 @@ export function groupRuntimeEvents({ sessionSignal, ...options }: AutoRepeatOpti
       } },
     },
     {
-      name: "自动复读", event: "message.group", priority: -10_000,
+      name: $t("runtime-events.text_a35768178c"), event: "message.group", priority: -10_000,
       async observe(event: AutoRepeatEvent) { await observeRepeat(event, sessionSignal?.(event)); },
     },
   ];

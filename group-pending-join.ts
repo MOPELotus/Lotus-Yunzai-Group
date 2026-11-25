@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 export interface PendingGroupJoin {
   readonly userId: number;
   readonly nickname?: string;
@@ -45,7 +48,7 @@ const review = /^#?(同意|拒绝)(?:加|入)?群申请(\d+)$/u;
 const reviewAll = /^#?(同意|拒绝)全部(?:加|入)?群申请$/u;
 const lookup = /^#?查看(?:全部)?(?:加|入)?群申请$/u;
 const maxShown = 50;
-const unavailable = "当前无法核验本群的加群申请，请在 QQ 中查看。";
+const unavailable = $t("group-pending-join.text_fd8660b736");
 
 export function isGroupPendingJoinCommand(message: string): boolean {
   return lookup.test(message);
@@ -80,24 +83,24 @@ export async function groupPendingJoinCommand(message: string, context: GroupPen
         result.entries.some(entry => !entry || !positiveId(entry.userId))) return unavailable;
 
     const { entries, complete } = result;
-    if (!entries.length) return complete ? "暂无加群申请(。-ω-)zzz" :
-      "本次查询范围内未发现待处理的加群申请，未能核验完整列表，请在 QQ 中查看。";
+    if (!entries.length) return complete ? $t("group-pending-join.text_7f37189c6c") :
+      $t("group-pending-join.text_405fdfb59a");
 
     const shown = entries.slice(0, maxShown);
-    const heading = complete ? `现有未处理的加群申请如下，共 ${entries.length} 条` :
-      `本次查到 ${entries.length} 条待处理加群申请，未能核验完整列表`;
+    const heading = complete ? $t("group-pending-join.text_effe03effd", { "length": entries.length }) :
+      $t("group-pending-join.text_226af6cc05", { "length": entries.length });
     const summary = [
       heading,
-      ...(shown.length < entries.length ? [`\n仅展示前 ${shown.length} 条，请在 QQ 中查看其余申请。`] : []),
+      ...(shown.length < entries.length ? [$t("group-pending-join.text_8259da8992", { "length": shown.length })] : []),
     ];
     const nodes = shown.map(({ userId, nickname, comment, tip, risk }): Part[] => {
       const note = displayRequestField(tip, 256);
       return [
         { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-        `\nQQ：${userId}\n昵称：${displayRequestField(nickname, 128) || "未知"}` +
-        (risk === true ? "\n风险申请，请在 QQ 中处理。" : "") +
+        $t("group-pending-join.text_ce7c0f9436", { "userId": userId, "value2": displayRequestField(nickname, 128) || $t("group-pending-join.text_4d8c1c5b42") }) +
+        (risk === true ? $t("group-pending-join.text_dad8fb9cfc") : "") +
         (note ? `\nTips：${note}` : "") +
-        `\n附加信息：${displayRequestField(comment, 512) || "无附加信息"}`,
+        $t("group-pending-join.text_8b328b830a", { "value1": displayRequestField(comment, 512) || $t("group-pending-join.text_d67cd0210e") }),
       ];
     });
     return { type: "forward", nodes: [summary, ...nodes] };
@@ -106,21 +109,21 @@ export async function groupPendingJoinCommand(message: string, context: GroupPen
   }
 }
 
-const reviewUnavailable = "当前无法按 QQ 核实并审核这条加群申请，请引用原加群通知或在 QQ 中处理。";
-const batchUnavailable = "当前无法核验本群的完整待审列表，不能批量审核。请引用原加群通知或在 QQ 中处理。";
-const reviewUnknown = "加群申请处理结果未确认，请先在 QQ 核对。";
+const reviewUnavailable = $t("group-pending-join.text_b405cff8d7");
+const batchUnavailable = $t("group-pending-join.text_87fa90add5");
+const reviewUnknown = $t("group-pending-join.text_f956eda5d4");
 
 function reviewReply(result: PendingGroupJoinReviewResult, verb: string, applicant: number): string {
   switch (result.status) {
     case "confirmed": {
       const name = displayRequestField(result.nickname, 128);
-      return `已${verb}${name ? `${name}(${applicant})` : applicant}的加群申请辣٩(๑^o^๑)۶`;
+      return $t("group-pending-join.text_4a76ccc820", { "verb": verb, "value2": name ? `${name}(${applicant})` : applicant });
     }
-    case "rejected": return "呜呜呜，处理失败辣(இωஇ)，协议端拒绝了这次审核。";
-    case "not-found": return "呜呜呜，没找到这个淫的加群申请(つд⊂)";
-    case "ambiguous": return "这个 QQ 有多条待处理的加群申请，请引用相应的原加群通知或在 QQ 中处理。";
-    case "risk": return "该账号为风险账号请手动处理哦ಠ~ಠ";
-    case "expired": return "这条加群申请已过期或已处理，请在 QQ 中核对。";
+    case "rejected": return $t("group-pending-join.text_2c8239c6ae");
+    case "not-found": return $t("group-pending-join.text_14903b8370");
+    case "ambiguous": return $t("group-pending-join.text_5d3ec98b49");
+    case "risk": return $t("group-pending-join.text_f8693f4988");
+    case "expired": return $t("group-pending-join.text_8a28483bab");
     case "unavailable": return reviewUnavailable;
     default: return reviewUnknown;
   }
@@ -128,31 +131,31 @@ function reviewReply(result: PendingGroupJoinReviewResult, verb: string, applica
 
 function batchReviewReply(result: PendingGroupJoinBatchResult, verb: string): Reply {
   if (result.status === "unavailable") return batchUnavailable;
-  if (result.status === "not-found") return "暂无加群申请(。-ω-)zzz";
+  if (result.status === "not-found") return $t("group-pending-join.text_7f37189c6c");
   if (result.status !== "processed" || !Array.isArray(result.entries) || !result.entries.length) return reviewUnknown;
 
   const labels = {
-    confirmed: `已${verb}`,
-    rejected: "失败",
-    risk: "风险",
-    unknown: "结果未知",
-    unavailable: "未处理",
-    expired: "未处理",
+    confirmed: $t("group-pending-join.text_597ee8e766", { "verb": verb }),
+    rejected: $t("group-pending-join.text_28384d7afd"),
+    risk: $t("group-pending-join.text_af75e78cac"),
+    unknown: $t("group-pending-join.text_fb7e71452c"),
+    unavailable: $t("group-pending-join.text_83fbf42f9e"),
+    expired: $t("group-pending-join.text_83fbf42f9e"),
   } satisfies Record<BatchReviewStatus, string>;
   const rows = new Map([...new Set(Object.values(labels))].map(label => [label, [] as string[]]));
   for (const entry of result.entries) {
     if (!entry || !positiveId(entry.userId) || !Object.hasOwn(labels, entry.status)) return reviewUnknown;
     const status = entry.status as BatchReviewStatus;
     const id = String(entry.userId);
-    rows.get(labels[status])?.push(status === "expired" ? `${id}（已过期或已处理）` : id);
+    rows.get(labels[status])?.push(status === "expired" ? $t("group-pending-join.text_9391be06da", { "id": id }) : id);
   }
 
-  const summary = [`本次共核对 ${result.entries.length} 条加群申请`,
-    ...[...rows].map(([label, items]) => `${label}：${items.length} 条`)].join("\n");
+  const summary = [$t("group-pending-join.text_bd409adca9", { "length": result.entries.length }),
+    ...[...rows].map(([label, items]) => $t("group-pending-join.text_f8a770e14e", { "label": label, "length": items.length }))].join("\n");
   const nodes = [...rows].filter(([, items]) => items.length).map(([label, items]) => {
     const shown = items.slice(0, maxShown).map((item, index) => `${index + 1}、${item}`);
-    if (items.length > shown.length) shown.push(`另有 ${items.length - shown.length} 条，详见 QQ。`);
-    return [`${label}名单\n${shown.join("\n")}`];
+    if (items.length > shown.length) shown.push($t("group-pending-join.text_593c328a9d", { "value1": items.length - shown.length }));
+    return [$t("group-pending-join.text_e9339d3412", { "label": label, "value2": shown.join("\n") })];
   });
   return { type: "forward", nodes: [[summary], ...nodes] };
 }
@@ -172,18 +175,19 @@ export function createGroupPendingJoinReview(signal?: AbortSignal) {
       return batch ? batchUnavailable : reviewUnavailable;
     }
     const applicant = Number(match[2]);
-    if (!batch && !positiveId(applicant)) return "请填写有效的申请人 QQ 号。";
+    if (!batch && !positiveId(applicant)) return $t("group-pending-join.text_d7c9ed2121");
 
     const key = JSON.stringify([adapter ?? "onebot", self_id, group_id, user_id, String(message_id)]);
     if (inFlight.has(key) || seen.has(key)) return [];
     inFlight.add(key);
-    const verb = match[1] === "同意" ? "同意" : "拒绝";
+    const approve = match[1] === "同意";
+    const verb = approve ? $t("group-pending-join.text_905819e2e3") : $t("group-pending-join.text_136de7a8c4");
     try {
       if (batch) {
-        const result = await groupReviewAllPendingJoins?.(verb === "同意");
+        const result = await groupReviewAllPendingJoins?.(approve);
         return result ? batchReviewReply(result, verb) : reviewUnknown;
       }
-      const result = await groupReviewPendingJoin?.(applicant, verb === "同意");
+      const result = await groupReviewPendingJoin?.(applicant, approve);
       return result ? reviewReply(result, verb, applicant) : reviewUnknown;
     } catch {
       return reviewUnknown;

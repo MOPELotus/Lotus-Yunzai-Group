@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { formatGroupModerationMember, groupModerationName, groupTimeUnits, parseGroupMuteDuration,
   type GroupMuteContext, type GroupMuteResult, type GroupWholeMuteResult } from "./group-mute.ts";
 
@@ -59,34 +62,34 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
     if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id) ||
         (nativeAdapter !== "onebot" && nativeAdapter !== "milky") || !legalMessageId(message_id) ||
         (whole ? !privateGroupWholeMute : kick ? !privateGroupKick : !privateGroupMute)) {
-      return kick ? "当前私聊会话没有移出群成员的权限。" : "当前私聊会话没有群禁言权限。";
+      return kick ? $t("private-group-mute.text_a97279717e") : $t("private-group-mute.text_054404a3c8");
     }
     const groupId = Number(whole ? whole[2] : member?.[1]);
-    if (whole && !positiveId(groupId)) return "请填写有效的群号。";
+    if (whole && !positiveId(groupId)) return $t("private-group-mute.text_9c48f6c70c");
     const target = Number(member?.[2]);
     const seconds = member?.[3] === undefined ? 0 : parseGroupMuteDuration(member[3]);
     if (member && (!positiveId(groupId) || !positiveId(target) || seconds === undefined)) {
-      return kick ? "请填写有效的群号和 QQ 号。" : "请填写有效的群号、QQ 号和禁言时长。";
+      return kick ? $t("private-group-mute.text_4229d2fb99") : $t("private-group-mute.text_691d8a1458");
     }
-    if (kick && (target === self_id || isBotMaster(target))) return `群 ${groupId} 的 ${target} 受群管保护。`;
-    if (member && target === self_id) return `群 ${groupId} 的 ${target} 受群禁言保护。`;
+    if (kick && (target === self_id || isBotMaster(target))) return $t("private-group-mute.text_b5203e02df", { "groupId": groupId, "target": target });
+    if (member && target === self_id) return $t("private-group-mute.text_b19d453c21", { "groupId": groupId, "target": target });
     const key = JSON.stringify([nativeAdapter, self_id, user_id, String(message_id)]);
     if (inFlight.has(key) || seen.has(key)) return [];
     inFlight.add(key);
-    const action = whole ? (whole[1] === "禁言" ? "开启全体禁言" : "解除全体禁言")
-      : kick ? "踢出群聊" : seconds === 0 ? "解禁" : "禁言";
-    const state = kick ? "群成员状态" : "禁言状态";
+    const action = whole ? (whole[1] === "禁言" ? $t("private-group-mute.text_92a98d5729") : $t("private-group-mute.text_1221f79fd5"))
+      : kick ? $t("private-group-mute.text_d5586c8693") : seconds === 0 ? $t("private-group-mute.text_75a8ec42b1") : $t("private-group-mute.text_f76935bcd9");
+    const state = kick ? $t("private-group-mute.text_ee2d379872") : $t("private-group-mute.text_7dc7680369");
     try {
       if (whole && privateGroupWholeMute) {
         const { status, groupName } = await privateGroupWholeMute(groupId, whole[1] === "禁言");
         switch (status) {
           case "confirmed": {
             const name = groupModerationName(groupName);
-            return `✅ 已将群「${name && name !== String(groupId) ? `${name}(${groupId})` : groupId}」${action}`;
+            return $t("private-group-mute.text_e2b54849e1", { "value1": name && name !== String(groupId) ? `${name}(${groupId})` : groupId, "action": action });
           }
-          case "rejected": return `协议端拒绝了群 ${groupId} 的${action}操作。`;
-          case "unavailable": return `无法对群 ${groupId} 执行${action}，请核对群管理权限。`;
-          default: return `群 ${groupId} 的${action}结果未确认，请核对当前禁言状态。`;
+          case "rejected": return $t("private-group-mute.text_48f797024f", { "groupId": groupId, "action": action });
+          case "unavailable": return $t("private-group-mute.text_ab4ac54c96", { "groupId": groupId, "action": action });
+          default: return $t("private-group-mute.text_30381f77e8", { "groupId": groupId, "action": action });
         }
       }
       if (!member || seconds === undefined) return;
@@ -94,13 +97,13 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
       switch (result?.status) {
         case "confirmed": {
           const identity = formatGroupModerationMember(target, result.memberName);
-          if (kick) return `✅ 已将「${identity}」踢出群聊（群 ${groupId}）`;
-          return seconds === 0 ? `✅ 已将群 ${groupId} 的「${identity}」解除禁言` :
-            `✅ 已将群 ${groupId} 的「${identity}」禁言 ${seconds} 秒`;
+          if (kick) return $t("private-group-mute.text_7119778e87", { "identity": identity, "groupId": groupId });
+          return seconds === 0 ? $t("private-group-mute.text_b15986e965", { "groupId": groupId, "identity": identity }) :
+            $t("private-group-mute.text_818db34ec9", { "groupId": groupId, "identity": identity, "seconds": seconds });
         }
-        case "rejected": return `协议端拒绝了群 ${groupId} 对 ${target} 的${action}。`;
-        case "protected": return `群 ${groupId} 的 ${target} ${kick ? "受群管保护" : "受群禁言保护"}。`;
-        case "unavailable": return `无法对群 ${groupId} 的 ${target} 执行${action}，请核对成员身份与权限。`;
+        case "rejected": return $t("private-group-mute.text_7481c6123b", { "groupId": groupId, "target": target, "action": action });
+        case "protected": return $t("private-group-mute.text_b858d99bee", { "groupId": groupId, "target": target, "value3": kick ? $t("private-group-mute.text_22624520a4") : $t("private-group-mute.text_6e802272b0") });
+        case "unavailable": return $t("private-group-mute.text_54f265889a", { "groupId": groupId, "target": target, "action": action });
         case "unknown": break;
       }
     } catch {
@@ -113,7 +116,7 @@ export function createPrivateGroupMute(signal?: AbortSignal) {
         if (!oldest.done) seen.delete(oldest.value);
       }
     }
-    const scope = whole ? `群 ${groupId}` : `群 ${groupId} 对 ${target}`;
-    return `${scope} 的${action}结果未确认，请核对当前${state}。`;
+    const scope = whole ? $t("private-group-mute.text_060d121dff", { "groupId": groupId }) : $t("private-group-mute.text_8f381d9aa5", { "groupId": groupId, "target": target });
+    return $t("private-group-mute.text_5c7217592e", { "scope": scope, "action": action, "state": state });
   };
 }

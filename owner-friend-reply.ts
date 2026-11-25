@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import type { FriendRequestReviewContext } from "./friend-request-review.ts";
 
 export type OwnerFriendReplyBody = string | readonly (string | { readonly sourceIndex: number })[];
@@ -20,8 +23,8 @@ export interface OwnerFriendReplyContext extends Pick<FriendRequestReviewContext
 export const ownerFriendReplyFeature = "[group] 主人回复好友";
 const direct = /^#?回复[ \t]*(\d+)(?:[ \t]+([\s\S]*))?$/u;
 const quote = /^#?回复(?:[ \t]+([\s\S]*))?$/u;
-const unavailable = "当前无法通过这条私聊发送好友消息，请在 QQ 中发送。";
-const unknown = "好友消息发送结果未确认，请先在 QQ 中核对。";
+const unavailable = $t("owner-friend-reply.text_ff5c335a07");
+const unknown = $t("owner-friend-reply.text_810b427d47");
 const maxRememberedMessages = 2048;
 
 function replySegment(part: OriginalSegment | undefined): boolean {
@@ -70,12 +73,12 @@ function positiveId(value: number | undefined): value is number {
 
 function receipt(result: Exclude<QuotedOwnerFriendReplyResult, "unrelated">): string {
   switch (result) {
-    case "confirmed": return "✅ 已把消息发给它了哦~";
-    case "rejected": return "❎ 协议端拒绝发送这条好友消息。";
-    case "not-friend": return "❎ 好友列表查无此人";
+    case "confirmed": return $t("owner-friend-reply.text_5cbccccf01");
+    case "rejected": return $t("owner-friend-reply.text_da7b4b19e5");
+    case "not-friend": return $t("owner-friend-reply.text_06abb72781");
     case "unavailable": return unavailable;
-    case "expired": return "原好友消息通知已过期，请改用「回复 QQ号 <内容>」直接发送。";
-    case "unsupported": return "❎ 无法核验原消息中的图片或 QQ 表情，整条消息未发送。";
+    case "expired": return $t("owner-friend-reply.text_3996f93313");
+    case "unsupported": return $t("owner-friend-reply.text_861263afb4");
     default: return unknown;
   }
 }
@@ -96,7 +99,7 @@ export function createOwnerFriendReply(signal?: AbortSignal) {
     const match = address?.match ?? (quoted ? quote : direct).exec(command);
     if (!match) return;
     if (!positiveId(self_id) || !positiveId(user_id) || !isBotMaster(user_id)) {
-      return quoted ? undefined : "请由当前机器人的主人私聊回复好友。";
+      return quoted ? undefined : $t("owner-friend-reply.text_4d86673643");
     }
     if (!nativeId(message_id)) return quoted ? undefined : unavailable;
 
@@ -107,15 +110,15 @@ export function createOwnerFriendReply(signal?: AbortSignal) {
     } else {
       if (!sendOwnerFriendReply) return unavailable;
       const target = Number(match[1]);
-      if (!positiveId(target)) return "❎ QQ号不正确，人家做不到的啦>_<~";
-      if (target === self_id) return "❎ 不能给当前机器人自己发送好友消息。";
+      if (!positiveId(target)) return $t("owner-friend-reply.text_6231b5c85f");
+      if (target === self_id) return $t("owner-friend-reply.text_ebc4be67aa");
       submit = body => sendOwnerFriendReply(target, body);
     }
     const leadingBody = quoted ? match[1] : match[2];
     const body = mixed ? (address ? originalBody(mixed, address.index, leadingBody, quoted) : undefined) : leadingBody?.trim();
-    if (mixed && body === undefined) return quoted ? undefined : "❎ 回复含有不支持的消息段，整条消息未发送。";
+    if (mixed && body === undefined) return quoted ? undefined : $t("owner-friend-reply.text_03f47776b4");
     if (!body || (typeof body !== "string" && !body.some(part => typeof part !== "string" || part.trim()))) {
-      return quoted ? undefined : "❎ 消息不能为空";
+      return quoted ? undefined : $t("owner-friend-reply.text_7d2a387083");
     }
 
     const key = JSON.stringify([adapter ?? "onebot", self_id, user_id, String(message_id)]);

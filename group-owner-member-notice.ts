@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { displayRequestField } from "./group-pending-join.ts";
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
@@ -50,19 +53,19 @@ export function createGroupOwnerMemberNotice(options: PrivateNoticeOptions): Gro
     const displayCard = displayRequestField(card ?? details?.card, 128);
     const timestamp = time !== undefined && positiveId(time) && time <= 8_640_000_000_000 ? time * 1_000 : Date.now();
     const lines = [
-      direction === "increase" ? "🟢 新成员加入" : "⚪ 成员离开",
+      direction === "increase" ? $t("group-owner-member-notice.text_9051fddcc2") : $t("group-owner-member-notice.text_78369cbbac"),
       "────────────",
-      `群聊：${displayRequestField(groupName ?? details?.groupName, 128) || "群名称暂不可用"}`,
-      `群号：${groupId}`,
-      `成员：${name ? `${name}（${userId}）` : userId}`,
+      $t("group-owner-member-notice.text_5bfa724a8c", { "value1": displayRequestField(groupName ?? details?.groupName, 128) || $t("group-owner-member-notice.text_1b6b59544b") }),
+      $t("group-owner-member-notice.text_64bbec1614", { "groupId": groupId }),
+      $t("group-owner-member-notice.text_df572f6429", { "value1": name ? `${name}（${userId}）` : userId }),
     ];
-    if (displayCard && displayCard !== name) lines.push(`名片：${displayCard}`);
+    if (displayCard && displayCard !== name) lines.push($t("group-owner-member-notice.text_3832f15144", { "displayCard": displayCard }));
     if (direction === "increase") {
-      if (action === "invite") lines.push("方式：邀请入群");
-      if (action === "approve") lines.push("方式：申请通过");
-      if (inviterId !== undefined && positiveId(inviterId)) lines.push(`邀请人：${inviterId}`);
+      if (action === "invite") lines.push($t("group-owner-member-notice.text_a2fef33cce"));
+      if (action === "approve") lines.push($t("group-owner-member-notice.text_9676b62fed"));
+      if (inviterId !== undefined && positiveId(inviterId)) lines.push($t("group-owner-member-notice.text_770ec6e737", { "inviterId": inviterId }));
     }
-    lines.push("", `时间：${formatGroupNoticeTime(timestamp)}`, `机器人：${botId}`);
+    lines.push("", $t("group-owner-member-notice.text_bfc7ca3615", { "value1": formatGroupNoticeTime(timestamp) }), $t("group-owner-member-notice.text_e0048482bb", { "botId": botId }));
     return lines.join("\n");
   };
 }

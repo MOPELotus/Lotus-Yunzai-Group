@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createHash, randomBytes } from "node:crypto";
 
 export type GroupRequestKind = "add" | "invite";
@@ -63,11 +66,11 @@ function preview(text: string | undefined): string {
 }
 
 function describe(id: string, request: PendingRequest): string {
-  const kind = request.kind === "invite" ? "邀请机器人加入群聊" : "成员申请入群";
-  const user = request.kind === "invite" ? "邀请者" : "申请人";
-  return `${id} · ${kind} · 群 ${request.groupId} · ${user} ${request.applicant}` +
-    (request.inviter === undefined ? "" : ` · 邀请者 ${request.inviter}`) +
-    (request.comment ? `\n附言：${request.comment}` : "");
+  const kind = request.kind === "invite" ? $t("request-review.text_6d066daa0e") : $t("request-review.text_fb68301598");
+  const user = request.kind === "invite" ? $t("request-review.text_a8292dcedc") : $t("request-review.text_0a2a5c33dd");
+  return $t("request-review.text_afb4585d55", { "id": id, "kind": kind, "groupId": request.groupId, "user": user, "applicant": request.applicant }) +
+    (request.inviter === undefined ? "" : $t("request-review.text_83ab0a608a", { "inviter": request.inviter })) +
+    (request.comment ? $t("request-review.text_90b918255e", { "comment": request.comment }) : "");
 }
 
 function belongsTo(request: PendingRequest, context: CommandContext): boolean {
@@ -124,9 +127,9 @@ export function createGroupRequestReview() {
 
     try {
       const quoted = event.notifyRequestOwners && groupRequestScope === "milky" && sub_type === "invite";
-      const actions = `#同意入群 ${id}\n#拒绝入群 ${id} [原因]` +
-        (quoted ? "\n也可引用此通知回复「同意」或「拒绝」。" : "");
-      const ordinaryMessage = `【待审核群请求】\n${describe(id, request)}\n${actions}`;
+      const actions = $t("request-review.text_2a08d3e7f5", { "id": id, "value2": id }) +
+        (quoted ? $t("request-review.text_4bd09e36eb") : "");
+      const ordinaryMessage = $t("request-review.text_0d41259f66", { "value1": describe(id, request), "actions": actions });
       const notifyOwners = sub_type === "add" ? event.notifyJoinRequestOwners : event.notifyInvitationRequestOwners;
       if (notifyOwners) {
         await notifyOwners(ordinaryMessage, actions);
@@ -140,43 +143,43 @@ export function createGroupRequestReview() {
   }
 
   function list(argument: string, context: CommandContext): string {
-    if (!authorised(context)) return "请由当前机器人的主人私聊处理群请求。";
+    if (!authorised(context)) return $t("request-review.text_e07bb7e32e");
     const page = argument ? Number(argument) : 1;
-    if (!Number.isSafeInteger(page) || page < 1) return "用法：#入群申请 [页码]";
+    if (!Number.isSafeInteger(page) || page < 1) return $t("request-review.text_f2dd0eab36");
 
     const queue = [...pending.entries()].filter(([, request]) => belongsTo(request, context)).reverse();
-    if (!queue.length) return "当前没有待审核的群请求。";
+    if (!queue.length) return $t("request-review.text_cb3a88ff02");
     const pages = Math.ceil(queue.length / pageSize);
-    if (page > pages) return `待审核群请求共有 ${pages} 页。`;
-    return [`【待审核群请求】第 ${page}/${pages} 页`,
+    if (page > pages) return $t("request-review.text_ecac8180a9", { "pages": pages });
+    return [$t("request-review.text_efccdc5fef", { "page": page, "pages": pages }),
       ...queue.slice((page - 1) * pageSize, page * pageSize).map(([id, request]) => describe(id, request)),
-      "发送 #同意入群 <编号> 或 #拒绝入群 <编号> [原因]。",
+      $t("request-review.text_ff7233a90a"),
     ].join("\n\n");
   }
 
   async function review(argument: string, context: CommandContext, allow: boolean): Promise<string> {
-    if (!authorised(context)) return "请由当前机器人的主人私聊处理群请求。";
+    if (!authorised(context)) return $t("request-review.text_e07bb7e32e");
 
     const [input = "", ...rest] = argument.trim().split(/\s+/u);
     const id = input.toLowerCase();
     if (!/^[a-f0-9]{12}$/u.test(id) || (allow && rest.length)) {
-      return allow ? "用法：#同意入群 <编号>" : "用法：#拒绝入群 <编号> [原因]";
+      return allow ? $t("request-review.text_a358632b8f") : $t("request-review.text_7635bf24a4");
     }
     const request = pending.get(id);
-    if (!request || !belongsTo(request, context)) return "未找到当前机器人的待审核群请求。";
-    if (!context.reviewGroupRequest) return "当前协议端不支持审核群请求。";
-    if (request.reviewing) return "这个群请求正在处理。";
+    if (!request || !belongsTo(request, context)) return $t("request-review.text_bd86fc28b4");
+    if (!context.reviewGroupRequest) return $t("request-review.text_95d3c03027");
+    if (request.reviewing) return $t("request-review.text_de89a5b7d9");
 
     request.reviewing = true;
     try {
       if (await context.reviewGroupRequest(request.flag, request.kind, allow, rest.join(" ") || undefined) !== true) {
-        return "协议端没有接受这次操作，群请求仍待审核。";
+        return $t("request-review.text_0bc07b8c10");
       }
       pending.delete(id);
       rememberCompleted(request.eventKey);
-      return allow ? "已同意群请求。" : "已拒绝群请求。";
+      return allow ? $t("request-review.text_7bd74daa9a") : $t("request-review.text_90acc5dee7");
     } catch {
-      return "群请求处理结果未确认。请先在 QQ 核对，再决定是否重试。";
+      return $t("request-review.text_6cf1c3cd12");
     } finally {
       request.reviewing = false;
     }

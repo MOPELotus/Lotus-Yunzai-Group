@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { createPrivateNoticeSettings, type PrivateNoticeOptions } from "./private-notice-config.ts";
 
 export type FriendPokeNoticePart = string | { readonly type: "image"; readonly file: string };
@@ -22,8 +25,8 @@ export function createFriendPokeNotice(options: PrivateNoticeOptions): FriendPok
 
     return [
       { type: "image", file: `https://q1.qlogo.cn/g?b=qq&s=100&nk=${userId}` },
-      `[消息(${botId}) - 戳一戳]\n`,
-      `来源账号：${userId}`,
+      $t("friend-poke-notice.text_16c1b7c5c9", { "botId": botId }),
+      $t("friend-poke-notice.text_c6ce36333c", { "userId": userId }),
     ];
   };
 }

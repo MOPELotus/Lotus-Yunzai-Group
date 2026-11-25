@@ -1,3 +1,6 @@
+import { createTranslator as createTextTranslator } from "../../packages/i18n/index.ts";
+import messageCatalog from "./i18n/zh-CN.json";
+const $t = createTextTranslator("group", messageCatalog.messages);
 import { link, mkdir, mkdtemp, open, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,11 +11,11 @@ const listCommand = /^#*屏蔽词列表/u;
 const addCommand = /^#*屏蔽(本群|全局)?([\s\S]*)$/u;
 const removeCommand = /^#*(?:解除|删除|取消|不)屏蔽(本群|全局)?([\s\S]*)$/u;
 const toggleCommand = /^#抽卡设置\s*(?:违禁词|屏蔽词)\s*(开启|关闭)$/u;
-const defaults = { enable: false, time: 60, replyText: "检测到违规词汇，已经制裁" };
+const defaults = { enable: false, time: 60, replyText: $t("screened-words.text_4116ed642c") };
 export const screenedWordLimits = { bytes: 512 * 1024, files: 240, words: 4096 } as const;
 const { bytes: maxBytes, files: maxFiles, words: maxWords } = screenedWordLimits;
 const maxLength = 512;
-const unavailable = "屏蔽词配置暂不可用。";
+const unavailable = $t("screened-words.text_a8de643af4");
 const controls = /[\p{Cc}\p{Zl}\p{Zp}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
 type LockFile = (file: string, subject: string) => Promise<{ close(): void }>;
@@ -50,9 +53,9 @@ async function readYaml(path: string) {
   try {
     const file = Bun.file(path);
     if (!await file.exists()) return;
-    if (file.size > maxBytes) throw new Error("屏蔽词文件超出上限。");
+    if (file.size > maxBytes) throw new Error($t("screened-words.text_a9f749a829"));
     const source = await file.text();
-    if (Buffer.byteLength(source) > maxBytes) throw new Error("屏蔽词文件超出上限。");
+    if (Buffer.byteLength(source) > maxBytes) throw new Error($t("screened-words.text_a9f749a829"));
     return { source, data: Bun.YAML.parse(source) as unknown };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -61,7 +64,7 @@ async function readYaml(path: string) {
 
 function settingsObject(value: unknown): Record<string, unknown> {
   if (value == null) return {};
-  if (typeof value !== "object" || Array.isArray(value)) throw new Error("屏蔽词配置格式无效。");
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error($t("screened-words.text_a285325003"));
   return value as Record<string, unknown>;
 }
 
@@ -71,27 +74,27 @@ export function readScreenedWordSettings(settings: Record<string, unknown>): Set
   const enabled = enable === true || enable === 1 || enable === "1" || enable === "true";
   const seconds = typeof time === "number" || typeof time === "string" && /^\d+$/u.test(time) ? Number(time) : NaN;
   if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 2_147_483_647 || typeof replyText !== "string" ||
-      replyText.length > 2048 || !replyText.isWellFormed()) throw new Error("屏蔽词设置无效。");
+      replyText.length > 2048 || !replyText.isWellFormed()) throw new Error($t("screened-words.text_1749100be5"));
   return { enable: enabled, time: seconds, replyText };
 }
 
 export function readScreenedWordList(value: unknown, legacy = false): string[] {
   if (value == null) return [];
-  if (!Array.isArray(value) || value.length > maxWords) throw new Error("屏蔽词词表无效。");
-  if (!legacy && !value.every(word)) throw new Error("屏蔽词词表无效。");
+  if (!Array.isArray(value) || value.length > maxWords) throw new Error($t("screened-words.text_c07e5f7456"));
+  if (!legacy && !value.every(word)) throw new Error($t("screened-words.text_c07e5f7456"));
   const strings = legacy ? value.map(item => item === true || typeof item === "number" && Number.isFinite(item) && item !== 0 ? String(item) : item) : value;
   return [...new Set(strings.filter(word))];
 }
 
 function listReply(local: readonly string[], global: readonly string[]): Reply {
   const nodes: string[][] = [];
-  for (const [name, words] of [["本群", local], ["全局", global]] as const) {
-    nodes.push([`${name}屏蔽词如下，共 ${words.length} 个`]);
+  for (const [name, words] of [[$t("screened-words.text_0d5f4509dd"), local], [$t("screened-words.text_63d6b47116"), global]] as const) {
+    nodes.push([$t("screened-words.text_50a5557370", { "name": name, "length": words.length })]);
     const shown = words.slice(0, 600);
     for (let i = 0; i < shown.length; i += 25) {
       nodes.push([shown.slice(i, i + 25).map((text, offset) => `${i + offset + 1}、【${text}】`).join("\n")]);
     }
-    if (shown.length < words.length) nodes.push([`${name}剩余 ${words.length - shown.length} 个词未展示。`]);
+    if (shown.length < words.length) nodes.push([$t("screened-words.text_31a42c858f", { "name": name, "value2": words.length - shown.length })]);
   }
   return { type: "forward", nodes };
 }
@@ -119,28 +122,28 @@ export function createGroupScreenedWords(root: URL, lockFile: LockFile, signal: 
       throw error;
     });
     const files = entries.filter(entry => entry.isFile() && entry.name.endsWith(".yaml")).map(entry => entry.name).sort().reverse();
-    if (files.length > maxFiles) throw new Error("屏蔽词文件超出上限。");
+    if (files.length > maxFiles) throw new Error($t("screened-words.text_a9f749a829"));
     const words = new Set<string>();
     let bytes = 0;
     for (const file of files) {
       const loaded = await readYaml(join(folder, file));
       bytes += Buffer.byteLength(loaded?.source ?? "");
-      if (bytes > maxBytes) throw new Error("屏蔽词文件超出上限。");
+      if (bytes > maxBytes) throw new Error($t("screened-words.text_a9f749a829"));
       for (const text of readScreenedWordList(loaded?.data, true)) words.add(text);
-      if (words.size > maxWords) throw new Error("屏蔽词数量超出上限。");
+      if (words.size > maxWords) throw new Error($t("screened-words.text_ba018f9fc0"));
     }
     return { current, words: [...words] };
   }
 
   async function save(path: string, before: string | undefined, contents: string, authorized: () => Promise<boolean>, unchanged: () => Promise<boolean>) {
-    if (Buffer.byteLength(contents) > maxBytes) throw new Error("屏蔽词文件超出上限。");
+    if (Buffer.byteLength(contents) > maxBytes) throw new Error($t("screened-words.text_a9f749a829"));
     const staging = await mkdtemp(join(dirname(path), ".screened-words-"));
     try {
       const temporary = join(staging, "settings.yaml");
       const file = await open(temporary, "wx", 0o600);
       try { await file.writeFile(contents); await file.sync(); } finally { await file.close(); }
       if (!await authorized()) return false;
-      if (!await unchanged()) throw new Error("屏蔽词配置正由其他程序修改。");
+      if (!await unchanged()) throw new Error($t("screened-words.text_3a119426b3"));
       signal.throwIfAborted();
       if (before === undefined) await link(temporary, path);
       else await rename(temporary, path);
@@ -171,25 +174,25 @@ export function createGroupScreenedWords(root: URL, lockFile: LockFile, signal: 
     try {
       if (toggle) {
         const authorized = async () => active() && master();
-        if (!await authorized()) return "仅当前机器人的主人可以设置屏蔽词监听。";
+        if (!await authorized()) return $t("screened-words.text_4be010acd4");
         if (!claim(context)) return [];
         const enable = toggle[1] === "开启";
         await mkdir(dirname(configFile), { recursive: true });
-        const lock = await lockFile(configFile + ".sqlite", "屏蔽词设置");
+        const lock = await lockFile(configFile + ".sqlite", $t("screened-words.text_2d99b9fb8b"));
         try {
           const { current, effective, values } = await settings();
-          if (values.enable === enable) return `屏蔽词监听已处于${toggle[1]}状态。`;
+          if (values.enable === enable) return $t("screened-words.text_e3e505f1d9", { "value1": toggle[1] });
           const document = parseDocument(current?.source ?? stringify(effective));
           document.set("enable", enable);
           const saved = await save(configFile, current?.source, document.toString(), authorized, async () => {
             const latest = await settings();
             return active() && master() && latest.current?.source === current?.source && JSON.stringify(latest.effective) === JSON.stringify(effective);
           });
-          return saved ? `已${toggle[1]}屏蔽词监听。` : "仅当前机器人的主人可以设置屏蔽词监听。";
+          return saved ? $t("screened-words.text_acb3606148", { "value1": toggle[1] }) : $t("screened-words.text_4be010acd4");
         } finally { lock.close(); }
       }
       if (context.message_type !== "group" || !positiveId(group_id)) return;
-      if (!(await settings()).values.enable) return "屏蔽词监听当前关闭。";
+      if (!(await settings()).values.enable) return $t("screened-words.text_1e7d9ca6fb");
       if (listCommand.test(message)) {
         const [local, global] = await Promise.all([scopeWords(String(group_id)), scopeWords("global")]);
         if (active()) return listReply(local.words, global.words);
@@ -199,17 +202,17 @@ export function createGroupScreenedWords(root: URL, lockFile: LockFile, signal: 
       const match = removal ?? addCommand.exec(message);
       if (!match) return;
       const requested = [...new Set((match[2] ?? "").trim().split(/[,，]/u))];
-      if (requested.length > 32 || !requested.every(word)) return "请填写有效屏蔽词，多个词用逗号分隔。";
+      if (requested.length > 32 || !requested.every(word)) return $t("screened-words.text_a2fa46e176");
       const scope = master() && match[1] !== "本群" ? "global" : String(group_id);
-      const label = scope === "global" ? "全局" : "本群";
+      const label = scope === "global" ? $t("screened-words.text_63d6b47116") : $t("screened-words.text_0d5f4509dd");
       const authorized = async () => active() && (scope !== "global" || master()) &&
         await context.groupManageBlacklist?.() === true && active() && (scope !== "global" || master());
-      const denied = `当前会话没有编辑${label}屏蔽词的权限。`;
+      const denied = $t("screened-words.text_8fcbb01165", { "label": label });
       if (!await authorized()) return denied;
       if (!claim(context)) return [];
       await mkdir(directory, { recursive: true, mode: 0o700 });
       const path = join(directory, `${scope}.yaml`);
-      const lock = await lockFile(path + ".sqlite", "屏蔽词词表");
+      const lock = await lockFile(path + ".sqlite", $t("screened-words.text_8cb590ad26"));
       try {
         const { current, words } = await scopeWords(scope);
         const present = new Set(words);
@@ -217,7 +220,7 @@ export function createGroupScreenedWords(root: URL, lockFile: LockFile, signal: 
         const unchanged = requested.filter(text => present.has(text) !== !!removal);
         if (changed.length) {
           const next = removal ? words.filter(text => !changed.includes(text)) : [...words, ...changed];
-          if (next.length > maxWords) return `${label}屏蔽词已达上限。`;
+          if (next.length > maxWords) return $t("screened-words.text_4cc64fe6cd", { "label": label });
           const saved = await save(path, current?.source, stringify(next), authorized, async () => {
             const latest = await scopeWords(scope);
             return latest.current?.source === current?.source && JSON.stringify(latest.words) === JSON.stringify(words) &&
@@ -225,8 +228,8 @@ export function createGroupScreenedWords(root: URL, lockFile: LockFile, signal: 
           });
           if (!saved) return denied;
         }
-        return [...(changed.length ? [`${removal ? "删除" : "新增"}${label}屏蔽词：【${changed.join("】【")}】`] : []),
-          ...(unchanged.length ? [`词语【${unchanged.join("】【")}】${removal ? "尚未被屏蔽" : "已经被屏蔽"}`] : [])].join("\n");
+        return [...(changed.length ? [$t("screened-words.text_4a9ca6c825", { "value1": removal ? $t("screened-words.text_2f9daa8289") : $t("screened-words.text_0006d696d8"), "label": label, "value3": changed.join("】【") })] : []),
+          ...(unchanged.length ? [$t("screened-words.text_b8259a1c65", { "value1": unchanged.join("】【"), "value2": removal ? $t("screened-words.text_d7abc6cbd0") : $t("screened-words.text_9f9e5df6cb") })] : [])].join("\n");
       } finally { lock.close(); }
     } catch { return active() ? unavailable : undefined; }
   }
