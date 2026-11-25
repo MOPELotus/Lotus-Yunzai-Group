@@ -14,15 +14,15 @@ test("沿用旧带井号与裸回复写法，精确识别 QQ，正文保留原�
   } };
   for (const [index, input] of [command, "#回复 51 你好", "回复51 你好", "回复 51 你好 朋友\n第二行   原空格"].entries()) {
     expect(isOwnerFriendReplyCommand(input)).toBe(true);
-    expect(await handle(input, { ...scope, message_id: index + 1 })).toBe("✅ 已把消息发给它了哦~");
+    expect(await handle(input, { ...scope, message_id: index + 1 })).toBe("✅ 消息已发送。");
   }
   for (const input of ["回复群友", "#回复@51 你好", "#回复+51 你好", "#回复51你好", "#回复 51\n你好"]) {
     expect(isOwnerFriendReplyCommand(input)).toBe(false);
     expect(await handle(input, scope)).toBeUndefined();
   }
   expect(await handle("#回复51", scope)).toContain("消息不能为空");
-  expect(await handle("#回复0 你好", scope)).toContain("QQ号不正确");
-  expect(await handle("#回复9007199254740993 内容", scope)).toContain("QQ号不正确");
+  expect(await handle("#回复0 你好", scope)).toContain("QQ 号不正确");
+  expect(await handle("#回复9007199254740993 内容", scope)).toContain("QQ 号不正确");
   expect(await handle("#回复99 你好", scope)).toContain("机器人自己");
   expect(calls).toEqual([[51, "你好"], [51, "你好"], [51, "你好"], [51, "你好 朋友\n第二行   原空格"]]);
 });
@@ -82,13 +82,13 @@ test("混排按第一个原文字段解析 QQ，保留相对次序且只传原�
   const scope: OwnerFriendReplyContext = { ...owner, message, async sendOwnerFriendReply(qq, body) {
     calls.push([qq, body]); return "confirmed";
   } };
-  expect(await handle("#回复 51 开头    图片之后\n继续 末尾", scope)).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("#回复 51 开头    图片之后\n继续 末尾", scope)).toBe("✅ 消息已发送。");
 
   const mediaOnly = [{ type: "text", text: "#回复52 " }, { type: "image" }, { type: "face" }];
-  expect(await handle("#回复52", { ...scope, message_id: 2, message: mediaOnly })).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("#回复52", { ...scope, message_id: 2, message: mediaOnly })).toBe("✅ 消息已发送。");
   const afterMedia = [{ type: "text", text: "#回复53" }, { type: "face" }, { type: "text", text: "4 后文" }];
   expect(isOwnerFriendReplyCommand("#回复534 后文", undefined, afterMedia)).toBe(true);
-  expect(await handle("#回复534 后文", { ...scope, message_id: 3, message: afterMedia })).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("#回复534 后文", { ...scope, message_id: 3, message: afterMedia })).toBe("✅ 消息已发送。");
   expect(isOwnerFriendReplyCommand("#回复53后文", undefined, afterMedia)).toBe(true);
   expect(calls).toEqual([
     [51, ["开头  ", { sourceIndex: 1 }, "  图片之后\n继续", { sourceIndex: 3 }, " 末尾"]],
@@ -126,12 +126,12 @@ test("真实引用只将本条正文交给宿主，包括开头数字与原图�
     async sendOwnerFriendReply() { throw new Error("引用消息不能由命令文字选择目标"); },
   };
   expect(isOwnerFriendReplyCommand("回复 510 好友你好", "17")).toBe(true);
-  expect(await handle("回复 510 好友你好", scope)).toBe("✅ 已把消息发给它了哦~");
+  expect(await handle("回复 510 好友你好", scope)).toBe("✅ 消息已发送。");
   expect(await handle("#回复 前面  后面", { ...scope, message_id: 2, adapter: "milky",
     message: [{ type: "reply" }, { type: "text", text: "#回复 前面  " }, { type: "image" },
-      { type: "text", text: "后面" }, { type: "face" }] })).toBe("✅ 已把消息发给它了哦~");
+      { type: "text", text: "后面" }, { type: "face" }] })).toBe("✅ 消息已发送。");
   expect(await handle("#回复", { ...scope, message_id: 3,
-    message: [{ type: "text", text: "#回复 " }, { type: "face" }, { type: "reply" }] })).toBe("✅ 已把消息发给它了哦~");
+    message: [{ type: "text", text: "#回复 " }, { type: "face" }, { type: "reply" }] })).toBe("✅ 消息已发送。");
   expect(bodies).toEqual(["510 好友你好", ["前面  ", { sourceIndex: 2 }, "后面", { sourceIndex: 4 }], [{ sourceIndex: 1 }]]);
   for (const invalid of [{ reply_id: undefined }, { reply_id: "" }, { message_type: "group" as const }, { isDelegated: true },
     { isBotMaster: () => false }, { sendQuotedOwnerFriendReply: undefined },

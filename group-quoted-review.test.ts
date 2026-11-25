@@ -55,8 +55,8 @@ test("未知结果的原消息并发只尝试一次，互不影响不同协议�
 test("无关消息继续派发，已过期、风险和明确失败各有正确提示", async () => {
   const { context, command } = fixture();
   const statuses = {
-    unrelated: undefined, expired: "找不到原消息了，手动拒绝叭~",
-    rejected: "呜呜呜，处理失败辣(இωஇ)", risk: "该账号为风险账号请手动处理哦ಠ~ಠ",
+    unrelated: undefined, expired: "找不到原消息，请手动拒绝。",
+    rejected: "处理失败。", risk: "该账号为风险账号，请手动处理。",
     unavailable: "当前无法核实并处理这条加群申请，请在 QQ 手动处理。",
   } as const;
   for (const [i, status] of (Object.keys(statuses) as (keyof typeof statuses)[]).entries()) {

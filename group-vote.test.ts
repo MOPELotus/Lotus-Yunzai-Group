@@ -107,7 +107,7 @@ test("普通人可发起和投票，设置限主人，管理员目标需配置�
   expect(await f.vote.command("#投票禁言50", f.context())).toContain("已被禁用");
   expect(await f.vote.command("#启用投票禁言", f.context())).toContain("没有设置");
   expect(await f.vote.command("#启用投票禁言", f.context(55))).toContain("已启用");
-  expect(await f.vote.command("#投票设置禁言时间42", f.context(55))).toContain("设置成42");
+  expect(await f.vote.command("#投票设置禁言时间42", f.context(55))).toContain("已将禁言时间设为42");
   expect(await f.vote.command("#投票禁言41", f.context())).toContain("不能对自己");
   expect(await f.vote.command("#投票禁言99", f.context())).toContain("对机器人无效");
   expect(await f.vote.command("#投票禁言50", f.context(41, { target: "owner" }))).toContain("对群主无效");

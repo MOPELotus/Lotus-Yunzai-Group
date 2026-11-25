@@ -45,7 +45,7 @@ test("只允许当前机器人的原生主人私聊读取，不在群内泄露�
 });
 
 test("区分完整空、有限空和不可核验，缩短过长结果且不展示原序号", async () => {
-  expect(await query({ complete: true, entries: [] })).toContain("暂无群邀请");
+  expect(await query({ complete: true, entries: [] })).toContain("暂无待处理的群邀请。");
   expect(await query({ complete: false, entries: [] })).toContain("未能核验完整列表");
   expect(await query(undefined)).toContain("当前无法核验");
   expect(await query({ complete: true, entries: [{ groupId: 77, inviterId: Number.NaN }] })).toContain("当前无法核验");

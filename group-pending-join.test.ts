@@ -99,7 +99,7 @@ test("旧按 QQ 审核保持同群真消息和单个安全 QQ，清晰回执确�
 test("审核按真实拒绝、未知、身份歧义、风险和过期分别处理", async () => {
   for (const [status, expected] of [
     ["rejected", "协议端拒绝"], ["unknown", "结果未确认"], ["unavailable", "请引用原加群通知"],
-    ["not-found", "没找到"], ["ambiguous", "多条待处理"], ["risk", "风险账号"], ["expired", "已过期或已处理"],
+    ["not-found", "未找到该用户的加群申请"], ["ambiguous", "多条待处理"], ["risk", "风险账号"], ["expired", "已过期或已处理"],
   ] as const) {
     const handle = createGroupPendingJoinReview();
     const result = await handle("#拒绝入群申请510", { ...current, message_id: 1,
